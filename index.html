@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thousand Year Old Vampire - Companion</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        /* ==========================================
+           VARIABLES & THEMES
+           ========================================== */
+        :root {
+            --bg-color: #121212;
+            --text-color: #e0e0e0;
+            --accent-color: #8b0000;
+            --border-color: #444;
+            --panel-bg: #1e1e1e;
+            --warning-color: #ff9800;
+            --boxed-color: #4CAF50;
+            --base-font-size: 16px;
+        }
+
+        body.light-mode {
+            --bg-color: #f4f4f9;
+            --text-color: #1a1a1a;
+            --accent-color: #b71c1c;
+            --border-color: #ccc;
+            --panel-bg: #ffffff;
+        }
+
+        /* ==========================================
+           GLOBAL LAYOUT
+           ========================================== */
+        body { 
+            font-family: 'Georgia', serif; 
+            background-color: var(--bg-color); 
+            color: var(--text-color); 
+            font-size: var(--base-font-size); 
+            max-width: 1100px; 
+            margin: 0 auto; 
+            padding: 20px; 
+            line-height: 1.5; 
+            transition: background 0.3s, color 0.3s; 
+        }
+
+        h1, h2, h3, h4 { 
+            color: var(--accent-color); 
+            border-bottom: 1px solid var(--border-color); 
+            padding-bottom: 5px; 
+            margin-top: 0;
+        }
+
+        .container { 
+            display: flex; 
+            flex-wrap: wrap; 
+            gap: 20px; 
+        }
+
+        .panel { 
+            background: var(--panel-bg); 
+            padding: 15px; 
+            border: 1px solid var(--border-color); 
+            border-radius: 5px; 
+            flex: 1 1 300px; 
+            position: relative; 
+            transition: background 0.3s;
+        }
+
+        .full-width { 
+            flex: 1 1 100%; 
+        }
+        
+        /* ==========================================
+           BUTTONS & INPUTS
+           ========================================== */
+        button { 
+            background-color: var(--accent-color); 
+            color: white; 
+            border: none; 
+            padding: 8px 15px; 
+            font-size: 0.9em; 
+            cursor: pointer; 
+            border-radius: 3px; 
+            transition: 0.2s; 
+        }
+
+        button:hover { 
+            filter: brightness(1.2); 
+        }
+
+        button:disabled { 
+            background-color: #555; 
+            color: #888; 
+            cursor: not-allowed; 
+        }
+
+        .btn-small { 
+            padding: 4px 8px; 
+            font-size: 0.8em; 
+            margin-left: 5px; 
+        }
+
+        .btn-strike { 
+            background-color: #555; 
+        }
+        
+        input[type="text"], select, textarea, input[type="number"] { 
+            background: #222; 
+            color: #fff; 
+            border: 1px solid #555; 
+            padding: 6px; 
+            font-family: inherit; 
+            font-size: 1em; 
+            width: 100%; 
+            box-sizing: border-box;
+        }
+
+        body.light-mode input[type="text"], 
+        body.light-mode select, 
+        body.light-mode textarea, 
+        body.light-mode input[type="number"] { 
+            background: #fff; 
+            color: #000; 
+            border-color: #aaa; 
+        }
+
+        textarea { 
+            resize: vertical; 
+            min-height: 60px; 
+        }
+        
+        .options-bar { 
+            background: rgba(0,0,0,0.1); 
+            padding: 10px; 
+            border-radius: 5px; 
+            margin-bottom: 15px; 
+            display: flex; 
+            gap: 10px; 
+            flex-wrap: wrap; 
+            border: 1px dashed var(--border-color); 
+            font-size: 0.9em; 
+            align-items: center; 
+            justify-content: space-between;
+        }
+
+        /* ==========================================
+           WARNINGS & MODALS
+           ========================================== */
+        #gameWarning { 
+            display: none; 
+            background: var(--warning-color); 
+            color: #000; 
+            padding: 10px; 
+            font-weight: bold; 
+            border-radius: 5px; 
+            margin-bottom: 20px; 
+            text-align: center; 
+        }
+
+        #triggerAlert { 
+            display: none; 
+            background: #2196F3; 
+            color: #fff; 
+            padding: 10px; 
+            font-weight: bold; 
+            border-radius: 5px; 
+            margin-bottom: 20px; 
+            text-align: center; 
+            border: 2px solid #fff;
+        }
+        
+        .modal-overlay { 
+            display: none; 
+            position: fixed; 
+            top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.85); 
+            z-index: 1000; 
+            align-items: center; 
+            justify-content: center; 
+            overflow-y: auto; 
+        }
+
+        .modal-content { 
+            background: var(--panel-bg); 
+            padding: 30px; 
+            border-radius: 5px; 
+            border: 2px solid var(--accent-color); 
+            width: 90%; 
+            max-width: 600px; 
+            text-align: left; 
+            margin: 20px auto; 
+            color: var(--text-color);
+        }
+
+        /* ==========================================
+           TRAITS & GRAVEYARD
+           ========================================== */
+        .hide-graveyard .strikethrough { 
+            display: none !important; 
+        }
+
+        .trait-list { 
+            list-style-type: none; 
+            padding: 0; 
+            margin: 0 0 10px 0; 
+        }
+
+        .trait-list li { 
+            display: flex; 
+            gap: 5px; 
+            margin-bottom: 8px; 
+            align-items: center; 
+        }
+
+        .strikethrough input[type="text"] { 
+            text-decoration: line-through; 
+            opacity: 0.5; 
+        }
+
+        .checked-skill { 
+            border-bottom: 2px solid #4CAF50 !important; 
+            color: #4CAF50;
+        }
+
+        .doom-dots { 
+            color: var(--warning-color); 
+            font-weight: bold; 
+            font-size: 1.2em; 
+            letter-spacing: 2px;
+        }
+        
+        /* ==========================================
+           MEMORIES
+           ========================================== */
+        .memory-block { 
+            border: 1px solid var(--border-color); 
+            padding: 10px; 
+            margin-bottom: 15px; 
+            background: rgba(0,0,0,0.05); 
+            transition: all 0.3s;
+        }
+
+        .experience-input { 
+            margin-top: 5px; 
+            border-left: 2px solid var(--border-color); 
+            padding-left: 5px; 
+        }
+
+        .mem-controls { 
+            display: flex; 
+            justify-content: space-between; 
+            margin-top: 5px; 
+        }
+
+        .mem-starred { 
+            border-color: #FFC107; 
+            box-shadow: 0 0 5px rgba(255, 193, 7, 0.3); 
+        }
+
+        .mem-hazy input[type="text"] { 
+            font-style: italic; 
+            color: #999; 
+        }
+
+        .mem-primal input[type="text"] { 
+            font-family: monospace; 
+            color: #bcaaa4; 
+        }
+
+        .boxed-experience { 
+            border: 2px solid var(--boxed-color); 
+            padding: 10px; 
+            border-radius: 5px; 
+            margin-bottom: 20px; 
+            background: rgba(76, 175, 80, 0.1); 
+        }
+        
+        /* ==========================================
+           LOGS & TRIGGERS
+           ========================================== */
+        .trigger-item { 
+            background: rgba(0,0,0,0.1); 
+            border-left: 3px solid #2196F3; 
+            padding: 5px 10px; 
+            margin-bottom: 5px; 
+            font-size: 0.9em; 
+            display: flex; 
+            justify-content: space-between;
+        }
+
+        #rollHistoryLog { 
+            max-height: 100px; 
+            overflow-y: auto; 
+            font-size: 0.8em; 
+            color: #888; 
+            background: rgba(0,0,0,0.2); 
+            padding: 10px; 
+            border: 1px solid var(--border-color); 
+            margin-top: 15px; 
+            text-align: left;
+        }
+        
+        #previewContent { 
+            font-family: 'Georgia', serif; 
+            line-height: 1.6; 
+            max-height: 60vh; 
+            overflow-y: auto; 
+            padding-right: 10px;
+        }
+
+        #previewContent b { 
+            color: var(--accent-color); 
+        }
+    </style>
+</head>
+<body>
+
+    <audio id="sfxDice" src="https://actions.google.com/sounds/v1/foley/rolling_dice.ogg" preload="auto"></audio>
+    <audio id="sfxPage" src="https://actions.google.com/sounds/v1/foley/book_page_flip.ogg" preload="auto"></audio>
+
+    <div id="setupWizard" class="modal-overlay">
+        <div class="modal-content">
+            
+            <div id="step1" class="wizard-step">
+                <h2>Step 1: Your Mortal Identity</h2>
+                <p>Before you became a monster, you were a person. What was your name?</p>
+                <input type="text" id="setupName" placeholder="Enter your mortal name..." style="margin-bottom: 5px;">
+                <button onclick="nextStep(2)" style="width: 100%; margin-top: 15px;">Next Step</button>
+            </div>
+
+            <div id="step2" class="wizard-step" style="display: none;">
+                <h2>Step 2: Mortal Skills</h2>
+                <p>What were you exceptionally good at in your human life? List three. (e.g., "Blacksmithing", "Charming", "Spear Fighting", "Herbalism")</p>
+                <input type="text" id="setupSkill1" placeholder="Skill 1" style="margin-bottom: 5px;">
+                <input type="text" id="setupSkill2" placeholder="Skill 2" style="margin-bottom: 5px;">
+                <input type="text" id="setupSkill3" placeholder="Skill 3">
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn-strike" onclick="nextStep(1)" style="flex: 1;">Back</button>
+                    <button onclick="nextStep(3)" style="flex: 2;">Next Step</button>
+                </div>
+            </div>
+
+            <div id="step3" class="wizard-step" style="display: none;">
+                <h2>Step 3: Resources</h2>
+                <p>What valuable physical items or properties do you possess from your human years? List three. (e.g., "A fine horse", "A hidden cave", "Bag of gold coins", "Family signet ring")</p>
+                <input type="text" id="setupRes1" placeholder="Resource 1" style="margin-bottom: 5px;">
+                <input type="text" id="setupRes2" placeholder="Resource 2" style="margin-bottom: 5px;">
+                <input type="text" id="setupRes3" placeholder="Resource 3">
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn-strike" onclick="nextStep(2)" style="flex: 1;">Back</button>
+                    <button onclick="nextStep(4)" style="flex: 2;">Next Step</button>
+                </div>
+            </div>
+
+            <div id="step4" class="wizard-step" style="display: none;">
+                <h2>Step 4: Characters</h2>
+                <p>Name at least three mortals intimately tied to your life. One should be the person who turned you into a vampire. (e.g., "Eliza, my sister", "Marcus, the local priest")</p>
+                <input type="text" id="setupChar1" placeholder="Character 1" style="margin-bottom: 5px;">
+                <input type="text" id="setupChar2" placeholder="Character 2" style="margin-bottom: 5px;">
+                <input type="text" id="setupChar3" placeholder="Character 3">
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn-strike" onclick="nextStep(3)" style="flex: 1;">Back</button>
+                    <button onclick="nextStep(5)" style="flex: 2;">Next Step</button>
+                </div>
+            </div>
+
+            <div id="step5" class="wizard-step" style="display: none;">
+                <h2>Step 5: Your First Mark</h2>
+                <p>How has vampirism visibly or physically altered you? You must have at least one Mark. (e.g., "Elongated fangs", "Deathly pale skin", "A hole in my chest where my heart was")</p>
+                <input type="text" id="setupMark" placeholder="Enter your starting Mark...">
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn-strike" onclick="nextStep(4)" style="flex: 1;">Back</button>
+                    <button onclick="nextStep(6)" style="flex: 2;">Next Step</button>
+                </div>
+            </div>
+
+            <div id="step6" class="wizard-step" style="display: none;">
+                <h2>Step 6: Your First Memory</h2>
+                <p>Create a Memory Theme, and record your very first Experience within it—usually the tragic moment of your transformation. (e.g. Theme: 'The Night I Died', Experience: 'I was drained of life by a hooded figure in the rain.')</p>
+                <input type="text" id="setupMemTheme" placeholder="Memory Theme..." style="margin-bottom: 5px;">
+                <textarea id="setupMemExp" placeholder="Write your first experience here..."></textarea>
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn-strike" onclick="nextStep(5)" style="flex: 1;">Back</button>
+                    <button onclick="finishSetup()" style="flex: 2; background: #4CAF50;">Begin Chronicle</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="previewModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 800px;">
+            <h2 id="previewTitle" style="text-align: center;">The Chronicle</h2>
+            <div id="previewContent"></div>
+            <button onclick="document.getElementById('previewModal').style.display='none'" style="width: 100%; margin-top: 15px;">Close Journal</button>
+        </div>
+    </div>
+
+    <div class="options-bar" style="border-style: solid; background: var(--panel-bg);">
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <b>Settings:</b>
+            <button class="btn-small" onclick="toggleTheme()" id="btnTheme">Toggle Light Mode</button>
+            <button class="btn-small" onclick="changeFontSize(2)">A+</button>
+            <button class="btn-small" onclick="changeFontSize(-2)">A-</button>
+            <label><input type="checkbox" id="optMuteSound" onchange="saveGame()"> Mute Sounds</label>
+        </div>
+        <div>
+            <button class="btn-small" style="background: #9c27b0;" onclick="exportSaveData()">Backup Save (.json)</button>
+            <input type="file" id="importSaveFile" accept=".json" style="display: none;" onchange="importSaveData(event)">
+            <button class="btn-small" style="background: #673ab7;" onclick="document.getElementById('importSaveFile').click()">Restore Save</button>
+            <button class="btn-small" style="background: #d32f2f;" onclick="resetGame()">Wipe Data</button>
+        </div>
+    </div>
+
+    <h1 style="border: none; margin: 0; padding: 0;">Vampire Chronicle</h1>
+    
+    <div style="display: flex; gap: 10px; margin-top: 10px; margin-bottom: 5px;">
+        <input type="text" id="currentName" placeholder="Enter your current alias/name..." style="font-size: 1.2em; font-weight: bold;">
+        <button onclick="changeName()">Adopt New Name</button>
+    </div>
+    <div id="nameHistory" style="font-size: 0.8em; color: #aaa; margin-bottom: 20px; font-style: italic;">Forgotten Names: None yet.</div>
+
+    <div id="gameWarning">⚠️ SURVIVAL WARNING: You have 0 available Skills or Resources. Game Over imminent!</div>
+    <div id="triggerAlert">🔔 FUTURE PROMPT TRIGGERED: <span id="triggerAlertText"></span></div>
+
+    <div class="panel full-width" style="text-align: center; margin-bottom: 20px;">
+        <div class="options-bar">
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <label><input type="checkbox" id="optReverseTime"> Rev. Time</label>
+                <label><input type="checkbox" id="optMultiplayer"> Multi</label>
+                <button class="btn-small btn-strike" onclick="useAccursedStrings()">Strings (-1)</button>
+                <button id="btnUndo" class="btn-small" style="background: #607d8b;" onclick="undoLastRoll()" disabled>Undo</button>
+                <input type="number" id="jumpPromptNum" placeholder="#" style="width: 50px; padding: 4px; margin-left: 10px;">
+                <button class="btn-small" style="background: #ff5722;" onclick="jumpToPrompt()">Jump</button>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn-small btn-strike" onclick="loseMemorySlot()">-1 Mem Slot</button>
+                <button class="btn-small" style="background: var(--boxed-color);" onclick="unlockSecondSeason()">2nd Season</button>
+                <button class="btn-small" style="background: #2196F3;" onclick="previewChronicle()">Read Journal</button>
+                <button class="btn-small" style="background: #4CAF50;" onclick="exportJournal()">Export (.txt)</button>
+            </div>
+        </div>
+        
+        <button id="btnRoll" onclick="rollAndMove()" style="font-size: 1.2em; padding: 10px 20px;">Roll Dice & Advance</button>
+        
+        <h3 id="promptResult" style="margin-top: 15px; color: #ff4d4d;">Awaiting First Roll...</h3>
+        <p id="rollResultDetails" style="font-size: 0.9em; color: #aaa;"></p>
+        <div id="promptTextDisplay" style="margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.1); border-left: 4px solid var(--accent-color); font-style: italic; text-align: left;">
+            Your prompt narrative will appear here.
+        </div>
+        
+        <textarea id="promptJournal" placeholder="Write your detailed narrative response to this prompt here... (This automatically saves to your Chronicle when you roll the dice)" style="margin-top: 15px; min-height: 120px; font-size: 1.05em; border-color: var(--accent-color);"></textarea>
+        
+        <div id="rollHistoryLog"><b>History:</b><br></div>
+    </div>
+
+    <div class="panel full-width" style="margin-bottom: 20px;">
+        <h3 style="margin: 0;">Future Prompt Triggers</h3>
+        <p style="font-size: 0.8em; color: #aaa; margin-bottom: 10px;">Set a trap, hide a treasure, or track a dying mortal.</p>
+        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+            <input type="number" id="triggerPromptNum" placeholder="Prompt #" style="width: 100px;">
+            <input type="text" id="triggerDesc" placeholder="What happens here?">
+            <button onclick="addTrigger()">Add Trigger</button>
+        </div>
+        <div id="triggersList"></div>
+    </div>
+
+    <div class="container">
+        
+        <div class="panel">
+            <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                <h2>Traits</h2>
+                <label style="font-size: 0.8em;">
+                    <input type="checkbox" id="hideGraveyardToggle" onchange="toggleGraveyard()"> Hide Lost
+                </label>
+            </div>
+            
+            <div id="traitsContainer">
+                <h3>Skills</h3>
+                <ul class="trait-list" id="skillsList"></ul>
+                <button class="btn-small" onclick="addSkill()">+ Add Skill</button>
+                
+                <h3 style="margin-top: 20px;">Resources</h3>
+                <ul class="trait-list" id="resourcesList"></ul>
+                <button class="btn-small" onclick="addResource()">+ Add Resource</button>
+                
+                <h3 style="margin-top: 20px;">Characters</h3>
+                <p style="font-size: 0.8em; color: #aaa;">Click [+•] to add a Doom Dot.</p>
+                <ul class="trait-list" id="charactersList"></ul>
+                <button class="btn-small" onclick="addCharacter()">+ Add Character</button>
+                <button class="btn-small btn-strike" style="margin-top: 5px; width: 100%;" onclick="killAllMortals()">Pass a Century</button>
+                
+                <h3 style="margin-top: 20px;">Marks</h3>
+                <ul class="trait-list" id="marksList"></ul>
+                <button class="btn-small" onclick="addMark()">+ Add Mark</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Memories <span id="memoryCount">(0/5 Active)</span></h2>
+            
+            <div class="boxed-experience">
+                <h4 style="margin: 0; color: var(--boxed-color); border-bottom: none;">The Boxed Experience</h4>
+                <p style="font-size: 0.8em; margin: 5px 0;">This serendipitous moment never fades and does not count towards your limit.</p>
+                <textarea id="boxedExpText" placeholder="A moment that never fades... (*italics* / **bold**)"></textarea>
+            </div>
+            
+            <div id="memoriesContainer"></div>
+            <button class="btn-small" onclick="addMemoryBlock('memoriesContainer')" style="margin-bottom: 20px; width: 100%;">+ Add Memory</button>
+
+            <h2 style="margin-top: 30px;">Diary / Storage <span id="diaryCount">(0/4 Active)</span></h2>
+            <button class="btn-small" onclick="expandDiary()" style="margin-bottom: 10px;">Expand Limit</button>
+            
+            <div id="diaryContainer"></div>
+            <button class="btn-small" onclick="addMemoryBlock('diaryContainer')" style="width: 100%;">+ Add Storage Entry</button>
+        </div>
+
+    </div>
+
+    <script src="data.js"></script>
+    <script src="app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js').then(() => console.log('Service Worker Registered'));
+        }
+    </script>
+</body>
+</html>
