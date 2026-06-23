@@ -5,313 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Thousand Year Old Vampire - Companion</title>
     <link rel="manifest" href="manifest.json">
-    <style>
-        /* ==========================================
-           VARIABLES & THEMES
-           ========================================== */
-        :root {
-            --bg-color: #121212;
-            --text-color: #e0e0e0;
-            --accent-color: #8b0000;
-            --border-color: #444;
-            --panel-bg: #1e1e1e;
-            --warning-color: #ff9800;
-            --boxed-color: #4CAF50;
-            --base-font-size: 16px;
-        }
-
-        body.light-mode {
-            --bg-color: #f4f4f9;
-            --text-color: #1a1a1a;
-            --accent-color: #b71c1c;
-            --border-color: #ccc;
-            --panel-bg: #ffffff;
-        }
-
-        /* ==========================================
-           GLOBAL LAYOUT
-           ========================================== */
-        body { 
-            font-family: 'Georgia', serif; 
-            background-color: var(--bg-color); 
-            color: var(--text-color); 
-            font-size: var(--base-font-size); 
-            max-width: 1100px; 
-            margin: 0 auto; 
-            padding: 20px; 
-            line-height: 1.5; 
-            transition: background 0.3s, color 0.3s; 
-        }
-
-        h1, h2, h3, h4 { 
-            color: var(--accent-color); 
-            border-bottom: 1px solid var(--border-color); 
-            padding-bottom: 5px; 
-            margin-top: 0;
-        }
-
-        .container { 
-            display: flex; 
-            flex-wrap: wrap; 
-            gap: 20px; 
-        }
-
-        .panel { 
-            background: var(--panel-bg); 
-            padding: 15px; 
-            border: 1px solid var(--border-color); 
-            border-radius: 5px; 
-            flex: 1 1 300px; 
-            position: relative; 
-            transition: background 0.3s;
-        }
-
-        .full-width { 
-            flex: 1 1 100%; 
-        }
-        
-        /* ==========================================
-           BUTTONS & INPUTS
-           ========================================== */
-        button { 
-            background-color: var(--accent-color); 
-            color: white; 
-            border: none; 
-            padding: 8px 15px; 
-            font-size: 0.9em; 
-            cursor: pointer; 
-            border-radius: 3px; 
-            transition: 0.2s; 
-        }
-
-        button:hover { 
-            filter: brightness(1.2); 
-        }
-
-        button:disabled { 
-            background-color: #555; 
-            color: #888; 
-            cursor: not-allowed; 
-        }
-
-        .btn-small { 
-            padding: 4px 8px; 
-            font-size: 0.8em; 
-            margin-left: 5px; 
-        }
-
-        .btn-strike { 
-            background-color: #555; 
-        }
-        
-        input[type="text"], select, textarea, input[type="number"] { 
-            background: #222; 
-            color: #fff; 
-            border: 1px solid #555; 
-            padding: 6px; 
-            font-family: inherit; 
-            font-size: 1em; 
-            width: 100%; 
-            box-sizing: border-box;
-        }
-
-        body.light-mode input[type="text"], 
-        body.light-mode select, 
-        body.light-mode textarea, 
-        body.light-mode input[type="number"] { 
-            background: #fff; 
-            color: #000; 
-            border-color: #aaa; 
-        }
-
-        textarea { 
-            resize: vertical; 
-            min-height: 60px; 
-        }
-        
-        .options-bar { 
-            background: rgba(0,0,0,0.1); 
-            padding: 10px; 
-            border-radius: 5px; 
-            margin-bottom: 15px; 
-            display: flex; 
-            gap: 10px; 
-            flex-wrap: wrap; 
-            border: 1px dashed var(--border-color); 
-            font-size: 0.9em; 
-            align-items: center; 
-            justify-content: space-between;
-        }
-
-        /* ==========================================
-           WARNINGS & MODALS
-           ========================================== */
-        #gameWarning { 
-            display: none; 
-            background: var(--warning-color); 
-            color: #000; 
-            padding: 10px; 
-            font-weight: bold; 
-            border-radius: 5px; 
-            margin-bottom: 20px; 
-            text-align: center; 
-        }
-
-        #triggerAlert { 
-            display: none; 
-            background: #2196F3; 
-            color: #fff; 
-            padding: 10px; 
-            font-weight: bold; 
-            border-radius: 5px; 
-            margin-bottom: 20px; 
-            text-align: center; 
-            border: 2px solid #fff;
-        }
-        
-        .modal-overlay { 
-            display: none; 
-            position: fixed; 
-            top: 0; left: 0; width: 100%; height: 100%; 
-            background: rgba(0,0,0,0.85); 
-            z-index: 1000; 
-            align-items: center; 
-            justify-content: center; 
-            overflow-y: auto; 
-        }
-
-        .modal-content { 
-            background: var(--panel-bg); 
-            padding: 30px; 
-            border-radius: 5px; 
-            border: 2px solid var(--accent-color); 
-            width: 90%; 
-            max-width: 600px; 
-            text-align: left; 
-            margin: 20px auto; 
-            color: var(--text-color);
-        }
-
-        /* ==========================================
-           TRAITS & GRAVEYARD
-           ========================================== */
-        .hide-graveyard .strikethrough { 
-            display: none !important; 
-        }
-
-        .trait-list { 
-            list-style-type: none; 
-            padding: 0; 
-            margin: 0 0 10px 0; 
-        }
-
-        .trait-list li { 
-            display: flex; 
-            gap: 5px; 
-            margin-bottom: 8px; 
-            align-items: center; 
-        }
-
-        .strikethrough input[type="text"] { 
-            text-decoration: line-through; 
-            opacity: 0.5; 
-        }
-
-        .checked-skill { 
-            border-bottom: 2px solid #4CAF50 !important; 
-            color: #4CAF50;
-        }
-
-        .doom-dots { 
-            color: var(--warning-color); 
-            font-weight: bold; 
-            font-size: 1.2em; 
-            letter-spacing: 2px;
-        }
-        
-        /* ==========================================
-           MEMORIES
-           ========================================== */
-        .memory-block { 
-            border: 1px solid var(--border-color); 
-            padding: 10px; 
-            margin-bottom: 15px; 
-            background: rgba(0,0,0,0.05); 
-            transition: all 0.3s;
-        }
-
-        .experience-input { 
-            margin-top: 5px; 
-            border-left: 2px solid var(--border-color); 
-            padding-left: 5px; 
-        }
-
-        .mem-controls { 
-            display: flex; 
-            justify-content: space-between; 
-            margin-top: 5px; 
-        }
-
-        .mem-starred { 
-            border-color: #FFC107; 
-            box-shadow: 0 0 5px rgba(255, 193, 7, 0.3); 
-        }
-
-        .mem-hazy input[type="text"] { 
-            font-style: italic; 
-            color: #999; 
-        }
-
-        .mem-primal input[type="text"] { 
-            font-family: monospace; 
-            color: #bcaaa4; 
-        }
-
-        .boxed-experience { 
-            border: 2px solid var(--boxed-color); 
-            padding: 10px; 
-            border-radius: 5px; 
-            margin-bottom: 20px; 
-            background: rgba(76, 175, 80, 0.1); 
-        }
-        
-        /* ==========================================
-           LOGS & TRIGGERS
-           ========================================== */
-        .trigger-item { 
-            background: rgba(0,0,0,0.1); 
-            border-left: 3px solid #2196F3; 
-            padding: 5px 10px; 
-            margin-bottom: 5px; 
-            font-size: 0.9em; 
-            display: flex; 
-            justify-content: space-between;
-        }
-
-        #rollHistoryLog { 
-            max-height: 100px; 
-            overflow-y: auto; 
-            font-size: 0.8em; 
-            color: #888; 
-            background: rgba(0,0,0,0.2); 
-            padding: 10px; 
-            border: 1px solid var(--border-color); 
-            margin-top: 15px; 
-            text-align: left;
-        }
-        
-        #previewContent { 
-            font-family: 'Georgia', serif; 
-            line-height: 1.6; 
-            max-height: 60vh; 
-            overflow-y: auto; 
-            padding-right: 10px;
-        }
-
-        #previewContent b { 
-            color: var(--accent-color); 
-        }
-    </style>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
@@ -400,8 +94,8 @@
         <div style="display: flex; gap: 10px; align-items: center;">
             <b>Settings:</b>
             <button class="btn-small" onclick="toggleTheme()" id="btnTheme">Toggle Light Mode</button>
-            <button class="btn-small" onclick="changeFontSize(2)">A+</button>
-            <button class="btn-small" onclick="changeFontSize(-2)">A-</button>
+            <button class="btn-small" onclick="changeFontSize(2)" aria-label="Increase font size">A+</button>
+            <button class="btn-small" onclick="changeFontSize(-2)" aria-label="Decrease font size">A-</button>
             <label><input type="checkbox" id="optMuteSound" onchange="saveGame()"> Mute Sounds</label>
         </div>
         <div>
@@ -420,8 +114,8 @@
     </div>
     <div id="nameHistory" style="font-size: 0.8em; color: #aaa; margin-bottom: 20px; font-style: italic;">Forgotten Names: None yet.</div>
 
-    <div id="gameWarning">⚠️ SURVIVAL WARNING: You have 0 available Skills or Resources. Game Over imminent!</div>
-    <div id="triggerAlert">🔔 FUTURE PROMPT TRIGGERED: <span id="triggerAlertText"></span></div>
+    <div id="gameWarning" role="alert" aria-live="assertive">⚠️ SURVIVAL WARNING: You have 0 available Skills or Resources. Game Over imminent!</div>
+    <div id="triggerAlert" role="alert" aria-live="assertive">🔔 FUTURE PROMPT TRIGGERED: <span id="triggerAlertText"></span></div>
 
     <div class="panel full-width" style="text-align: center; margin-bottom: 20px;">
         <div class="options-bar">
@@ -441,7 +135,7 @@
             </div>
         </div>
         
-        <button id="btnRoll" onclick="rollAndMove()" style="font-size: 1.2em; padding: 10px 20px;">Roll Dice & Advance</button>
+        <button id="btnRoll" onclick="rollAndMove()" aria-label="Roll dice and advance to the next prompt" style="font-size: 1.2em; padding: 10px 20px;">Roll Dice & Advance</button>
         
         <h3 id="promptResult" style="margin-top: 15px; color: #ff4d4d;">Awaiting First Roll...</h3>
         <p id="rollResultDetails" style="font-size: 0.9em; color: #aaa;"></p>
@@ -517,6 +211,7 @@
 
     </div>
 
+    <script src="logic.js"></script>
     <script src="data.js"></script>
     <script src="app.js"></script>
     <script>

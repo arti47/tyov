@@ -1,55 +1,105 @@
 // app.js
-// The Complete Engine for Thousand Year Old Vampire Companion
+// The engine for the Thousand Year Old Vampire Companion.
+//
+// State model (v2): a single `state` object is the source of truth. The DOM is
+// rendered FROM state; it is never read back as the source of truth. This kills
+// the previous innerHTML-as-state design and the XSS/quote bugs that came with
+// it. All user text is escaped via TYOV.escapeHtml before it touches innerHTML.
 
-let maxMemories = 5;
-let maxDiary = 4;
-let currentPrompt = 0;
-let promptVisits = {};
-let futureTriggers = [];
-let namesHistory = [];
-let turnCount = 0;
-let rollHistory = [];
-let previousState = null; 
-let journalHistory = []; 
-let isGameLoaded = false; // iOS Safari Lock
+'use strict';
+
+var escapeHtml = TYOV.escapeHtml;
+var getTier = TYOV.getTier;
+var getPromptText = TYOV.getPromptText;
+var parseMarkdown = TYOV.parseMarkdown;
+
+var SAVE_KEY = 'tyov_save';
+var SAVE_VERSION = 2;
+
+var isGameLoaded = false; // Guards autosave until load/setup completes.
+var undoStack = [];        // Multi-level undo of gameplay state.
+
+function defaultState() {
+    return {
+        version: SAVE_VERSION,
+        maxMemories: 5,
+        maxDiary: 4,
+        currentPrompt: 0,
+        promptVisits: {},
+        futureTriggers: [],
+        namesHistory: [],
+        turnCount: 0,
+        rollHistory: [],
+        journalHistory: [],
+        currentName: '',
+        boxedExp: '',
+        currentJournal: '',
+        skills: [],      // { id, text, lost, checked }
+        resources: [],   // { id, text, lost }
+        characters: [],  // { id, text, type: 'Mortal'|'Immortal', doom, lost }
+        marks: [],       // { id, text, lost }
+        memories: [],    // { id, theme, experiences[], memState }
+        diary: [],       // same shape as memories
+        settings: {},
+        display: {
+            promptResult: 'Awaiting First Roll...',
+            rollDetails: '',
+            promptText: 'Your prompt narrative will appear here.'
+        }
+    };
+}
+
+var state = defaultState();
+
+// ==========================================
+// SMALL DOM HELPERS
+// ==========================================
+
+function el(id) { return document.getElementById(id); }
+function val(id) { var e = el(id); return e ? e.value : ''; }
+function setVal(id, v) { var e = el(id); if (e) e.value = v || ''; }
+function checked(id) { var e = el(id); return e ? e.checked : false; }
+function setChecked(id, v) { var e = el(id); if (e) e.checked = !!v; }
+function setText(id, t) { var e = el(id); if (e) e.innerText = t; }
+function genId() {
+    return 'e' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-3);
+}
+function debounce(fn, ms) {
+    var t;
+    return function () { clearTimeout(t); t = setTimeout(fn, ms); };
+}
 
 // ==========================================
 // AUDIO CUES & THEMES
 // ==========================================
 
 function playSound(type) {
-    if (document.getElementById('optMuteSound').checked) return;
+    if (checked('optMuteSound')) return;
     try {
-        const sfx = document.getElementById(type === 'dice' ? 'sfxDice' : 'sfxPage');
-        if (sfx) { 
-            sfx.currentTime = 0; 
-            sfx.play().catch(e => { console.log("Audio prevented by browser"); }); 
+        var sfx = el(type === 'dice' ? 'sfxDice' : 'sfxPage');
+        if (sfx) {
+            sfx.currentTime = 0;
+            sfx.play().catch(function () { console.log('Audio prevented by browser'); });
         }
-    } catch(e) {}
+    } catch (e) { /* ignore */ }
 }
 
 function toggleTheme() {
-    const isLight = document.body.classList.toggle('light-mode');
-    document.getElementById('btnTheme').innerText = isLight ? "Toggle Dark Mode" : "Toggle Light Mode";
-    saveGame();
+    var isLight = document.body.classList.toggle('light-mode');
+    setText('btnTheme', isLight ? 'Toggle Dark Mode' : 'Toggle Light Mode');
+    persist();
 }
 
 function changeFontSize(delta) {
-    let currentSize = parseInt(getComputedStyle(document.body).getPropertyValue('--base-font-size')) || 16;
-    let newSize = Math.max(12, Math.min(24, currentSize + delta));
-    document.body.style.setProperty('--base-font-size', `${newSize}px`);
-    saveGame();
+    var cur = parseInt(getComputedStyle(document.body).getPropertyValue('--base-font-size'), 10) || 16;
+    var next = Math.max(12, Math.min(24, cur + delta));
+    document.body.style.setProperty('--base-font-size', next + 'px');
+    persist();
 }
 
 function toggleGraveyard() {
-    const isHidden = document.getElementById('hideGraveyardToggle').checked;
-    const container = document.getElementById('traitsContainer');
-    if (isHidden) {
-        container.classList.add('hide-graveyard');
-    } else {
-        container.classList.remove('hide-graveyard');
-    }
-    saveGame();
+    el('traitsContainer').classList.toggle('hide-graveyard', checked('hideGraveyardToggle'));
+    persist();
 }
 
 // ==========================================
@@ -57,320 +107,401 @@ function toggleGraveyard() {
 // ==========================================
 
 function nextStep(stepNum) {
-    document.querySelectorAll('.wizard-step').forEach(el => el.style.display = 'none');
-    document.getElementById('step' + stepNum).style.display = 'block';
+    var steps = document.querySelectorAll('.wizard-step');
+    for (var i = 0; i < steps.length; i++) steps[i].style.display = 'none';
+    el('step' + stepNum).style.display = 'block';
+}
+
+function newMemory(theme, exp1) {
+    return { id: genId(), theme: theme || '', experiences: [exp1 || '', '', ''], memState: 'normal' };
 }
 
 function finishSetup() {
-    document.getElementById('currentName').value = document.getElementById('setupName').value;
-    
-    ['setupSkill1', 'setupSkill2', 'setupSkill3'].forEach(id => { 
-        let val = document.getElementById(id).value;
-        if(val) addSkill(val); 
+    state.currentName = val('setupName');
+
+    ['setupSkill1', 'setupSkill2', 'setupSkill3'].forEach(function (id) {
+        var v = val(id);
+        if (v) state.skills.push({ id: genId(), text: v, lost: false, checked: false });
     });
-
-    ['setupRes1', 'setupRes2', 'setupRes3'].forEach(id => { 
-        let val = document.getElementById(id).value;
-        if(val) addResource(val); 
+    ['setupRes1', 'setupRes2', 'setupRes3'].forEach(function (id) {
+        var v = val(id);
+        if (v) state.resources.push({ id: genId(), text: v, lost: false });
     });
-
-    ['setupChar1', 'setupChar2', 'setupChar3'].forEach(id => { 
-        let val = document.getElementById(id).value;
-        if(val) addCharacter(val, 'Mortal'); 
+    ['setupChar1', 'setupChar2', 'setupChar3'].forEach(function (id) {
+        var v = val(id);
+        if (v) state.characters.push({ id: genId(), text: v, type: 'Mortal', doom: 0, lost: false });
     });
+    var mark = val('setupMark');
+    if (mark) state.marks.push({ id: genId(), text: mark, lost: false });
 
-    let markVal = document.getElementById('setupMark').value;
-    if(markVal) addMark(markVal);
+    state.memories.push(newMemory(val('setupMemTheme'), val('setupMemExp')));
+    for (var i = 1; i < 5; i++) state.memories.push(newMemory());
 
-    let theme = document.getElementById('setupMemTheme').value;
-    let exp = document.getElementById('setupMemExp').value;
-    addMemoryBlock('memoriesContainer', true, theme, exp);
-    
-    for(let i=1; i<5; i++) {
-        addMemoryBlock('memoriesContainer', true);
-    }
-
-    document.getElementById('setupWizard').style.display = 'none';
+    el('setupWizard').style.display = 'none';
     isGameLoaded = true;
-    saveGame();
+    applyState();
+    persist();
+}
+
+function showWizard() {
+    el('setupWizard').style.display = 'flex';
+    nextStep(1);
 }
 
 // ==========================================
-// SAVE, LOAD & UNDO
+// SAVE, LOAD, MIGRATION & UNDO
 // ==========================================
 
-function syncInputsToAttributes() {
-    document.querySelectorAll('input[type="text"], input[type="number"], textarea').forEach(el => { 
-        el.setAttribute('value', el.value); 
-        if(el.tagName === 'TEXTAREA') el.innerHTML = el.value; 
-    });
-    document.querySelectorAll('input[type="checkbox"]').forEach(el => {
-        el.checked ? el.setAttribute('checked', 'checked') : el.removeAttribute('checked');
-    });
-    document.querySelectorAll('select').forEach(el => { 
-        el.querySelectorAll('option').forEach(opt => {
-            opt.value === el.value ? opt.setAttribute('selected', 'selected') : opt.removeAttribute('selected');
-        }); 
-    });
-}
-
-function saveGame() {
-    if (!isGameLoaded) return; // Wait until file is fully loaded
-
-    syncInputsToAttributes();
-    const saveData = {
-        maxMemories, maxDiary, currentPrompt, promptVisits, futureTriggers, namesHistory, turnCount, rollHistory, journalHistory,
-        currentName: document.getElementById('currentName').value, 
-        boxedExp: document.getElementById('boxedExpText').value,
-        currentJournal: document.getElementById('promptJournal').value,
-        settings: { 
-            isLightMode: document.body.classList.contains('light-mode'), 
-            fontSize: getComputedStyle(document.body).getPropertyValue('--base-font-size'), 
-            hideGraveyard: document.getElementById('hideGraveyardToggle').checked, 
-            muteSound: document.getElementById('optMuteSound').checked 
-        },
-        htmlData: { 
-            skills: document.getElementById('skillsList').innerHTML, 
-            resources: document.getElementById('resourcesList').innerHTML, 
-            characters: document.getElementById('charactersList').innerHTML, 
-            marks: document.getElementById('marksList').innerHTML, 
-            memories: document.getElementById('memoriesContainer').innerHTML, 
-            diary: document.getElementById('diaryContainer').innerHTML, 
-            promptDisplay: document.getElementById('promptTextDisplay').innerHTML, 
-            promptResult: document.getElementById('promptResult').innerText, 
-            rollDetails: document.getElementById('rollResultDetails').innerText, 
-            rollLog: document.getElementById('rollHistoryLog').innerHTML 
-        }
+function persist() {
+    if (!isGameLoaded) return;
+    // Pull the few free-form fields that live directly in the DOM.
+    state.currentName = val('currentName');
+    state.boxedExp = val('boxedExpText');
+    state.currentJournal = val('promptJournal');
+    state.settings = {
+        isLightMode: document.body.classList.contains('light-mode'),
+        fontSize: getComputedStyle(document.body).getPropertyValue('--base-font-size'),
+        hideGraveyard: checked('hideGraveyardToggle'),
+        muteSound: checked('optMuteSound'),
+        reverseTime: checked('optReverseTime'),
+        multiplayer: checked('optMultiplayer')
     };
-    localStorage.setItem('tyov_save', JSON.stringify(saveData));
+    try {
+        localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+    } catch (e) {
+        console.error('Save failed', e);
+    }
+}
+
+var saveGame = debounce(persist, 300);
+
+function normMem(m) {
+    m = m || {};
+    var exps = Array.isArray(m.experiences) ? m.experiences.slice() : [];
+    while (exps.length < 3) exps.push('');
+    return {
+        id: m.id || genId(),
+        theme: m.theme || '',
+        experiences: exps,
+        memState: m.memState || 'normal'
+    };
+}
+
+// Validate/repair an arbitrary parsed object into a complete v2 state.
+function normalizeState(d) {
+    var s = Object.assign(defaultState(), d || {});
+    s.version = SAVE_VERSION;
+    s.skills = (s.skills || []).map(function (x) {
+        return { id: x.id || genId(), text: x.text || '', lost: !!x.lost, checked: !!x.checked };
+    });
+    s.resources = (s.resources || []).map(function (x) {
+        return { id: x.id || genId(), text: x.text || '', lost: !!x.lost };
+    });
+    s.marks = (s.marks || []).map(function (x) {
+        return { id: x.id || genId(), text: x.text || '', lost: !!x.lost };
+    });
+    s.characters = (s.characters || []).map(function (x) {
+        return {
+            id: x.id || genId(),
+            text: x.text || '',
+            type: x.type === 'Immortal' ? 'Immortal' : 'Mortal',
+            doom: x.doom || 0,
+            lost: !!x.lost
+        };
+    });
+    s.memories = (s.memories || []).map(normMem);
+    s.diary = (s.diary || []).map(normMem);
+    s.settings = s.settings || {};
+    s.display = Object.assign(defaultState().display, s.display || {});
+    return s;
+}
+
+// --- v1 (innerHTML-blob) migration -------------------------------------------
+
+function isLegacy(d) {
+    return d && (d.htmlData !== undefined || d.version === undefined);
+}
+
+function parseTraitRows(html, hasCheckbox) {
+    if (!html) return [];
+    var doc = new DOMParser().parseFromString('<ul>' + html + '</ul>', 'text/html');
+    return Array.prototype.map.call(doc.querySelectorAll('li'), function (li) {
+        var t = li.querySelector('input[type="text"]');
+        var row = {
+            id: genId(),
+            text: t ? (t.getAttribute('value') || '') : '',
+            lost: li.classList.contains('strikethrough')
+        };
+        if (hasCheckbox) {
+            var c = li.querySelector('input[type="checkbox"]');
+            row.checked = !!(c && c.hasAttribute('checked'));
+        }
+        return row;
+    });
+}
+
+function parseCharacterRows(html) {
+    if (!html) return [];
+    var doc = new DOMParser().parseFromString('<ul>' + html + '</ul>', 'text/html');
+    return Array.prototype.map.call(doc.querySelectorAll('li'), function (li) {
+        var t = li.querySelector('input[type="text"]');
+        var sel = li.querySelector('select');
+        var type = 'Mortal';
+        if (sel) {
+            var opt = sel.querySelector('option[selected]');
+            type = opt ? opt.value : 'Mortal';
+        }
+        var dots = li.querySelector('.doom-dots');
+        var doom = dots ? (dots.textContent.match(/•/g) || []).length : 0;
+        return {
+            id: genId(),
+            text: t ? (t.getAttribute('value') || '') : '',
+            type: type === 'Immortal' ? 'Immortal' : 'Mortal',
+            doom: doom,
+            lost: li.classList.contains('strikethrough')
+        };
+    });
+}
+
+function parseMemoryRows(html) {
+    if (!html) return [];
+    var doc = new DOMParser().parseFromString('<div>' + html + '</div>', 'text/html');
+    return Array.prototype.map.call(doc.querySelectorAll('.memory-block'), function (b) {
+        var theme = b.querySelector('input[type="text"]');
+        var exps = Array.prototype.map.call(b.querySelectorAll('.experience-input'), function (e) {
+            return e.getAttribute('value') || '';
+        });
+        var memState = 'normal';
+        var sel = b.querySelector('select');
+        if (sel) {
+            var opt = sel.querySelector('option[selected]');
+            if (opt) memState = opt.value;
+        } else {
+            ['starred', 'hazy', 'vast', 'primal'].forEach(function (st) {
+                if (b.classList.contains('mem-' + st)) memState = st;
+            });
+        }
+        return normMem({ theme: theme ? (theme.getAttribute('value') || '') : '', experiences: exps, memState: memState });
+    });
+}
+
+function migrateV1(d) {
+    try { localStorage.setItem('tyov_save_v1_backup', JSON.stringify(d)); } catch (e) { /* ignore */ }
+    var h = d.htmlData || {};
+    return normalizeState({
+        version: SAVE_VERSION,
+        maxMemories: d.maxMemories || 5,
+        maxDiary: d.maxDiary || 4,
+        currentPrompt: d.currentPrompt || 0,
+        promptVisits: d.promptVisits || {},
+        futureTriggers: d.futureTriggers || [],
+        namesHistory: d.namesHistory || [],
+        turnCount: d.turnCount || 0,
+        rollHistory: d.rollHistory || [],
+        journalHistory: d.journalHistory || [],
+        currentName: d.currentName || '',
+        boxedExp: d.boxedExp || '',
+        currentJournal: d.currentJournal || '',
+        skills: parseTraitRows(h.skills, true),
+        resources: parseTraitRows(h.resources, false),
+        marks: parseTraitRows(h.marks, false),
+        characters: parseCharacterRows(h.characters),
+        memories: parseMemoryRows(h.memories),
+        diary: parseMemoryRows(h.diary),
+        settings: d.settings || {},
+        display: {
+            promptResult: h.promptResult || 'Awaiting First Roll...',
+            rollDetails: h.rollDetails || '',
+            promptText: h.promptDisplay || 'Your prompt narrative will appear here.'
+        }
+    });
 }
 
 function loadGame() {
-    const saved = localStorage.getItem('tyov_save');
-    if (saved) {
-        const data = JSON.parse(saved);
-        maxMemories = data.maxMemories || 5; 
-        maxDiary = data.maxDiary || 4; 
-        currentPrompt = data.currentPrompt || 0; 
-        promptVisits = data.promptVisits || {}; 
-        futureTriggers = data.futureTriggers || []; 
-        namesHistory = data.namesHistory || []; 
-        turnCount = data.turnCount || 0; 
-        rollHistory = data.rollHistory || [];
-        journalHistory = data.journalHistory || [];
+    var saved;
+    try {
+        saved = localStorage.getItem(SAVE_KEY);
+    } catch (e) {
+        saved = null;
+    }
+    if (!saved) { showWizard(); return; }
 
-        document.getElementById('currentName').value = data.currentName || ""; 
-        document.getElementById('boxedExpText').value = data.boxedExp || ""; 
-        document.getElementById('promptJournal').value = data.currentJournal || "";
-        document.getElementById('nameHistory').innerText = "Forgotten Names: " + (namesHistory.length ? namesHistory.join(" ➔ ") : "None yet.");
-        
-        if (data.settings) { 
-            if (data.settings.isLightMode) { document.body.classList.add('light-mode'); document.getElementById('btnTheme').innerText = "Toggle Dark Mode"; }
-            if (data.settings.fontSize) document.body.style.setProperty('--base-font-size', data.settings.fontSize); 
-            if (data.settings.hideGraveyard) { document.getElementById('hideGraveyardToggle').checked = true; document.getElementById('traitsContainer').classList.add('hide-graveyard'); } 
-            if (data.settings.muteSound) document.getElementById('optMuteSound').checked = true; 
-        }
-        
-        document.getElementById('skillsList').innerHTML = data.htmlData.skills || ""; 
-        document.getElementById('resourcesList').innerHTML = data.htmlData.resources || ""; 
-        document.getElementById('charactersList').innerHTML = data.htmlData.characters || ""; 
-        document.getElementById('marksList').innerHTML = data.htmlData.marks || ""; 
-        document.getElementById('memoriesContainer').innerHTML = data.htmlData.memories || ""; 
-        document.getElementById('diaryContainer').innerHTML = data.htmlData.diary || ""; 
-        document.getElementById('promptTextDisplay').innerHTML = data.htmlData.promptDisplay || ""; 
-        document.getElementById('promptResult').innerText = data.htmlData.promptResult || "Awaiting First Roll..."; 
-        document.getElementById('rollResultDetails').innerText = data.htmlData.rollDetails || ""; 
-        document.getElementById('rollHistoryLog').innerHTML = data.htmlData.rollLog || "<b>Chronicle History:</b><br>";
-        
-        renderTriggers(); 
-        updateMemoryCount(); 
-        updateDiaryCount(); 
-        checkSurvivalState(); 
-        checkGameOver();
-        
-        isGameLoaded = true; 
-    } else { 
-        document.getElementById('setupWizard').style.display = 'flex'; 
-        nextStep(1); 
+    var data;
+    try {
+        data = JSON.parse(saved);
+    } catch (e) {
+        alert('Your saved chronicle could not be read (corrupted data). Starting fresh; ' +
+              'a backup of the raw data was kept under "tyov_save_corrupt".');
+        try { localStorage.setItem('tyov_save_corrupt', saved); } catch (e2) { /* ignore */ }
+        showWizard();
+        return;
+    }
+
+    state = isLegacy(data) ? migrateV1(data) : normalizeState(data);
+    applyState();
+    isGameLoaded = true;
+    persist(); // Re-save in current format (completes the migration).
+}
+
+function resetGame() {
+    if (confirm('Are you sure you want to wipe this chronicle? This cannot be undone.')) {
+        localStorage.removeItem(SAVE_KEY);
+        location.reload();
     }
 }
 
-function resetGame() { 
-    if(confirm("Are you sure you want to wipe this chronicle? This cannot be undone.")) { 
-        localStorage.removeItem('tyov_save'); 
-        location.reload(); 
-    } 
-}
-
-document.addEventListener('input', saveGame); 
-document.addEventListener('change', saveGame);
-
 function saveStateForUndo() {
-    previousState = JSON.stringify({ 
-        currentPrompt, 
-        promptVisits: {...promptVisits}, 
-        turnCount, 
-        rollHistory: [...rollHistory], 
-        journalHistory: [...journalHistory],
-        displayHTML: document.getElementById('promptTextDisplay').innerHTML, 
-        resultText: document.getElementById('promptResult').innerText, 
-        detailText: document.getElementById('rollResultDetails').innerText, 
-        logHTML: document.getElementById('rollHistoryLog').innerHTML,
-        currentJournal: document.getElementById('promptJournal').value
-    });
-    document.getElementById('btnUndo').disabled = false;
+    undoStack.push(JSON.stringify({
+        currentPrompt: state.currentPrompt,
+        promptVisits: state.promptVisits,
+        turnCount: state.turnCount,
+        rollHistory: state.rollHistory,
+        journalHistory: state.journalHistory,
+        display: state.display,
+        currentJournal: val('promptJournal')
+    }));
+    if (undoStack.length > 50) undoStack.shift();
+    el('btnUndo').disabled = false;
 }
 
 function undoLastRoll() {
-    if (!previousState) return;
-    const s = JSON.parse(previousState);
-    currentPrompt = s.currentPrompt; 
-    promptVisits = s.promptVisits; 
-    turnCount = s.turnCount; 
-    rollHistory = s.rollHistory;
-    journalHistory = s.journalHistory;
-    
-    document.getElementById('promptTextDisplay').innerHTML = s.displayHTML; 
-    document.getElementById('promptResult').innerText = s.resultText; 
-    document.getElementById('rollResultDetails').innerText = s.detailText; 
-    document.getElementById('rollHistoryLog').innerHTML = s.logHTML;
-    document.getElementById('promptJournal').value = s.currentJournal;
-    
-    previousState = null; 
-    document.getElementById('btnUndo').disabled = true; 
-    saveGame();
+    if (!undoStack.length) return;
+    var s = JSON.parse(undoStack.pop());
+    state.currentPrompt = s.currentPrompt;
+    state.promptVisits = s.promptVisits;
+    state.turnCount = s.turnCount;
+    state.rollHistory = s.rollHistory;
+    state.journalHistory = s.journalHistory;
+    state.display = s.display;
+    setVal('promptJournal', s.currentJournal);
+
+    applyDisplay();
+    renderRollLog();
+    checkTriggers();
+    checkGameOver();
+    el('btnUndo').disabled = undoStack.length === 0;
+    persist();
 }
 
 function addToHistoryLog(text) {
-    turnCount++; 
-    const logStr = `[Turn ${turnCount}] ${text}`;
-    rollHistory.push(logStr);
-    
-    const logDiv = document.getElementById('rollHistoryLog');
-    const newEntry = document.createElement('div'); 
-    newEntry.innerText = logStr;
-    logDiv.insertBefore(newEntry, logDiv.childNodes[2]); 
+    state.turnCount++;
+    state.rollHistory.push('[Turn ' + state.turnCount + '] ' + text);
+    renderRollLog();
 }
 
 // ==========================================
 // IMPORT & EXPORT
 // ==========================================
 
-function exportSaveData() { 
-    saveGame(); 
-    const blob = new Blob([localStorage.getItem('tyov_save')], { type: "application/json" }); 
-    const a = document.createElement("a"); 
-    a.href = URL.createObjectURL(blob); 
-    a.download = "Vampire_Save.json"; 
-    a.click(); 
+function exportSaveData() {
+    persist();
+    var blob = new Blob([localStorage.getItem(SAVE_KEY) || '{}'], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'Vampire_Save.json';
+    a.click();
 }
 
-function importSaveData(e) { 
-    const f = e.target.files[0]; 
-    if(!f) return;
-    const r = new FileReader(); 
-    r.onload = (event) => { 
-        localStorage.setItem('tyov_save', event.target.result); 
-        location.reload(); 
-    }; 
-    r.readAsText(f); 
-}
-
-function parseMarkdown(text) { 
-    if(!text) return '';
-    return text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
-               .replace(/\*(.*?)\*/g, '<i>$1</i>')
-               .replace(/\n/g, '<br>'); 
+function importSaveData(e) {
+    var f = e.target.files[0];
+    if (!f) return;
+    var r = new FileReader();
+    r.onload = function (event) {
+        var parsed;
+        try {
+            parsed = JSON.parse(event.target.result);
+            if (!parsed || typeof parsed !== 'object') throw new Error('Not a JSON object');
+        } catch (err) {
+            alert('Import failed: the file is not valid JSON.\n\n' + err.message);
+            return;
+        }
+        try {
+            var migrated = isLegacy(parsed) ? migrateV1(parsed) : normalizeState(parsed);
+            localStorage.setItem(SAVE_KEY, JSON.stringify(migrated));
+            location.reload();
+        } catch (err) {
+            alert('Import failed: the file is not a valid Vampire Chronicle save.\n\n' + err.message);
+        }
+    };
+    r.readAsText(f);
 }
 
 function previewChronicle() {
-    syncInputsToAttributes();
-    const name = document.getElementById('currentName').value || "Unnamed Vampire";
-    document.getElementById('previewTitle').innerText = `The Chronicle of ${name}`;
+    var name = state.currentName || 'Unnamed Vampire';
+    el('previewTitle').innerText = 'The Chronicle of ' + name;
 
-    let html = ``;
-    
-    const boxed = document.getElementById('boxedExpText').value;
-    if(boxed.trim()) {
-        html += `<div style="background:rgba(76,175,80,0.1);padding:15px;border-left:4px solid #4CAF50;margin-bottom:20px;">
-                    <i>"A serendipitous moment that never fades..."</i><br><br>${parseMarkdown(boxed)}
-                 </div>`;
+    var html = '';
+    var boxed = val('boxedExpText');
+    if (boxed.trim()) {
+        html += '<div style="background:rgba(76,175,80,0.1);padding:15px;border-left:4px solid #4CAF50;margin-bottom:20px;">' +
+                '<i>"A serendipitous moment that never fades..."</i><br><br>' + parseMarkdown(boxed) + '</div>';
     }
 
-    if (journalHistory.length > 0) {
-        html += `<h3>Narrative Journal</h3><div style="margin-bottom: 30px; padding: 15px; background: rgba(0,0,0,0.05); border: 1px solid var(--border-color);">`;
-        journalHistory.forEach(entry => {
-            html += `<div style="margin-bottom: 15px;"><b>[Prompt ${entry.prompt}]</b><br>${parseMarkdown(entry.text)}</div>`;
+    if (state.journalHistory.length > 0) {
+        html += '<h3>Narrative Journal</h3><div style="margin-bottom: 30px; padding: 15px; background: rgba(0,0,0,0.05); border: 1px solid var(--border-color);">';
+        state.journalHistory.forEach(function (entry) {
+            html += '<div style="margin-bottom: 15px;"><b>[Prompt ' + escapeHtml(String(entry.prompt)) + ']</b><br>' +
+                    parseMarkdown(entry.text) + '</div>';
         });
-        html += `</div>`;
+        html += '</div>';
     }
 
-    html += `<h3>Active Memories</h3>`;
-    document.querySelectorAll('#memoriesContainer .memory-block').forEach(block => {
-        let theme = block.querySelector('input[type="text"]').value;
-        if(!theme) return;
-        html += `<div style="margin-bottom: 15px;"><b>Theme: ${theme}</b><ul>`;
-        block.querySelectorAll('.experience-input').forEach(exp => {
-            if(exp.value.trim() !== '') html += `<li>${parseMarkdown(exp.value)}</li>`;
-        });
-        html += `</ul></div>`;
-    });
+    html += '<h3>Active Memories</h3>' + renderMemoriesPreview(state.memories, false);
+    html += '<hr style="border-color: var(--border-color); margin: 30px 0;">';
+    html += '<h3>The Diary / Lost Storage</h3>' + renderMemoriesPreview(state.diary, true);
 
-    html += `<hr style="border-color: var(--border-color); margin: 30px 0;">`;
-    html += `<h3>The Diary / Lost Storage</h3>`;
-    document.querySelectorAll('#diaryContainer .memory-block').forEach(block => {
-        let theme = block.querySelector('input[type="text"]').value;
-        if(!theme) return;
-        html += `<div style="margin-bottom: 15px; color: #888;"><b>Theme: ${theme}</b><ul>`;
-        block.querySelectorAll('.experience-input').forEach(exp => {
-            if(exp.value.trim() !== '') html += `<li>${parseMarkdown(exp.value)}</li>`;
-        });
-        html += `</ul></div>`;
-    });
+    el('previewContent').innerHTML = html;
+    el('previewModal').style.display = 'flex';
+}
 
-    document.getElementById('previewContent').innerHTML = html;
-    document.getElementById('previewModal').style.display = 'flex';
+function renderMemoriesPreview(list, faded) {
+    var out = '';
+    list.forEach(function (m) {
+        if (!m.theme) return;
+        out += '<div style="margin-bottom: 15px;' + (faded ? ' color:#888;' : '') + '"><b>Theme: ' +
+               escapeHtml(m.theme) + '</b><ul>';
+        m.experiences.forEach(function (x) {
+            if (x.trim() !== '') out += '<li>' + parseMarkdown(x) + '</li>';
+        });
+        out += '</ul></div>';
+    });
+    return out;
 }
 
 function exportJournal() {
-    syncInputsToAttributes();
-    let txt = `CHRONICLE OF ${document.getElementById('currentName').value}\n=======================================\n\n`;
-    
-    let boxed = document.getElementById('boxedExpText').value;
-    if (boxed) {
-        txt += `--- BOXED EXPERIENCE ---\n${boxed}\n\n`;
-    }
+    var txt = 'CHRONICLE OF ' + (state.currentName || 'Unnamed Vampire') +
+              '\n=======================================\n\n';
 
-    if (journalHistory.length > 0) {
-        txt += `--- NARRATIVE JOURNAL ---\n`;
-        journalHistory.forEach(entry => { 
-            txt += `[Prompt ${entry.prompt}]\n${entry.text}\n\n`; 
+    var boxed = val('boxedExpText');
+    if (boxed) txt += '--- BOXED EXPERIENCE ---\n' + boxed + '\n\n';
+
+    if (state.journalHistory.length > 0) {
+        txt += '--- NARRATIVE JOURNAL ---\n';
+        state.journalHistory.forEach(function (entry) {
+            txt += '[Prompt ' + entry.prompt + ']\n' + entry.text + '\n\n';
         });
     }
 
-    txt += `--- ACTIVE MEMORIES ---\n`;
-    document.querySelectorAll('#memoriesContainer .memory-block').forEach(block => { 
-        txt += `[${block.querySelector('input').value}]\n`; 
-        block.querySelectorAll('.experience-input').forEach(exp => { 
-            if(exp.value.trim() !== '') txt += `- ${exp.value}\n`; 
-        }); 
-        txt += `\n`;
-    });
+    txt += '--- ACTIVE MEMORIES ---\n' + journalMemoriesText(state.memories);
+    txt += '--- DIARY / STORAGE ---\n' + journalMemoriesText(state.diary);
 
-    txt += `--- DIARY / STORAGE ---\n`;
-    document.querySelectorAll('#diaryContainer .memory-block').forEach(block => { 
-        txt += `[${block.querySelector('input').value}]\n`; 
-        block.querySelectorAll('.experience-input').forEach(exp => { 
-            if(exp.value.trim() !== '') txt += `- ${exp.value}\n`; 
-        }); 
-        txt += `\n`;
-    });
-
-    const blob = new Blob([txt], { type: "text/plain" }); 
-    const a = document.createElement("a"); 
-    a.href = URL.createObjectURL(blob); 
-    a.download = "Chronicle.txt"; 
+    var blob = new Blob([txt], { type: 'text/plain' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'Chronicle.txt';
     a.click();
+}
+
+function journalMemoriesText(list) {
+    var out = '';
+    list.forEach(function (m) {
+        out += '[' + m.theme + ']\n';
+        m.experiences.forEach(function (x) {
+            if (x.trim() !== '') out += '- ' + x + '\n';
+        });
+        out += '\n';
+    });
+    return out;
 }
 
 // ==========================================
@@ -378,122 +509,109 @@ function exportJournal() {
 // ==========================================
 
 function archiveJournal() {
-    const jText = document.getElementById('promptJournal').value.trim();
-    if (jText !== "" && currentPrompt !== 0) {
-        let visits = promptVisits[currentPrompt] || 1;
-        let tier = visits === 1 ? 'a' : (visits === 2 ? 'b' : 'c');
-        journalHistory.push({ prompt: `${currentPrompt}${tier}`, text: jText });
-        document.getElementById('promptJournal').value = ''; 
+    var ta = el('promptJournal');
+    var jText = ta.value.trim();
+    if (jText !== '' && state.currentPrompt !== 0) {
+        var visits = state.promptVisits[state.currentPrompt] || 1;
+        state.journalHistory.push({ prompt: state.currentPrompt + getTier(visits), text: jText });
+        ta.value = '';
+        state.currentJournal = '';
     }
 }
 
 function changeName() {
-    const input = document.getElementById('currentName');
-    if(input.value.trim() !== "") {
-        namesHistory.push(input.value);
-        document.getElementById('nameHistory').innerText = "Forgotten Names: " + namesHistory.join(" ➔ ");
-        input.value = "";
-        saveGame();
+    var input = el('currentName');
+    if (input.value.trim() !== '') {
+        state.namesHistory.push(input.value);
+        renderNameHistory();
+        input.value = '';
+        state.currentName = '';
+        persist();
     }
 }
 
 function calculateMove() {
-    const isMulti = document.getElementById('optMultiplayer').checked;
-    const isRev = document.getElementById('optReverseTime').checked;
-    
-    const d10_1 = Math.floor(Math.random() * 10) + 1;
-    const d10_2 = isMulti ? Math.floor(Math.random() * 10) + 1 : 0;
-    const d6 = Math.floor(Math.random() * 6) + 1;
-    
-    const totalD10 = d10_1 + d10_2;
-    const diff = isRev ? (d6 - totalD10) : (totalD10 - d6);
-    
-    return { diff, d10_1, d10_2, d6, isMulti, isRev };
+    return TYOV.rollDice({ reverse: checked('optReverseTime'), multi: checked('optMultiplayer') });
 }
 
-function updatePromptDisplay(promptNum, tier) {
-    let narrativeText = "Prompt text not found. Ensure data.js is loaded.";
-    if (promptDB[promptNum]) {
-        if (promptDB[promptNum][tier]) {
-            narrativeText = promptDB[promptNum][tier];
-        } else if (promptVisits[promptNum] > Object.keys(promptDB[promptNum]).length) {
-            narrativeText = "You have completed all entries for this prompt. You must roll again or move forward.";
-        }
-    }
-    document.getElementById('promptTextDisplay').innerText = narrativeText;
+function updatePromptDisplay(promptNum, visits) {
+    state.display.promptText = getPromptText(promptDB, promptNum, visits);
+    el('promptTextDisplay').innerText = state.display.promptText;
 }
 
-function checkGameOver() { 
-    if (currentPrompt >= 72 && currentPrompt <= 80) { 
-        document.getElementById('btnRoll').disabled = true; 
-        document.getElementById('promptResult').innerText += " [GAME OVER]"; 
-    } 
+function checkGameOver() {
+    var over = state.currentPrompt >= 72 && state.currentPrompt <= 80;
+    el('btnRoll').disabled = over;
+    if (over) el('promptResult').innerText = state.display.promptResult + ' [GAME OVER]';
 }
 
 function rollAndMove() {
     archiveJournal();
-    playSound('dice'); 
-    saveStateForUndo(); 
-    
-    if(currentPrompt === 0) currentPrompt = 1;
-    
-    let moveData = calculateMove(); 
-    currentPrompt = Math.max(1, currentPrompt + moveData.diff);
-    
-    promptVisits[currentPrompt] = (promptVisits[currentPrompt] || 0) + 1;
-    let tier = promptVisits[currentPrompt] === 1 ? 'a' : (promptVisits[currentPrompt] === 2 ? 'b' : 'c');
-    
-    let d10Str = moveData.isMulti ? `${moveData.d10_1} + ${moveData.d10_2}` : `${moveData.d10_1}`;
-    let detailStr = `Rolled ${moveData.isRev ? `d6(${moveData.d6}) - d10(${d10Str})` : `d10(${d10Str}) - d6(${moveData.d6})`}. Moved by ${moveData.diff}.`;
-    
-    document.getElementById('rollResultDetails').innerText = detailStr;
-    document.getElementById('promptResult').innerText = `Proceed to Prompt ${currentPrompt}${tier}`;
-    
-    addToHistoryLog(`Prompt ${currentPrompt}${tier} (${detailStr})`);
-    
-    updatePromptDisplay(currentPrompt, tier); 
+    playSound('dice');
+    saveStateForUndo();
+
+    if (state.currentPrompt === 0) state.currentPrompt = 1;
+
+    var m = calculateMove();
+    state.currentPrompt = Math.max(1, state.currentPrompt + m.diff);
+    state.promptVisits[state.currentPrompt] = (state.promptVisits[state.currentPrompt] || 0) + 1;
+
+    var visits = state.promptVisits[state.currentPrompt];
+    var tier = getTier(visits);
+    var d10Str = m.multi ? (m.d10_1 + ' + ' + m.d10_2) : ('' + m.d10_1);
+    var detail = 'Rolled ' + (m.reverse
+        ? ('d6(' + m.d6 + ') - d10(' + d10Str + ')')
+        : ('d10(' + d10Str + ') - d6(' + m.d6 + ')')) + '. Moved by ' + m.diff + '.';
+
+    state.display.rollDetails = detail;
+    state.display.promptResult = 'Proceed to Prompt ' + state.currentPrompt + tier;
+
+    updatePromptDisplay(state.currentPrompt, visits);
+    addToHistoryLog('Prompt ' + state.currentPrompt + tier + ' (' + detail + ')');
+
+    applyDisplay();
     checkTriggers();
-    checkGameOver(); 
-    saveGame();
+    checkGameOver();
+    persist();
 }
 
 function jumpToPrompt() {
-    let target = parseInt(document.getElementById('jumpPromptNum').value);
-    if (target >= 1 && target <= 80) { 
-        archiveJournal();
-        playSound('page'); 
-        saveStateForUndo(); 
-        currentPrompt = target; 
-        
-        promptVisits[target] = (promptVisits[target] || 0) + 1; 
-        let tier = promptVisits[target] === 1 ? 'a' : (promptVisits[target] === 2 ? 'b' : 'c'); 
-        
-        document.getElementById('rollResultDetails').innerText = `Manually jumped to Prompt ${target}.`; 
-        document.getElementById('promptResult').innerText = `Proceed to Prompt ${target}${tier}`; 
-        addToHistoryLog(`Jumped to Prompt ${target}${tier}`); 
-        
-        updatePromptDisplay(target, tier); 
-        checkTriggers();
-        checkGameOver(); 
-        saveGame(); 
-        
-        document.getElementById('jumpPromptNum').value = '';
-    } else { 
-        alert("Please enter a valid prompt number between 1 and 80."); 
+    var target = parseInt(val('jumpPromptNum'), 10);
+    if (!(target >= 1 && target <= 80)) {
+        alert('Please enter a valid prompt number between 1 and 80.');
+        return;
     }
+    archiveJournal();
+    playSound('page');
+    saveStateForUndo();
+    state.currentPrompt = target;
+    state.promptVisits[target] = (state.promptVisits[target] || 0) + 1;
+    var visits = state.promptVisits[target];
+    var tier = getTier(visits);
+
+    state.display.rollDetails = 'Manually jumped to Prompt ' + target + '.';
+    state.display.promptResult = 'Proceed to Prompt ' + target + tier;
+    updatePromptDisplay(target, visits);
+    addToHistoryLog('Jumped to Prompt ' + target + tier);
+
+    applyDisplay();
+    checkTriggers();
+    checkGameOver();
+    persist();
+    setVal('jumpPromptNum', '');
 }
 
 function useAccursedStrings() {
-    if(currentPrompt > 1) {
-        archiveJournal();
-        saveStateForUndo();
-        currentPrompt -= 1;
-        document.getElementById('promptResult').innerText = `Stepped back to Prompt ${currentPrompt}`;
-        document.getElementById('promptTextDisplay').innerText = "You have stepped backward using the Accursed Strings.";
-        addToHistoryLog(`Used Accursed Strings: Back to Prompt ${currentPrompt}`);
-        checkTriggers();
-        saveGame();
-    }
+    if (state.currentPrompt <= 1) return;
+    archiveJournal();
+    saveStateForUndo();
+    state.currentPrompt -= 1;
+    state.display.promptResult = 'Stepped back to Prompt ' + state.currentPrompt;
+    state.display.promptText = 'You have stepped backward using the Accursed Strings.';
+    addToHistoryLog('Used Accursed Strings: Back to Prompt ' + state.currentPrompt);
+    applyDisplay();
+    checkTriggers();
+    persist();
 }
 
 // ==========================================
@@ -501,34 +619,39 @@ function useAccursedStrings() {
 // ==========================================
 
 function addTrigger() {
-    const num = parseInt(document.getElementById('triggerPromptNum').value);
-    const desc = document.getElementById('triggerDesc').value;
-    if(!num || !desc) return;
-    
-    futureTriggers.push({ prompt: num, text: desc });
+    var num = parseInt(val('triggerPromptNum'), 10);
+    var desc = val('triggerDesc');
+    if (!num || !desc) return;
+    state.futureTriggers.push({ prompt: num, text: desc });
     renderTriggers();
-    document.getElementById('triggerPromptNum').value = '';
-    document.getElementById('triggerDesc').value = '';
-    saveGame();
+    setVal('triggerPromptNum', '');
+    setVal('triggerDesc', '');
+    persist();
+}
+
+function removeTrigger(index) {
+    state.futureTriggers.splice(index, 1);
+    renderTriggers();
+    persist();
 }
 
 function renderTriggers() {
-    const container = document.getElementById('triggersList');
-    container.innerHTML = '';
-    futureTriggers.forEach((t, index) => {
-        container.innerHTML += `<div class="trigger-item"><span><b>Prompt ${t.prompt}:</b> ${t.text}</span> <button class="btn-small btn-strike" onclick="futureTriggers.splice(${index}, 1); renderTriggers(); saveGame();">X</button></div>`;
-    });
+    el('triggersList').innerHTML = state.futureTriggers.map(function (t, index) {
+        return '<div class="trigger-item"><span><b>Prompt ' + escapeHtml(String(t.prompt)) + ':</b> ' +
+               escapeHtml(t.text) + '</span> <button class="btn-small btn-strike" aria-label="Remove trigger" ' +
+               'onclick="removeTrigger(' + index + ')">X</button></div>';
+    }).join('');
 }
 
 function checkTriggers() {
-    const alertBox = document.getElementById('triggerAlert');
-    const alertText = document.getElementById('triggerAlertText');
-    let found = futureTriggers.filter(t => t.prompt === currentPrompt);
-    if(found.length > 0) { 
-        alertBox.style.display = 'block'; 
-        alertText.innerText = found.map(t => t.text).join(" | "); 
-    } else { 
-        alertBox.style.display = 'none'; 
+    var alertBox = el('triggerAlert');
+    var alertText = el('triggerAlertText');
+    var found = state.futureTriggers.filter(function (t) { return t.prompt === state.currentPrompt; });
+    if (found.length > 0) {
+        alertBox.style.display = 'block';
+        alertText.innerText = found.map(function (t) { return t.text; }).join(' | ');
+    } else {
+        alertBox.style.display = 'none';
     }
 }
 
@@ -536,175 +659,347 @@ function checkTriggers() {
 // TRAITS MANAGEMENT
 // ==========================================
 
-function checkSurvivalState() { 
-    const activeSkills = document.querySelectorAll('#skillsList li:not(.strikethrough)').length;
-    const activeRes = document.querySelectorAll('#resourcesList li:not(.strikethrough)').length;
-    document.getElementById('gameWarning').style.display = (activeSkills === 0 && activeRes === 0) ? 'block' : 'none'; 
+function findEntity(list, id) {
+    return state[list].filter(function (e) { return e.id === id; })[0];
 }
 
-function toggleLose(btn) { 
-    btn.parentElement.classList.toggle('strikethrough'); 
-    btn.innerText = btn.parentElement.classList.contains('strikethrough') ? 'Restore' : 'Lose'; 
-    checkSurvivalState(); 
-    saveGame(); 
+function renderList(list) {
+    if (list === 'skills') renderSkills();
+    else if (list === 'resources') renderResources();
+    else if (list === 'characters') renderCharacters();
+    else if (list === 'marks') renderMarks();
 }
 
-function addSkill(v='') { 
-    document.getElementById('skillsList').insertAdjacentHTML('beforeend', `<li><input type="checkbox" onchange="this.nextElementSibling.classList.toggle('checked-skill', this.checked); saveGame();"><input type="text" value="${v}"><button class="btn-small btn-strike" onclick="toggleLose(this)">Lose</button></li>`); 
-    checkSurvivalState(); 
+// Text edits update state only — no re-render, so input focus is preserved.
+// The global 'input' listener handles the (debounced) save.
+function setEntityText(list, id, value) {
+    var e = findEntity(list, id);
+    if (e) e.text = value;
 }
 
-function addResource(v='') { 
-    document.getElementById('resourcesList').insertAdjacentHTML('beforeend', `<li><input type="text" value="${v}"><button class="btn-small btn-strike" onclick="toggleLose(this)">Lose</button></li>`); 
-    checkSurvivalState(); 
+function toggleLoseEntity(list, id) {
+    var e = findEntity(list, id);
+    if (!e) return;
+    e.lost = !e.lost;
+    renderList(list);
+    checkSurvivalState();
+    persist();
 }
 
-function addCharacter(v='', type='Mortal') { 
-    const id = 'c' + Math.random().toString(36).substr(2,5); 
-    const mSel = type === 'Mortal' ? 'selected' : '';
-    const iSel = type === 'Immortal' ? 'selected' : '';
-
-    document.getElementById('charactersList').insertAdjacentHTML('beforeend', `
-        <li id="${id}">
-            <select onchange="this.parentElement.querySelector('.doom-btn').style.display = this.value === 'Mortal' ? 'inline-block' : 'none'; saveGame();">
-                <option value="Mortal" ${mSel}>Mortal</option>
-                <option value="Immortal" ${iSel}>Immortal</option>
-            </select>
-            <input type="text" value="${v}">
-            <span class="doom-dots"></span>
-            <button class="btn-small doom-btn" style="display: ${type === 'Mortal' ? 'inline-block' : 'none'}" onclick="this.previousSibling.innerText+='•'; saveGame()">+•</button>
-            <button class="btn-small btn-strike" onclick="toggleLose(this)">Lose</button>
-        </li>`); 
+function setSkillChecked(id, isChecked) {
+    var e = findEntity('skills', id);
+    if (e) { e.checked = isChecked; renderSkills(); persist(); }
 }
 
-function addMark(v='') { 
-    document.getElementById('marksList').insertAdjacentHTML('beforeend', `<li><input type="text" value="${v}"><button class="btn-small btn-strike" onclick="toggleLose(this)">Lose</button></li>`); 
+function setCharacterType(id, type) {
+    var e = findEntity('characters', id);
+    if (e) { e.type = type === 'Immortal' ? 'Immortal' : 'Mortal'; renderCharacters(); persist(); }
 }
 
-function killAllMortals() { 
-    document.querySelectorAll('#charactersList li').forEach(li => { 
-        if(li.querySelector('select').value === 'Mortal' && !li.classList.contains('strikethrough')) { 
-            li.classList.add('strikethrough'); 
-            li.querySelector('.btn-strike').innerText = 'Restore'; 
-        } 
-    }); 
-    saveGame(); 
+function addDoom(id) {
+    var e = findEntity('characters', id);
+    if (e) { e.doom++; renderCharacters(); persist(); }
+}
+
+function addSkill(v) {
+    state.skills.push({ id: genId(), text: v || '', lost: false, checked: false });
+    renderSkills();
+    checkSurvivalState();
+    persist();
+}
+
+function addResource(v) {
+    state.resources.push({ id: genId(), text: v || '', lost: false });
+    renderResources();
+    checkSurvivalState();
+    persist();
+}
+
+function addCharacter(v, type) {
+    state.characters.push({
+        id: genId(), text: v || '', type: type === 'Immortal' ? 'Immortal' : 'Mortal', doom: 0, lost: false
+    });
+    renderCharacters();
+    persist();
+}
+
+function addMark(v) {
+    state.marks.push({ id: genId(), text: v || '', lost: false });
+    renderMarks();
+    persist();
+}
+
+function killAllMortals() {
+    if (!confirm('Pass a century? Every living mortal Character will be struck out.')) return;
+    state.characters.forEach(function (c) {
+        if (c.type === 'Mortal' && !c.lost) c.lost = true;
+    });
+    renderCharacters();
+    checkSurvivalState();
+    persist();
+}
+
+function checkSurvivalState() {
+    var activeSkills = state.skills.filter(function (s) { return !s.lost; }).length;
+    var activeRes = state.resources.filter(function (r) { return !r.lost; }).length;
+    el('gameWarning').style.display = (activeSkills === 0 && activeRes === 0) ? 'block' : 'none';
+}
+
+function renderSkills() {
+    el('skillsList').innerHTML = state.skills.map(function (s) {
+        return '<li class="' + (s.lost ? 'strikethrough' : '') + '">' +
+            '<input type="checkbox" aria-label="Mark skill as used" ' + (s.checked ? 'checked' : '') +
+                ' onchange="setSkillChecked(\'' + s.id + '\', this.checked)">' +
+            '<input type="text" aria-label="Skill name" class="' + (s.checked ? 'checked-skill' : '') +
+                '" value="' + escapeHtml(s.text) + '" oninput="setEntityText(\'skills\',\'' + s.id + '\', this.value)">' +
+            '<button class="btn-small btn-strike" onclick="toggleLoseEntity(\'skills\',\'' + s.id + '\')">' +
+                (s.lost ? 'Restore' : 'Lose') + '</button></li>';
+    }).join('');
+}
+
+function renderResources() {
+    el('resourcesList').innerHTML = state.resources.map(function (r) {
+        return '<li class="' + (r.lost ? 'strikethrough' : '') + '">' +
+            '<input type="text" aria-label="Resource name" value="' + escapeHtml(r.text) +
+                '" oninput="setEntityText(\'resources\',\'' + r.id + '\', this.value)">' +
+            '<button class="btn-small btn-strike" onclick="toggleLoseEntity(\'resources\',\'' + r.id + '\')">' +
+                (r.lost ? 'Restore' : 'Lose') + '</button></li>';
+    }).join('');
+}
+
+function renderMarks() {
+    el('marksList').innerHTML = state.marks.map(function (m) {
+        return '<li class="' + (m.lost ? 'strikethrough' : '') + '">' +
+            '<input type="text" aria-label="Mark description" value="' + escapeHtml(m.text) +
+                '" oninput="setEntityText(\'marks\',\'' + m.id + '\', this.value)">' +
+            '<button class="btn-small btn-strike" onclick="toggleLoseEntity(\'marks\',\'' + m.id + '\')">' +
+                (m.lost ? 'Restore' : 'Lose') + '</button></li>';
+    }).join('');
+}
+
+function renderCharacters() {
+    el('charactersList').innerHTML = state.characters.map(function (c) {
+        var dots = new Array(c.doom + 1).join('•');
+        return '<li class="' + (c.lost ? 'strikethrough' : '') + '" id="' + c.id + '">' +
+            '<select aria-label="Character mortality" onchange="setCharacterType(\'' + c.id + '\', this.value)">' +
+                '<option value="Mortal" ' + (c.type === 'Mortal' ? 'selected' : '') + '>Mortal</option>' +
+                '<option value="Immortal" ' + (c.type === 'Immortal' ? 'selected' : '') + '>Immortal</option>' +
+            '</select>' +
+            '<input type="text" aria-label="Character name" value="' + escapeHtml(c.text) +
+                '" oninput="setEntityText(\'characters\',\'' + c.id + '\', this.value)">' +
+            '<span class="doom-dots">' + dots + '</span>' +
+            '<button class="btn-small doom-btn" aria-label="Add doom dot" style="display:' +
+                (c.type === 'Mortal' ? 'inline-block' : 'none') + '" onclick="addDoom(\'' + c.id + '\')">+•</button>' +
+            '<button class="btn-small btn-strike" onclick="toggleLoseEntity(\'characters\',\'' + c.id + '\')">' +
+                (c.lost ? 'Restore' : 'Lose') + '</button></li>';
+    }).join('');
 }
 
 // ==========================================
 // MEMORIES & DIARY
 // ==========================================
 
-let memIdCounter = 0;
+function memList(name) { return name === 'diary' ? state.diary : state.memories; }
+function findMem(name, id) {
+    return memList(name).filter(function (m) { return m.id === id; })[0];
+}
 
-function addMemoryBlock(containerId, bypassLimit = false, theme = '', exp1 = '') {
-    if(!bypassLimit && containerId === 'memoriesContainer' && document.querySelectorAll('#memoriesContainer .memory-block').length >= maxMemories) { 
-        alert(`Memory Limit Reached (${maxMemories}). Delete a memory or move it to a Diary.`); 
-        return; 
+function setMemoryTheme(name, id, value) {
+    var m = findMem(name, id);
+    if (m) m.theme = value;
+}
+
+function setExperience(name, id, index, value) {
+    var m = findMem(name, id);
+    if (m) m.experiences[index] = value;
+}
+
+function addMemoryBlock(containerId) {
+    var name = containerId === 'diaryContainer' ? 'diary' : 'memories';
+    if (name === 'memories' && state.memories.length >= state.maxMemories) {
+        alert('Memory Limit Reached (' + state.maxMemories + '). Delete a memory or move it to a Diary.');
+        return;
     }
-    if(!bypassLimit && containerId === 'diaryContainer' && document.querySelectorAll('#diaryContainer .memory-block').length >= maxDiary) { 
-        alert(`Diary Limit Reached (${maxDiary}). Expand your limit if a Prompt allows it.`); 
-        return; 
+    if (name === 'diary' && state.diary.length >= state.maxDiary) {
+        alert('Diary Limit Reached (' + state.maxDiary + '). Expand your limit if a Prompt allows it.');
+        return;
     }
-
-    const id = 'mem_' + memIdCounter++;
-    const migrateBtn = containerId === 'memoriesContainer' ? `<button class="btn-small migrate-btn" style="background:#2196F3; margin-right:5px;" onclick="migrateToDiary('${id}')">Move to Diary</button>` : '';
-    
-    document.getElementById(containerId).insertAdjacentHTML('beforeend', `
-        <div class="memory-block" id="${id}">
-            <input type="text" placeholder="Memory Theme" value="${theme}">
-            <div class="exp-container">
-                <input type="text" class="experience-input" placeholder="- Experience 1" value="${exp1}">
-                <input type="text" class="experience-input" placeholder="- Experience 2">
-                <input type="text" class="experience-input" placeholder="- Experience 3">
-            </div>
-            <div class="mem-controls">
-                <select onchange="changeMemoryState('${id}', this.value)">
-                    <option value="normal">Normal</option>
-                    <option value="starred">⭐ Starred</option>
-                    <option value="hazy">🌫️ Hazy</option>
-                    <option value="vast">🌌 Vast</option>
-                    <option value="primal">🐾 Primal</option>
-                </select>
-                <div>
-                    ${migrateBtn}
-                    <button class="btn-small btn-strike" onclick="this.parentElement.parentElement.parentElement.remove(); updateMemoryCount(); updateDiaryCount(); saveGame();">Delete</button>
-                </div>
-            </div>
-        </div>`);
-    
-    updateMemoryCount(); 
-    updateDiaryCount(); 
-    saveGame();
+    memList(name).push(newMemory());
+    renderMemoryList(name);
+    updateMemoryCount();
+    updateDiaryCount();
+    persist();
 }
 
-function migrateToDiary(blockId) { 
-    if(document.querySelectorAll('#diaryContainer .memory-block').length >= maxDiary) { 
-        alert(`Your Diary is full! (${maxDiary} slots). Expand your limit or delete an entry.`); 
-        return; 
-    } 
-    playSound('page'); 
-    const block = document.getElementById(blockId); 
-    const btn = block.querySelector('.migrate-btn');
-    if (btn) btn.remove(); // Remove migrate button once in diary
-    document.getElementById('diaryContainer').appendChild(block); 
-    updateMemoryCount(); 
-    updateDiaryCount(); 
-    saveGame(); 
-}
-
-function changeMemoryState(blockId, state) { 
-    const block = document.getElementById(blockId); 
-    const expContainer = block.querySelector('.exp-container');
-    
-    block.className = 'memory-block'; 
-    if (state !== 'normal') block.classList.add('mem-' + state);
-    
-    // Reset to 3 inputs initially
-    while(expContainer.children.length > 3) expContainer.lastChild.remove();
-    
-    // If Vast, add 2 more
-    if(state === 'vast') {
-        expContainer.insertAdjacentHTML('beforeend', `<input type="text" class="experience-input" placeholder="- Experience 4"><input type="text" class="experience-input" placeholder="- Experience 5">`);
+function changeMemoryState(name, id, memState) {
+    var m = findMem(name, id);
+    if (!m) return;
+    m.memState = memState;
+    if (memState === 'vast') {
+        while (m.experiences.length < 5) m.experiences.push('');
+    } else if (m.experiences.length > 3) {
+        m.experiences = m.experiences.slice(0, 3); // Lose the extra Vast experiences.
     }
-    
-    updateMemoryCount(); 
-    saveGame(); 
+    renderMemoryList(name);
+    updateMemoryCount();
+    persist();
 }
 
-function updateMemoryCount() { 
-    let count = 0;
-    document.querySelectorAll('#memoriesContainer .memory-block').forEach(b => {
-        if(!b.classList.contains('mem-starred')) count++;
-    });
-    document.getElementById('memoryCount').innerText = `(${count}/${maxMemories} Active Slots)`; 
+function migrateToDiary(id) {
+    if (state.diary.length >= state.maxDiary) {
+        alert('Your Diary is full! (' + state.maxDiary + ' slots). Expand your limit or delete an entry.');
+        return;
+    }
+    var i = state.memories.map(function (m) { return m.id; }).indexOf(id);
+    if (i < 0) return;
+    playSound('page');
+    state.diary.push(state.memories.splice(i, 1)[0]);
+    renderMemoryList('memories');
+    renderMemoryList('diary');
+    updateMemoryCount();
+    updateDiaryCount();
+    persist();
 }
 
-function updateDiaryCount() { 
-    const count = document.querySelectorAll('#diaryContainer .memory-block').length; 
-    document.getElementById('diaryCount').innerText = `(${count}/${maxDiary} Slots)`; 
+function deleteMemory(name, id) {
+    var arr = memList(name);
+    var i = arr.map(function (m) { return m.id; }).indexOf(id);
+    if (i >= 0) arr.splice(i, 1);
+    renderMemoryList(name);
+    updateMemoryCount();
+    updateDiaryCount();
+    persist();
 }
 
-function loseMemorySlot() { 
-    maxMemories = Math.max(1, maxMemories - 1); 
-    updateMemoryCount(); 
-    alert(`You have permanently lost a memory slot. Max is now ${maxMemories}.`);
-    saveGame(); 
+function memoryBlockHtml(m, name) {
+    var expCount = m.memState === 'vast' ? 5 : 3;
+    var exps = '';
+    for (var i = 0; i < expCount; i++) {
+        exps += '<input type="text" class="experience-input" aria-label="Experience ' + (i + 1) +
+                '" placeholder="- Experience ' + (i + 1) + '" value="' + escapeHtml(m.experiences[i] || '') +
+                '" oninput="setExperience(\'' + name + '\',\'' + m.id + '\',' + i + ', this.value)">';
+    }
+    var states = [['normal', 'Normal'], ['starred', '⭐ Starred'], ['hazy', '🌫️ Hazy'],
+                  ['vast', '🌌 Vast'], ['primal', '🐾 Primal']];
+    var options = states.map(function (s) {
+        return '<option value="' + s[0] + '" ' + (m.memState === s[0] ? 'selected' : '') + '>' + s[1] + '</option>';
+    }).join('');
+    var migrateBtn = name === 'memories'
+        ? '<button class="btn-small migrate-btn" style="background:#2196F3; margin-right:5px;" onclick="migrateToDiary(\'' + m.id + '\')">Move to Diary</button>'
+        : '';
+    return '<div class="memory-block ' + (m.memState !== 'normal' ? 'mem-' + m.memState : '') + '" id="' + m.id + '">' +
+        '<input type="text" aria-label="Memory theme" placeholder="Memory Theme" value="' + escapeHtml(m.theme) +
+            '" oninput="setMemoryTheme(\'' + name + '\',\'' + m.id + '\', this.value)">' +
+        '<div class="exp-container">' + exps + '</div>' +
+        '<div class="mem-controls">' +
+            '<select aria-label="Memory state" onchange="changeMemoryState(\'' + name + '\',\'' + m.id + '\', this.value)">' +
+                options + '</select>' +
+            '<div>' + migrateBtn +
+                '<button class="btn-small btn-strike" onclick="deleteMemory(\'' + name + '\',\'' + m.id + '\')">Delete</button>' +
+            '</div>' +
+        '</div></div>';
 }
 
-function expandDiary() { 
-    maxDiary += 2; 
-    updateDiaryCount(); 
-    alert(`Diary storage expanded! Max is now ${maxDiary}.`);
-    saveGame(); 
+function renderMemoryList(name) {
+    var containerId = name === 'diary' ? 'diaryContainer' : 'memoriesContainer';
+    el(containerId).innerHTML = memList(name).map(function (m) { return memoryBlockHtml(m, name); }).join('');
 }
 
-function unlockSecondSeason() { 
-    maxMemories = 8; 
-    updateMemoryCount(); 
-    alert("Second Season unlocked! Max Memories is now 8.");
-    saveGame(); 
+function updateMemoryCount() {
+    var count = state.memories.filter(function (m) { return m.memState !== 'starred'; }).length;
+    setText('memoryCount', '(' + count + '/' + state.maxMemories + ' Active Slots)');
 }
 
-// Boot up
+function updateDiaryCount() {
+    setText('diaryCount', '(' + state.diary.length + '/' + state.maxDiary + ' Slots)');
+}
+
+function loseMemorySlot() {
+    if (!confirm('Permanently lose a memory slot? This cannot be undone.')) return;
+    state.maxMemories = Math.max(1, state.maxMemories - 1);
+    updateMemoryCount();
+    alert('You have permanently lost a memory slot. Max is now ' + state.maxMemories + '.');
+    persist();
+}
+
+function expandDiary() {
+    state.maxDiary += 2;
+    updateDiaryCount();
+    alert('Diary storage expanded! Max is now ' + state.maxDiary + '.');
+    persist();
+}
+
+function unlockSecondSeason() {
+    state.maxMemories = 8;
+    updateMemoryCount();
+    alert('Second Season unlocked! Max Memories is now 8.');
+    persist();
+}
+
+// ==========================================
+// RENDER / APPLY FULL STATE
+// ==========================================
+
+function renderNameHistory() {
+    setText('nameHistory', 'Forgotten Names: ' +
+        (state.namesHistory.length ? state.namesHistory.join(' ➔ ') : 'None yet.'));
+}
+
+function renderRollLog() {
+    var entries = state.rollHistory.slice().reverse().map(function (s) {
+        return '<div>' + escapeHtml(s) + '</div>';
+    }).join('');
+    el('rollHistoryLog').innerHTML = '<b>History:</b><br>' + entries;
+}
+
+function applyDisplay() {
+    setText('promptResult', state.display.promptResult);
+    setText('rollResultDetails', state.display.rollDetails);
+    el('promptTextDisplay').innerText = state.display.promptText;
+}
+
+function renderAll() {
+    renderSkills();
+    renderResources();
+    renderCharacters();
+    renderMarks();
+    renderMemoryList('memories');
+    renderMemoryList('diary');
+    renderTriggers();
+    renderRollLog();
+    renderNameHistory();
+    updateMemoryCount();
+    updateDiaryCount();
+}
+
+function applyState() {
+    setVal('currentName', state.currentName);
+    setVal('boxedExpText', state.boxedExp);
+    setVal('promptJournal', state.currentJournal);
+
+    var st = state.settings || {};
+    if (st.isLightMode) {
+        document.body.classList.add('light-mode');
+        setText('btnTheme', 'Toggle Dark Mode');
+    }
+    if (st.fontSize) document.body.style.setProperty('--base-font-size', st.fontSize);
+    setChecked('hideGraveyardToggle', !!st.hideGraveyard);
+    if (st.hideGraveyard) el('traitsContainer').classList.add('hide-graveyard');
+    setChecked('optMuteSound', !!st.muteSound);
+    setChecked('optReverseTime', !!st.reverseTime);
+    setChecked('optMultiplayer', !!st.multiplayer);
+
+    renderAll();
+    applyDisplay();
+    checkSurvivalState();
+    checkTriggers();
+    checkGameOver();
+}
+
+// ==========================================
+// BOOT
+// ==========================================
+
+document.addEventListener('input', saveGame);
+document.addEventListener('change', saveGame);
 window.onload = loadGame;
