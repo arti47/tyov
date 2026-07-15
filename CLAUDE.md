@@ -8,6 +8,12 @@ Guidance for AI agents (and humans) working in this repository.
 > change game rules, or alter the UI structure, reflect it in the relevant
 > section below. Treat an out-of-date CLAUDE.md as a bug. See
 > [Keeping this file up to date](#keeping-this-file-up-to-date).
+>
+> **Also keep the [Roadmap](#roadmap--rules-fidelity-gaps) current** — when a
+> change closes (or opens) a gap between this app and the rules-as-written, move
+> or edit that roadmap item in the same commit. **Always merge the latest
+> `main` into your working branch before you start and before you push**, so the
+> roadmap and code never drift from `main`.
 
 ---
 
@@ -150,15 +156,68 @@ If you change any cached asset (`index.html`, `styles.css`, `logic.js`,
 generally land on next load even without a bump — but bump for certainty, and
 keep the `ASSETS` precache list in sync when you add/remove files.
 
+## Roadmap — rules-fidelity gaps
+
+Tracked differences between this app and *Thousand Year Old Vampire* as written
+(rulebook + appendices). Verified against the full source text. Keep this list
+live: when you close a gap, move it to **Done**; if you find a new one, add it.
+Severity reflects how far the app drifts from the rules-as-written, not effort.
+
+### Planned / open
+
+1. **Vampire creation is incomplete.** _(Notable)_ The rules seed **five
+   Memories, each with one Experience** (life summary + three trait-combining
+   Experiences + the transformation) and create the **Immortal who turned you**.
+   The setup wizard (`finishSetup` in `app.js`, steps in `index.html`) collects
+   only one Memory and three **Mortal**-only Characters, leaving four Memories
+   empty and no immortal maker. Fix: collect all five starting Experiences and
+   the immortal sire in the wizard.
+2. **Skill/Resource substitution & death-by-exhaustion not modeled.** _(Minor)_
+   Rules: if you can't check a Skill, lose a Resource instead (and vice-versa);
+   if you can do neither, the game ends. `checkSurvivalState()` only shows a
+   passive warning at 0 active Skills **and** 0 Resources — no substitution
+   prompt, no auto game-over. This is the game's *primary* end condition.
+3. **"Rev. Time" is a sticky toggle**, but in the source reversing the dice
+   (d6 − d10) is a **one-shot next-roll** effect from a single Prompt. Consider
+   making it auto-clear after one roll.
+4. **"Strings (-1)" skips its cost.** _(Minor)_ The Accursed Strings Resource
+   lets you step back one page **by striking out X checked Skills**;
+   `useAccursedStrings()` steps back for free.
+5. **Diary rules loosely enforced.** _(Minor)_ Source: one Diary at a time, it
+   is a Resource, must hold ≥1 Memory, and a Memory moved into it can gain no
+   further Experiences. The app treats the Diary as a separate panel with freely
+   editable experiences and an "Expand Limit (+2)" button with no rules basis.
+6. **"2nd Season" (max Memories → 8) has no basis in the core rulebook** — it
+   appears to come from an unconfirmed supplement. Verify against a source or
+   relabel/remove.
+7. **No auto-advance after all three tiers are exhausted.** _(Cosmetic)_ Rules
+   say "move along to the next Prompt"; the app shows a message and waits for the
+   player.
+
+### Scoping decisions (not bugs)
+
+- `data.js` is the **Standard Prompt Database (1–80)** only. Appendix I
+  alternate Prompts (81–135) are intentionally out of scope.
+- Prompts **72–80** are each single-entry "The game is over" Prompts, so
+  `checkGameOver()` disabling the roll across that range is **faithful**.
+
+### Done
+
+- _(none yet — record closed gaps here with the commit that closed them)_
+
 ## Keeping this file up to date
 
 This is a hard requirement of working in this repo:
 
-1. Make your code change.
-2. Update the affected section(s) above (file map, state shape, save format,
+1. **Merge the latest `main`** into your working branch before you start.
+2. Make your code change.
+3. Update the affected section(s) above (file map, state shape, save format,
    flow, conventions).
-3. If you changed cached assets, bump `CACHE_NAME` and update `ASSETS` in `sw.js`.
-4. Add/adjust tests in `tests/` for any logic change.
-5. Commit the code and the `CLAUDE.md` update **together**.
+4. Update the [Roadmap](#roadmap--rules-fidelity-gaps): move any gap you closed
+   to **Done**, and add any new gap you introduced or discovered.
+5. If you changed cached assets, bump `CACHE_NAME` and update `ASSETS` in `sw.js`.
+6. Add/adjust tests in `tests/` for any logic change.
+7. Commit the code and the `CLAUDE.md` update **together**.
+8. **Merge `main` again and push** so the branch never drifts from `main`.
 
 If a change makes any statement here false, fix the statement.
