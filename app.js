@@ -924,6 +924,14 @@ function promptLoseResource() {
     }
 }
 
+// "Kill a mortal Character" — opens the picker of Mortal Characters (kill or
+// revive), plus a "+ New mortal Character" action so you can create one when
+// none are available (rules: "Create a mortal if none are available"). Unlike
+// Skills/Resources this isn't part of the substitution ladder.
+function promptKillMortal() {
+    showTraitPicker('characters', el('btnKillMortal'));
+}
+
 function closeTraitPicker() {
     if (openTraitPicker && openTraitPicker.parentNode) {
         openTraitPicker.parentNode.removeChild(openTraitPicker);
@@ -953,23 +961,33 @@ function showTraitPicker(kind, anchorBtn) {
 }
 
 function traitPickerHTML(kind) {
-    var isSkill = kind === 'skills';
-    var title = isSkill ? 'Check a Skill' : 'Lose a Resource';
-    var hint = isSkill ? 'Tap to check — or un-check — a Skill.'
-                       : 'Tap to lose — or restore — a Resource.';
-    var items, rows;
-    if (isSkill) {
+    var title, hint, body;
+    if (kind === 'skills') {
+        title = 'Check a Skill';
+        hint = 'Tap to check — or un-check — a Skill.';
         // A Skill in the graveyard (lost) can't be checked, so omit it.
-        items = state.skills.filter(function (s) { return !s.lost; });
-        rows = items.map(function (s) { return traitPickerRow('skills', s.id, s.text, s.checked, '✓'); });
+        var skills = state.skills.filter(function (s) { return !s.lost; });
+        body = skills.length
+            ? skills.map(function (s) { return traitPickerRow('skills', s.id, s.text, s.checked, '✓'); }).join('')
+            : '<p class="tp-empty">No Skills.</p>';
+    } else if (kind === 'characters') {
+        title = 'Kill a Mortal';
+        hint = 'Tap to kill — or revive — a mortal Character.';
+        // All Mortal Characters (incl. already-killed, so they can be revived).
+        var mortals = state.characters.filter(function (c) { return c.type === 'Mortal'; });
+        body = (mortals.length
+            ? mortals.map(function (c) { return traitPickerRow('characters', c.id, c.text, c.lost, '✗'); }).join('')
+            : '<p class="tp-empty">No mortal Characters yet.</p>') +
+            '<button type="button" class="tp-row tp-create" onclick="createMortalFromPicker()">' +
+                '<span class="tp-box">+</span><span class="tp-name">New mortal Character…</span></button>';
     } else {
-        // All Resources (incl. the Diary) — lost ones stay listed so they can
-        // be restored ("un-selected").
-        items = state.resources.slice();
-        rows = items.map(function (r) { return traitPickerRow('resources', r.id, r.text, r.lost, '✗'); });
+        title = 'Lose a Resource';
+        hint = 'Tap to lose — or restore — a Resource.';
+        // All Resources (incl. the Diary) — lost ones stay listed for restore.
+        body = state.resources.length
+            ? state.resources.map(function (r) { return traitPickerRow('resources', r.id, r.text, r.lost, '✗'); }).join('')
+            : '<p class="tp-empty">No Resources.</p>';
     }
-    var body = rows.length ? rows.join('')
-        : '<p class="tp-empty">No ' + (isSkill ? 'Skills' : 'Resources') + '.</p>';
     return '<div class="tp-head"><strong>' + title + '</strong>' +
         '<button type="button" class="tp-close" aria-label="Close" onclick="closeTraitPicker()">×</button></div>' +
         '<div class="tp-rows" role="menu">' + body + '</div>' +
@@ -977,10 +995,12 @@ function traitPickerHTML(kind) {
 }
 
 function traitPickerRow(kind, id, text, on, glyph) {
-    var name = escapeHtml(text || (kind === 'skills' ? 'Unnamed Skill' : 'Unnamed Resource'));
-    // A lost Resource is struck out; a checked Skill is not (it's marked by the
-    // ✓ box + accent border, per the rules — checked ≠ lost).
-    var strike = on && kind === 'resources';
+    var fallback = kind === 'skills' ? 'Unnamed Skill'
+        : (kind === 'characters' ? 'Unnamed mortal' : 'Unnamed Resource');
+    var name = escapeHtml(text || fallback);
+    // A lost Resource / killed Character is struck out; a checked Skill is not
+    // (it's marked by the ✓ box + accent border — checked ≠ lost).
+    var strike = on && kind !== 'skills';
     return '<button type="button" class="tp-row' + (on ? ' tp-on' : '') + '" data-id="' + id + '"' +
         ' role="menuitemcheckbox" aria-checked="' + (on ? 'true' : 'false') + '"' +
         ' onclick="pickTrait(\'' + kind + '\',\'' + id + '\')">' +
@@ -997,11 +1017,17 @@ function pickTrait(kind, id) {
         on = s.checked;
         announce((on ? 'Checked' : 'Un-checked') + ' Skill "' + (s.text || 'Unnamed') + '".');
     } else {
-        toggleLoseEntity('resources', id); // pushUndo + render + survival + persist (Diary-aware)
-        var r = findEntity('resources', id);
-        if (!r) return;
-        on = r.lost;
-        announce((on ? 'Lost' : 'Restored') + ' Resource "' + (r.text || 'Unnamed') + '".');
+        // Resources and mortal Characters both toggle .lost via toggleLoseEntity.
+        var list = kind === 'characters' ? 'characters' : 'resources';
+        toggleLoseEntity(list, id); // pushUndo + render + survival + persist (Diary-aware)
+        var e = findEntity(list, id);
+        if (!e) return;
+        on = e.lost;
+        if (kind === 'characters') {
+            announce((on ? 'Killed' : 'Revived') + ' mortal Character "' + (e.text || 'Unnamed') + '".');
+        } else {
+            announce((on ? 'Lost' : 'Restored') + ' Resource "' + (e.text || 'Unnamed') + '".');
+        }
     }
     // Update just this row in place. (Rebuilding innerHTML here would detach the
     // clicked node before the document outside-click handler runs, which would
@@ -1014,8 +1040,29 @@ function pickTrait(kind, id) {
             var box = row.querySelector('.tp-box');
             if (box) box.textContent = on ? (kind === 'skills' ? '✓' : '✗') : '';
             var nm = row.querySelector('.tp-name');
-            if (nm) nm.classList.toggle('strikethrough', on && kind === 'resources');
+            if (nm) nm.classList.toggle('strikethrough', on && kind !== 'skills');
         }
+    }
+}
+
+// "+ New mortal Character" in the Kill-a-Mortal picker. Appends a fresh mortal
+// and inserts a killable row in place (no innerHTML rebuild — that would detach
+// the clicked create button and let the outside-click handler close the popover).
+function createMortalFromPicker() {
+    addCharacter('', 'Mortal'); // pushUndo + renderCharacters + persist
+    var created = state.characters[state.characters.length - 1];
+    announce('Created a new mortal Character. Name it in the Character tab.');
+    toast('New mortal Character added — name it in the Character tab.', 'info');
+    if (openTraitPicker && openTraitPicker.getAttribute('data-kind') === 'characters') {
+        var rows = openTraitPicker.querySelector('.tp-rows');
+        var createBtn = rows.querySelector('.tp-create');
+        var empty = rows.querySelector('.tp-empty');
+        if (empty) rows.removeChild(empty);
+        var tmp = document.createElement('div');
+        tmp.innerHTML = traitPickerRow('characters', created.id, created.text, created.lost, '✗');
+        var newRow = tmp.firstChild;
+        rows.insertBefore(newRow, createBtn);
+        newRow.focus();
     }
 }
 
@@ -1727,7 +1774,7 @@ document.addEventListener('click', function (e) {
     if (!openTraitPicker) return;
     var t = e.target;
     if (openTraitPicker.contains(t)) return;
-    if (t.closest && t.closest('#btnCheckSkill, #btnLoseResource')) return;
+    if (t.closest && t.closest('#btnCheckSkill, #btnLoseResource, #btnKillMortal')) return;
     closeTraitPicker();
 });
 

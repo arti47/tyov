@@ -389,18 +389,20 @@ body.light-mode .trait-recap {
     color: #aaa;
     text-align: center;
 }
-/* Two equal-width buttons on one row under the caption (no ragged wrap). */
+/* Equal-width guided-action buttons on one row under the caption (no ragged
+   wrap). They share the width evenly; labels wrap inside if very narrow. */
 .prompt-action-btns {
     display: flex;
-    gap: 10px;
+    gap: 8px;
     width: 100%;
-    max-width: 420px;
+    max-width: 460px;
 }
 .prompt-action-btns .btn-small {
     flex: 1 1 0;
     margin-left: 0; /* override the default btn-small left margin */
-    padding: 8px 10px;
-    white-space: nowrap;
+    padding: 8px 6px;
+    font-size: 0.76em;
+    line-height: 1.2;
 }
 
 /* Guided prompt-action picker: a hovering popover of Skills / Resources that
@@ -478,6 +480,10 @@ body.light-mode .tp-row { background: rgba(0, 0, 0, 0.05); }
 }
 .tp-name { flex: 1; }
 .tp-name.strikethrough { text-decoration: line-through; opacity: 0.65; }
+/* The "+ New mortal Character" action stands apart from the toggle rows. */
+.tp-create { border-style: dashed; }
+.tp-create .tp-name { color: var(--accent-color); }
+.tp-create .tp-box { border-style: dashed; }
 .tp-empty { color: #aaa; font-size: 0.9em; margin: 4px 0; }
 .tp-hint {
     font-size: 0.76em;
