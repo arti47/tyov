@@ -159,7 +159,7 @@
 
     <h1 style="border: none; margin: 0; padding: 0;">Vampire Chronicle</h1>
     
-    <div style="display: flex; gap: 10px; margin-top: 10px; margin-bottom: 5px;">
+    <div class="name-row" style="display: flex; gap: 10px; margin-top: 10px; margin-bottom: 5px;">
         <input type="text" id="currentName" placeholder="Enter your current alias/name..." style="font-size: 1.2em; font-weight: bold;">
         <button onclick="changeName()">Adopt New Name</button>
     </div>
@@ -213,7 +213,7 @@
     <div class="panel full-width" style="margin-bottom: 20px;">
         <h3 style="margin: 0;">Future Prompt Triggers</h3>
         <p style="font-size: 0.8em; color: #aaa; margin-bottom: 10px;">Set a trap, hide a treasure, or track a dying mortal.</p>
-        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+        <div class="trigger-row" style="display: flex; gap: 10px; margin-bottom: 10px;">
             <input type="number" id="triggerPromptNum" placeholder="Prompt #" style="width: 100px;">
             <input type="text" id="triggerDesc" placeholder="What happens here?">
             <button onclick="addTrigger()">Add Trigger</button>

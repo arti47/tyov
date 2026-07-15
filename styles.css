@@ -32,6 +32,7 @@ body {
     margin: 0 auto;
     padding: 20px;
     line-height: 1.5;
+    overflow-x: hidden; /* safety net: never scroll the page body sideways */
     transition: background 0.3s, color 0.3s;
 }
 
@@ -105,6 +106,7 @@ input[type="text"], select, textarea, input[type="number"] {
     font-size: 1em;
     width: 100%;
     box-sizing: border-box;
+    min-width: 0; /* allow controls to shrink inside flex rows instead of overflowing */
 }
 
 body.light-mode input[type="text"],
@@ -188,6 +190,7 @@ textarea:focus-visible {
     border: 2px solid var(--accent-color);
     width: 90%;
     max-width: 600px;
+    box-sizing: border-box; /* keep padding+border inside the 90% so it never overflows */
     text-align: left;
     margin: 20px auto;
     color: var(--text-color);
@@ -528,4 +531,45 @@ body.light-mode .oracle-word { background: rgba(0, 0, 0, 0.05); }
 
 #previewContent b {
     color: var(--accent-color);
+}
+
+/* ==========================================
+   RESPONSIVE — narrow / mobile screens
+   ========================================== */
+@media (max-width: 680px) {
+    body { padding: 12px; }
+
+    h1 { font-size: 1.6em; }
+
+    /* Toolbars: let the grouped controls wrap instead of overflowing. */
+    .options-bar { gap: 8px; }
+    .options-bar > div { flex-wrap: wrap; gap: 8px; }
+
+    /* Inline flex rows (name, triggers) stack their button below on narrow screens. */
+    .name-row,
+    .trigger-row { flex-wrap: wrap; }
+    .name-row > input,
+    .trigger-row input[type="text"] { flex: 1 1 100%; }
+    .name-row > button,
+    .trigger-row > button { flex: 1 1 auto; }
+    .trigger-row input[type="number"] { flex: 1 1 90px; width: auto; }
+
+    /* Trait rows: keep the text on the first line, wrap the controls beneath it. */
+    .trait-list li { flex-wrap: wrap; }
+    .trait-list li > input[type="text"] { flex: 1 1 60%; }
+    .trait-list li > select { flex: 0 0 auto; }
+
+    /* Memory controls wrap rather than clip the Move/Delete buttons. */
+    .mem-controls { flex-wrap: wrap; gap: 8px; }
+    .mem-controls > div { display: flex; flex-wrap: wrap; gap: 5px; }
+
+    /* Guided prompt actions already wrap; give them room. */
+    .prompt-actions { gap: 6px; }
+
+    /* Setup wizard + modals: tighter padding, full-width buttons stay usable. */
+    .modal-content { padding: 18px; }
+
+    /* Keep the floating oracle from crowding the edge. */
+    .oracle-fab { right: 14px; bottom: 14px; }
+    .oracle-panel { right: 14px; bottom: 74px; }
 }
