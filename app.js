@@ -108,6 +108,7 @@ var TABS = ['play', 'character', 'diary', 'journal', 'settings'];
 
 function showTab(name) {
     if (TABS.indexOf(name) === -1) name = 'play';
+    if (typeof closeTraitPicker === 'function') closeTraitPicker();
     state.activeTab = name;
     TABS.forEach(function (t) {
         var panel = el('panel-' + t), btn = el('tab-' + t);
@@ -888,21 +889,24 @@ function uncheckedSkillCount() {
 function activeResourceCount() {
     return state.resources.filter(function (r) { return !r.lost; }).length;
 }
-function firstActiveResource() {
-    return state.resources.filter(function (r) { return !r.lost; })[0];
-}
-function firstUncheckedSkill() {
-    return state.skills.filter(function (s) { return !s.lost && !s.checked; })[0];
-}
+
+// --- Guided prompt-action pickers (hovering popovers) -------------------
+// Clicking "Check a Skill" / "Lose a Resource" opens a small popover anchored
+// to the button, listing the relevant traits. Each row toggles that trait's
+// state live: check/un-check a Skill, lose/restore a Resource. Which picker
+// opens follows the rules substitution ladder (TYOV.resolveTraitAction): if you
+// can't check a Skill you're steered to lose a Resource instead (and vice
+// versa); if neither is possible you're offered "the game is over".
+
+var openTraitPicker = null; // the currently-open popover element, or null
 
 function promptCheckSkill() {
     var res = TYOV.resolveTraitAction('check', uncheckedSkillCount(), activeResourceCount());
     if (res.result === 'check') {
-        toast('Check one of your Skills in the Traits panel.', 'info');
+        showTraitPicker('skills', el('btnCheckSkill'));
     } else if (res.result === 'substitute-lose') {
-        var r = firstActiveResource();
-        if (r) { pushUndo(); r.lost = true; renderResources(); checkSurvivalState(); persist(); }
-        toast('Substitution — lost Resource "' + (r ? (r.text || 'Unnamed') : '') + '". ' + res.message, 'warn');
+        toast(res.message, 'warn');
+        showTraitPicker('resources', el('btnLoseResource'));
     } else {
         offerGameOver(res.message);
     }
@@ -911,14 +915,129 @@ function promptCheckSkill() {
 function promptLoseResource() {
     var res = TYOV.resolveTraitAction('lose', uncheckedSkillCount(), activeResourceCount());
     if (res.result === 'lose') {
-        toast('Lose (strike out) one of your Resources in the Traits panel.', 'info');
+        showTraitPicker('resources', el('btnLoseResource'));
     } else if (res.result === 'substitute-check') {
-        var s = firstUncheckedSkill();
-        if (s) { pushUndo(); s.checked = true; renderSkills(); persist(); }
-        toast('Substitution — checked Skill "' + (s ? (s.text || 'Unnamed') : '') + '". ' + res.message, 'warn');
+        toast(res.message, 'warn');
+        showTraitPicker('skills', el('btnCheckSkill'));
     } else {
         offerGameOver(res.message);
     }
+}
+
+function closeTraitPicker() {
+    if (openTraitPicker && openTraitPicker.parentNode) {
+        openTraitPicker.parentNode.removeChild(openTraitPicker);
+    }
+    openTraitPicker = null;
+}
+
+// kind: 'skills' (check/un-check) | 'resources' (lose/restore)
+function showTraitPicker(kind, anchorBtn) {
+    var toggleClosed = openTraitPicker && openTraitPicker.getAttribute('data-kind') === kind;
+    closeTraitPicker();
+    if (toggleClosed) return; // clicking the same button again closes it
+
+    var container = el('promptActions');
+    if (!container) return;
+    var pop = document.createElement('div');
+    pop.className = 'trait-picker';
+    pop.setAttribute('data-kind', kind);
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-label', kind === 'skills' ? 'Check a Skill' : 'Lose a Resource');
+    pop.innerHTML = traitPickerHTML(kind);
+    container.appendChild(pop);
+    positionTraitPicker(pop, anchorBtn);
+    openTraitPicker = pop;
+    var first = pop.querySelector('.tp-row') || pop.querySelector('.tp-close');
+    if (first) first.focus();
+}
+
+function traitPickerHTML(kind) {
+    var isSkill = kind === 'skills';
+    var title = isSkill ? 'Check a Skill' : 'Lose a Resource';
+    var hint = isSkill ? 'Tap to check — or un-check — a Skill.'
+                       : 'Tap to lose — or restore — a Resource.';
+    var items, rows;
+    if (isSkill) {
+        // A Skill in the graveyard (lost) can't be checked, so omit it.
+        items = state.skills.filter(function (s) { return !s.lost; });
+        rows = items.map(function (s) { return traitPickerRow('skills', s.id, s.text, s.checked, '✓'); });
+    } else {
+        // All Resources (incl. the Diary) — lost ones stay listed so they can
+        // be restored ("un-selected").
+        items = state.resources.slice();
+        rows = items.map(function (r) { return traitPickerRow('resources', r.id, r.text, r.lost, '✗'); });
+    }
+    var body = rows.length ? rows.join('')
+        : '<p class="tp-empty">No ' + (isSkill ? 'Skills' : 'Resources') + '.</p>';
+    return '<div class="tp-head"><strong>' + title + '</strong>' +
+        '<button type="button" class="tp-close" aria-label="Close" onclick="closeTraitPicker()">×</button></div>' +
+        '<div class="tp-rows" role="menu">' + body + '</div>' +
+        '<p class="tp-hint">' + hint + '</p>';
+}
+
+function traitPickerRow(kind, id, text, on, glyph) {
+    var name = escapeHtml(text || (kind === 'skills' ? 'Unnamed Skill' : 'Unnamed Resource'));
+    // A lost Resource is struck out; a checked Skill is not (it's marked by the
+    // ✓ box + accent border, per the rules — checked ≠ lost).
+    var strike = on && kind === 'resources';
+    return '<button type="button" class="tp-row' + (on ? ' tp-on' : '') + '" data-id="' + id + '"' +
+        ' role="menuitemcheckbox" aria-checked="' + (on ? 'true' : 'false') + '"' +
+        ' onclick="pickTrait(\'' + kind + '\',\'' + id + '\')">' +
+        '<span class="tp-box">' + (on ? glyph : '') + '</span>' +
+        '<span class="tp-name' + (strike ? ' strikethrough' : '') + '">' + name + '</span></button>';
+}
+
+function pickTrait(kind, id) {
+    var on;
+    if (kind === 'skills') {
+        var s = findEntity('skills', id);
+        if (!s) return;
+        setSkillChecked(id, !s.checked); // pushUndo + renderSkills + persist
+        on = s.checked;
+        announce((on ? 'Checked' : 'Un-checked') + ' Skill "' + (s.text || 'Unnamed') + '".');
+    } else {
+        toggleLoseEntity('resources', id); // pushUndo + render + survival + persist (Diary-aware)
+        var r = findEntity('resources', id);
+        if (!r) return;
+        on = r.lost;
+        announce((on ? 'Lost' : 'Restored') + ' Resource "' + (r.text || 'Unnamed') + '".');
+    }
+    // Update just this row in place. (Rebuilding innerHTML here would detach the
+    // clicked node before the document outside-click handler runs, which would
+    // then wrongly close the popover.)
+    if (openTraitPicker && openTraitPicker.getAttribute('data-kind') === kind) {
+        var row = openTraitPicker.querySelector('.tp-row[data-id="' + id + '"]');
+        if (row) {
+            row.classList.toggle('tp-on', on);
+            row.setAttribute('aria-checked', on ? 'true' : 'false');
+            var box = row.querySelector('.tp-box');
+            if (box) box.textContent = on ? (kind === 'skills' ? '✓' : '✗') : '';
+            var nm = row.querySelector('.tp-name');
+            if (nm) nm.classList.toggle('strikethrough', on && kind === 'resources');
+        }
+    }
+}
+
+function positionTraitPicker(pop, anchorBtn) {
+    // Anchor just below the clicked button, inside the position:relative
+    // .prompt-actions. On narrow screens, center it so it can't run off-screen.
+    if (window.innerWidth <= 520 || !anchorBtn) {
+        pop.classList.add('tp-centered');
+        pop.style.left = '';
+        pop.style.top = '';
+        return;
+    }
+    pop.classList.remove('tp-centered');
+    var container = pop.parentNode;
+    var cRect = container.getBoundingClientRect();
+    var bRect = anchorBtn.getBoundingClientRect();
+    var left = bRect.left - cRect.left;
+    var maxLeft = container.clientWidth - pop.offsetWidth;
+    if (left > maxLeft) left = maxLeft;
+    if (left < 0) left = 0;
+    pop.style.left = left + 'px';
+    pop.style.top = (bRect.bottom - cRect.top + 6) + 'px';
 }
 
 function offerGameOver(msg) {
@@ -1602,6 +1721,16 @@ document.addEventListener('focusin', function (e) {
     }
 });
 
+// Close the guided trait picker when clicking anywhere outside it (except its
+// own trigger buttons, whose own handlers toggle it).
+document.addEventListener('click', function (e) {
+    if (!openTraitPicker) return;
+    var t = e.target;
+    if (openTraitPicker.contains(t)) return;
+    if (t.closest && t.closest('#btnCheckSkill, #btnLoseResource')) return;
+    closeTraitPicker();
+});
+
 // --- Modal a11y: focus trap + Esc (B10) ---
 function focusablesIn(container) {
     return Array.prototype.slice.call(container.querySelectorAll(
@@ -1619,6 +1748,7 @@ function openModalEl() {
 document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
         // Esc dismisses dismissable overlays (not the required setup wizard).
+        if (openTraitPicker) { closeTraitPicker(); return; }
         if (isAppModalOpen()) { closeAppModal(); return; }
         var op = el('oraclePanel');
         if (op && op.classList.contains('show')) toggleOracle();

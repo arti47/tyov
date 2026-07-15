@@ -209,10 +209,10 @@
         <div id="endNote" class="prompt-note">This Prompt lets you end the game now, if it feels right. <button class="btn-small btn-strike" onclick="declareGameOver('You chose to end the chronicle here.')">End the Game</button></div>
         <div id="advanceNote" class="prompt-note">You've answered all entries (a, b, c) for this Prompt. <button class="btn-small" onclick="advanceToNextPrompt()">Move to next Prompt →</button></div>
 
-        <div class="prompt-actions" role="group" aria-label="Guided prompt actions">
+        <div class="prompt-actions" id="promptActions" role="group" aria-label="Guided prompt actions">
             <span style="font-size:0.8em; color:#aaa;">When a Prompt instructs you:</span>
-            <button class="btn-small" onclick="promptCheckSkill()">Check a Skill</button>
-            <button class="btn-small btn-strike" onclick="promptLoseResource()">Lose a Resource</button>
+            <button class="btn-small" id="btnCheckSkill" onclick="promptCheckSkill()">Check a Skill</button>
+            <button class="btn-small btn-strike" id="btnLoseResource" onclick="promptLoseResource()">Lose a Resource</button>
         </div>
 
         <textarea id="promptJournal" placeholder="Write your detailed narrative response to this prompt here... (This automatically saves to your Chronicle when you roll the dice)" style="margin-top: 15px; min-height: 120px; font-size: 1.05em; border-color: var(--accent-color);"></textarea>
