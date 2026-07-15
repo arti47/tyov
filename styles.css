@@ -480,6 +480,14 @@ body.light-mode .tp-row { background: rgba(0, 0, 0, 0.05); }
 }
 .tp-name { flex: 1; }
 .tp-name.strikethrough { text-decoration: line-through; opacity: 0.65; }
+/* Mortal / Immortal tag on Kill-a-Character rows. */
+.tp-tag {
+    flex: 0 0 auto;
+    font-size: 0.68em;
+    color: #aaa;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
 /* The "+ New mortal Character" action stands apart from the toggle rows. */
 .tp-create { border-style: dashed; }
 .tp-create .tp-name { color: var(--accent-color); }

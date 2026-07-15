@@ -924,12 +924,14 @@ function promptLoseResource() {
     }
 }
 
-// "Kill a mortal Character" — opens the picker of Mortal Characters (kill or
-// revive), plus a "+ New mortal Character" action so you can create one when
-// none are available (rules: "Create a mortal if none are available"). Unlike
-// Skills/Resources this isn't part of the substitution ladder.
-function promptKillMortal() {
-    showTraitPicker('characters', el('btnKillMortal'));
+// "Kill a Character" — opens the picker of ALL Characters (kill or revive).
+// Most kill prompts say "kill a Character" (5a, 17c, 19b, 35b, 36b…), which can
+// include Immortals such as your sire; a couple (1a, 34b) specify a mortal, so
+// the picker tags each row Mortal/Immortal and lists mortals first. A "+ New
+// mortal Character" action covers the rules' "create a mortal if none are
+// available". Unlike Skills/Resources this isn't part of the substitution ladder.
+function promptKillCharacter() {
+    showTraitPicker('characters', el('btnKillCharacter'));
 }
 
 function closeTraitPicker() {
@@ -971,13 +973,18 @@ function traitPickerHTML(kind) {
             ? skills.map(function (s) { return traitPickerRow('skills', s.id, s.text, s.checked, '✓'); }).join('')
             : '<p class="tp-empty">No Skills.</p>';
     } else if (kind === 'characters') {
-        title = 'Kill a Mortal';
-        hint = 'Tap to kill — or revive — a mortal Character.';
-        // All Mortal Characters (incl. already-killed, so they can be revived).
-        var mortals = state.characters.filter(function (c) { return c.type === 'Mortal'; });
-        body = (mortals.length
-            ? mortals.map(function (c) { return traitPickerRow('characters', c.id, c.text, c.lost, '✗'); }).join('')
-            : '<p class="tp-empty">No mortal Characters yet.</p>') +
+        title = 'Kill a Character';
+        hint = 'Tap to kill — or revive — a Character.';
+        // All Characters (incl. already-killed, so they can be revived), mortals
+        // listed first, each tagged with its type. Some prompts kill any
+        // Character (Immortals included), others specify a mortal.
+        var chars = state.characters.slice().sort(function (a, b) {
+            if (a.type === b.type) return 0;
+            return a.type === 'Mortal' ? -1 : 1;
+        });
+        body = (chars.length
+            ? chars.map(function (c) { return traitPickerRow('characters', c.id, c.text, c.lost, '✗', c.type); }).join('')
+            : '<p class="tp-empty">No Characters yet.</p>') +
             '<button type="button" class="tp-row tp-create" onclick="createMortalFromPicker()">' +
                 '<span class="tp-box">+</span><span class="tp-name">New mortal Character…</span></button>';
     } else {
@@ -994,18 +1001,20 @@ function traitPickerHTML(kind) {
         '<p class="tp-hint">' + hint + '</p>';
 }
 
-function traitPickerRow(kind, id, text, on, glyph) {
+function traitPickerRow(kind, id, text, on, glyph, tag) {
     var fallback = kind === 'skills' ? 'Unnamed Skill'
-        : (kind === 'characters' ? 'Unnamed mortal' : 'Unnamed Resource');
+        : (kind === 'characters' ? 'Unnamed Character' : 'Unnamed Resource');
     var name = escapeHtml(text || fallback);
     // A lost Resource / killed Character is struck out; a checked Skill is not
     // (it's marked by the ✓ box + accent border — checked ≠ lost).
     var strike = on && kind !== 'skills';
-    return '<button type="button" class="tp-row' + (on ? ' tp-on' : '') + '" data-id="' + id + '"' +
+    var tagHtml = tag ? '<span class="tp-tag">' + escapeHtml(tag) + '</span>' : '';
+    var typeAttr = tag ? ' data-type="' + escapeHtml(tag) + '"' : '';
+    return '<button type="button" class="tp-row' + (on ? ' tp-on' : '') + '" data-id="' + id + '"' + typeAttr +
         ' role="menuitemcheckbox" aria-checked="' + (on ? 'true' : 'false') + '"' +
         ' onclick="pickTrait(\'' + kind + '\',\'' + id + '\')">' +
         '<span class="tp-box">' + (on ? glyph : '') + '</span>' +
-        '<span class="tp-name' + (strike ? ' strikethrough' : '') + '">' + name + '</span></button>';
+        '<span class="tp-name' + (strike ? ' strikethrough' : '') + '">' + name + '</span>' + tagHtml + '</button>';
 }
 
 function pickTrait(kind, id) {
@@ -1024,7 +1033,7 @@ function pickTrait(kind, id) {
         if (!e) return;
         on = e.lost;
         if (kind === 'characters') {
-            announce((on ? 'Killed' : 'Revived') + ' mortal Character "' + (e.text || 'Unnamed') + '".');
+            announce((on ? 'Killed' : 'Revived') + ' Character "' + (e.text || 'Unnamed') + '".');
         } else {
             announce((on ? 'Lost' : 'Restored') + ' Resource "' + (e.text || 'Unnamed') + '".');
         }
@@ -1059,9 +1068,12 @@ function createMortalFromPicker() {
         var empty = rows.querySelector('.tp-empty');
         if (empty) rows.removeChild(empty);
         var tmp = document.createElement('div');
-        tmp.innerHTML = traitPickerRow('characters', created.id, created.text, created.lost, '✗');
+        tmp.innerHTML = traitPickerRow('characters', created.id, created.text, created.lost, '✗', 'Mortal');
         var newRow = tmp.firstChild;
-        rows.insertBefore(newRow, createBtn);
+        // Keep mortals-first order: insert before the first Immortal (or the
+        // create action if there are none).
+        var firstImmortal = rows.querySelector('.tp-row[data-type="Immortal"]');
+        rows.insertBefore(newRow, firstImmortal || createBtn);
         newRow.focus();
     }
 }
@@ -1774,7 +1786,7 @@ document.addEventListener('click', function (e) {
     if (!openTraitPicker) return;
     var t = e.target;
     if (openTraitPicker.contains(t)) return;
-    if (t.closest && t.closest('#btnCheckSkill, #btnLoseResource, #btnKillMortal')) return;
+    if (t.closest && t.closest('#btnCheckSkill, #btnLoseResource, #btnKillCharacter')) return;
     closeTraitPicker();
 });
 
