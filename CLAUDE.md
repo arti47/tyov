@@ -62,17 +62,19 @@ npm run lint      # ESLint (needs `npm install` first; no network = skip)
 |------|---------|
 | `index.html` | The UI markup only: setup wizard, dice/prompt panel, traits & memories panels, modals. Loads `logic.js` → `data.js` → `app.js`. No inline CSS. |
 | `styles.css` | All styles (themes/variables, layout, components, `:focus-visible` a11y outlines). Ends with a `@media (max-width: 680px)` block for the responsive/mobile layout; form controls use `min-width: 0` and the body has `overflow-x: hidden` so nothing scrolls sideways on phones. |
-| `logic.js` | **Pure**, DOM-free helpers shared by the app and tests: `escapeHtml`, `getTier`, `getPromptText`, `parseMarkdown`, `rollDice` (RNG injectable), `resolveTraitAction` (Skill/Resource substitution ladder), `rollMeaning` (d100 → meaning-table word). Exposed as `window.TYOV` in the browser and `module.exports` in Node. |
+| `logic.js` | **Pure**, DOM-free helpers shared by the app and tests: `escapeHtml`, `getTier`, `getPromptText`, `parseMarkdown`, `rollDice` (RNG injectable), `resolveTraitAction` (Skill/Resource substitution ladder), `rollMeaning` (d100 → meaning-table word), and the save-state helpers `genId`/`defaultState`/`normMem`/`normalizeState` (+`SAVE_VERSION`). Exposed as `window.TYOV` in the browser and `module.exports` in Node. |
 | `app.js` | The game engine: the `state` object, render-from-state functions, save/load + v1→v2 migration, full-state undo stack, dice/prompts, traits/memories/diary, triggers, guided prompt actions, nudges, the Meaning Oracle, import/export. |
 | `data.js` | The prompt database: `const promptDB`, keyed `1..80`, each with tiers `a`/`b`/`c` (first/second/third visit). Also `const meaningTable` — the 100-word Meaning Oracle list (1-indexed by a d100 roll). |
 | `assets/dice.wav`, `assets/page.wav` | Bundled, precached sound effects (dice roll, page turn) — local so audio works offline. Generated lightweight WAVs. |
 | `assets/icon-192.png`, `assets/icon-512.png`, `assets/icon-180.png` | PWA / home-screen icons (192 & 512 for the manifest incl. `maskable`; 180 for the iOS `apple-touch-icon`). Generated PNGs (blood-red field, dark moon, white fangs). |
 | `manifest.json` | PWA manifest: name/short_name/description, `start_url`/`scope`/`id` (all relative so it works under a Pages subpath), `standalone`, colors, and PNG icons (`any` + `maskable`). Drives "Add to Home Screen". |
-| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v8`. Precaches assets (incl. `assets/*.wav` and `assets/icon-*.png`), deletes old caches on activate, network-first for navigations, stale-while-revalidate for other GETs. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
+| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v9`. Precaches assets (incl. `assets/*.wav` and `assets/icon-*.png`), deletes old caches on activate, network-first for navigations, stale-while-revalidate for other GETs. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
 | `.github/workflows/pages.yml` | GitHub Actions workflow: on push to `main`, runs `npm test` then deploys the repo root to **GitHub Pages**. Requires Pages Source = "GitHub Actions" (one-time repo setting). |
-| `tests/logic.test.js` | Unit tests for `logic.js` (escaping, tiers, prompt text, markdown, dice, `resolveTraitAction`). |
-| `package.json` | Scripts: `test`, `serve`, `lint`. ESLint as a dev dependency. |
+| `.github/workflows/ci.yml` | CI workflow: on push to `main` and on PRs, runs `npm ci` → `npm test` → `npm run lint`. |
+| `tests/logic.test.js` | Unit tests for `logic.js` (escaping, tiers, prompt text, markdown, dice, `resolveTraitAction`, `rollMeaning`, and state normalization: `normalizeState`/`normMem`/`defaultState`). |
+| `package.json` / `package-lock.json` | Scripts: `test`, `serve`, `lint`. ESLint as the sole devDependency; the lockfile pins it for reproducible CI. |
 | `eslint.config.js` | Flat ESLint config with browser + test globals. |
+| `.gitignore` | Ignores `node_modules/`, editor cruft, and `_qa_*.html` scratch files. |
 | `README.md` | Minimal. |
 
 ## How it works
@@ -227,7 +229,7 @@ under that subpath. Every asset the SW precaches must stay same-origin/relative.
 ### Bumping the service worker cache
 If you change any cached asset (`index.html`, `styles.css`, `logic.js`,
 `app.js`, `data.js`, `manifest.json`, `assets/*.wav`, `assets/icon-*.png`), bump
-`CACHE_NAME` in `sw.js` (currently `-v8`). Bumping it is also what makes the
+`CACHE_NAME` in `sw.js` (currently `-v9`). Bumping it is also what makes the
 deployed `sw.js` byte-different, which is what triggers the tap-to-update toast
 for existing installs. The SW also network-first-loads navigations, so updates
 generally land on next load even without a bump — but bump for certainty, and
@@ -242,17 +244,14 @@ Severity reflects how far the app drifts from the rules-as-written, not effort.
 
 **Design principle:** *Guided* — the app surfaces the correct move and nudges
 toward it, but the player can override. (Exception: setup is fully faithful and
-required.) Delivery is **phased**; Phases 1–2 are done, Phase 3 is planned.
+required.) Delivery is **phased**; Phases 1–2 and Phase 3's a11y/CI are done —
+only save-slots/export (B8/B9) remain.
 
 ### Planned / open
 
-**Phase 3 — Saves / export / a11y / CI**
+**Phase 3 — Saves / export (remaining)**
 - **B8** Multiple save slots / vampires (keyed save collection + chooser).
 - **B9** Markdown export and a print-friendly chronicle stylesheet.
-- **B10** ARIA live regions for roll/prompt/alerts; modal focus traps + full
-  keyboard nav.
-- **C1** Extract & unit-test the v1→v2 migration and `normalizeState`.
-- **C2** GitHub Actions CI running `npm test` + ESLint on push/PR.
 
 ### Scoping decisions (not bugs)
 
@@ -262,6 +261,18 @@ required.) Delivery is **phased**; Phases 1–2 are done, Phase 3 is planned.
   `checkGameOver()` disabling the roll across that range is **faithful**.
 
 ### Done
+
+**Phase 3 — accessibility + CI**
+- **B10** Screen-reader live region (`#srAnnounce`/`announce()`) for roll/jump/
+  step/advance/game-over; modal focus trap (`focusablesIn`/`openModalEl` + Tab
+  handler) with Esc closing dismissable overlays and focus moved in on open;
+  `role="dialog"`/`aria-modal` on the wizard & journal modals; `.sr-only`; the
+  noisy `#saveStatus`/`#tierBadge` live regions were made visual-only.
+- **C1** `genId`/`defaultState`/`normMem`/`normalizeState` moved to `logic.js`
+  and unit-tested (18 tests total). (v1 `migrateV1` stays in `app.js` — it needs
+  `DOMParser`, untestable in Node without jsdom.)
+- **C2** `.github/workflows/ci.yml` runs `npm ci` → `npm test` → `npm run lint`
+  on push/PR. `package-lock.json` committed; `node_modules/` git-ignored.
 
 **Phase 2 — UX polish** (complete)
 - **B2** Responsive/mobile layout pass — verified in a real 390px viewport

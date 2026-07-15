@@ -3,7 +3,8 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const {
-    escapeHtml, getTier, getPromptText, parseMarkdown, rollDice, resolveTraitAction, rollMeaning
+    escapeHtml, getTier, getPromptText, parseMarkdown, rollDice, resolveTraitAction, rollMeaning,
+    genId, defaultState, normMem, normalizeState, SAVE_VERSION
 } = require('../logic.js');
 
 test('escapeHtml neutralises HTML metacharacters', () => {
@@ -114,4 +115,59 @@ test('rollMeaning stays in [1,100] and never returns undefined word', () => {
         assert.ok(r.roll >= 1 && r.roll <= 100);
         assert.ok(typeof r.word === 'string' && r.word.length > 0);
     }
+});
+
+test('genId produces unique-ish non-empty ids', () => {
+    const a = genId(), b = genId();
+    assert.ok(a.length > 3 && b.length > 3);
+    assert.notStrictEqual(a, b);
+});
+
+test('defaultState is a complete empty v2 state', () => {
+    const s = defaultState();
+    assert.strictEqual(s.version, SAVE_VERSION);
+    assert.strictEqual(s.maxMemories, 5);
+    assert.strictEqual(s.maxDiary, 4);
+    assert.deepStrictEqual(s.skills, []);
+    assert.deepStrictEqual(s.memories, []);
+    assert.strictEqual(s.gameOver, false);
+    assert.ok(s.display && typeof s.display.promptText === 'string');
+});
+
+test('normMem compacts experiences (>=1, trailing empties trimmed)', () => {
+    assert.deepStrictEqual(normMem({ experiences: ['a', '', ''] }).experiences, ['a']);
+    assert.deepStrictEqual(normMem({ experiences: ['', '', ''] }).experiences, ['']);
+    assert.deepStrictEqual(normMem({ experiences: ['a', '', 'b'] }).experiences, ['a', '', 'b']);
+    assert.deepStrictEqual(normMem({}).experiences, ['']);
+    const m = normMem({ theme: 'T', memState: 'hazy', lost: 1 });
+    assert.strictEqual(m.theme, 'T');
+    assert.strictEqual(m.memState, 'hazy');
+    assert.strictEqual(m.lost, true);
+    assert.ok(m.id);
+});
+
+test('normalizeState fills defaults and coerces types', () => {
+    const s = normalizeState({});
+    assert.strictEqual(s.version, SAVE_VERSION);
+    assert.deepStrictEqual(s.skills, []);
+    assert.ok(Array.isArray(s.characters) && Array.isArray(s.diary));
+    assert.ok(s.display.promptResult);
+});
+
+test('normalizeState forces version and repairs entities', () => {
+    const s = normalizeState({
+        version: 99,
+        skills: [{ text: 'Swordplay' }],
+        resources: [{ text: 'Diary', isDiary: true }, { text: 'Coin' }],
+        characters: [{ text: 'Bad', type: 'Wraith' }, { text: 'Sire', type: 'Immortal' }],
+        memories: [{ theme: 'M', experiences: ['x', '', ''] }]
+    });
+    assert.strictEqual(s.version, SAVE_VERSION);          // forced to current
+    assert.strictEqual(s.skills[0].checked, false);        // defaulted
+    assert.ok(s.skills[0].id);                             // id minted
+    assert.strictEqual(s.resources[0].isDiary, true);      // Diary flag preserved
+    assert.strictEqual(s.resources[1].isDiary, undefined); // not added elsewhere
+    assert.strictEqual(s.characters[0].type, 'Mortal');    // unknown type clamped
+    assert.strictEqual(s.characters[1].type, 'Immortal');  // valid type kept
+    assert.deepStrictEqual(s.memories[0].experiences, ['x']); // compacted
 });

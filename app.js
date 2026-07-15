@@ -13,45 +13,17 @@ var getTier = TYOV.getTier;
 var getPromptText = TYOV.getPromptText;
 var parseMarkdown = TYOV.parseMarkdown;
 var rollMeaning = TYOV.rollMeaning;
+// Save-state helpers live in logic.js (pure + unit-tested); alias them here.
+var genId = TYOV.genId;
+var defaultState = TYOV.defaultState;
+var normMem = TYOV.normMem;
+var normalizeState = TYOV.normalizeState;
 
 var SAVE_KEY = 'tyov_save';
-var SAVE_VERSION = 2;
+var SAVE_VERSION = TYOV.SAVE_VERSION;
 
 var isGameLoaded = false; // Guards autosave until load/setup completes.
 var undoStack = [];        // Multi-level undo of gameplay state.
-
-function defaultState() {
-    return {
-        version: SAVE_VERSION,
-        maxMemories: 5,
-        maxDiary: 4,
-        currentPrompt: 0,
-        promptVisits: {},
-        futureTriggers: [],
-        namesHistory: [],
-        turnCount: 0,
-        rollsSinceOldAge: 0,   // Rolls since the last old-age nudge (see rules p.155).
-        rollsSinceBackup: 0,   // Rolls since the last export, drives the backup reminder.
-        gameOver: false,       // True once a game-ending Prompt/exhaustion has fired.
-        rollHistory: [],
-        journalHistory: [],
-        currentName: '',
-        boxedExp: '',
-        currentJournal: '',
-        skills: [],      // { id, text, lost, checked }
-        resources: [],   // { id, text, lost }
-        characters: [],  // { id, text, type: 'Mortal'|'Immortal', doom, lost }
-        marks: [],       // { id, text, lost }
-        memories: [],    // { id, theme, experiences[], memState }
-        diary: [],       // same shape as memories
-        settings: {},
-        display: {
-            promptResult: 'Awaiting First Roll...',
-            rollDetails: '',
-            promptText: 'Your prompt narrative will appear here.'
-        }
-    };
-}
 
 var state = defaultState();
 
@@ -65,9 +37,6 @@ function setVal(id, v) { var e = el(id); if (e) e.value = v || ''; }
 function checked(id) { var e = el(id); return e ? e.checked : false; }
 function setChecked(id, v) { var e = el(id); if (e) e.checked = !!v; }
 function setText(id, t) { var e = el(id); if (e) e.innerText = t; }
-function genId() {
-    return 'e' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-3);
-}
 function debounce(fn, ms) {
     var t;
     return function () { clearTimeout(t); t = setTimeout(fn, ms); };
@@ -126,6 +95,12 @@ function setSaveStatus(text) {
     if (s) s.textContent = text;
 }
 
+// Push a message to the screen-reader live region (B10).
+function announce(msg) {
+    var r = el('srAnnounce');
+    if (r) r.textContent = msg;
+}
+
 function pad2(n) { return (n < 10 ? '0' : '') + n; }
 function nowHM() {
     var d = new Date();
@@ -172,8 +147,11 @@ function toggleGraveyard() {
 function nextStep(stepNum) {
     var steps = document.querySelectorAll('.wizard-step');
     for (var i = 0; i < steps.length; i++) steps[i].style.display = 'none';
-    el('step' + stepNum).style.display = 'block';
+    var step = el('step' + stepNum);
+    step.style.display = 'block';
     fillTraitRecaps(); // keep the "traits so far" reference current on every step
+    var first = step.querySelector('input, textarea'); // move focus into the step (B10)
+    if (first) first.focus();
 }
 
 // Populate the read-only "your traits so far" panels shown on the Memory steps,
@@ -332,52 +310,6 @@ function latestHistorySave() {
 }
 
 var saveGame = debounce(persist, 300);
-
-function normMem(m) {
-    m = m || {};
-    var exps = Array.isArray(m.experiences) ? m.experiences.slice() : [];
-    // Compact model: trim trailing empty rows but always keep at least one.
-    while (exps.length > 1 && exps[exps.length - 1] === '') exps.pop();
-    if (exps.length === 0) exps.push('');
-    return {
-        id: m.id || genId(),
-        theme: m.theme || '',
-        experiences: exps,
-        memState: m.memState || 'normal',
-        lost: !!m.lost
-    };
-}
-
-// Validate/repair an arbitrary parsed object into a complete v2 state.
-function normalizeState(d) {
-    var s = Object.assign(defaultState(), d || {});
-    s.version = SAVE_VERSION;
-    s.skills = (s.skills || []).map(function (x) {
-        return { id: x.id || genId(), text: x.text || '', lost: !!x.lost, checked: !!x.checked };
-    });
-    s.resources = (s.resources || []).map(function (x) {
-        var r = { id: x.id || genId(), text: x.text || '', lost: !!x.lost };
-        if (x.isDiary) r.isDiary = true; // the auto-managed Diary Resource (A6)
-        return r;
-    });
-    s.marks = (s.marks || []).map(function (x) {
-        return { id: x.id || genId(), text: x.text || '', lost: !!x.lost };
-    });
-    s.characters = (s.characters || []).map(function (x) {
-        return {
-            id: x.id || genId(),
-            text: x.text || '',
-            type: x.type === 'Immortal' ? 'Immortal' : 'Mortal',
-            doom: x.doom || 0,
-            lost: !!x.lost
-        };
-    });
-    s.memories = (s.memories || []).map(normMem);
-    s.diary = (s.diary || []).map(normMem);
-    s.settings = s.settings || {};
-    s.display = Object.assign(defaultState().display, s.display || {});
-    return s;
-}
 
 // --- v1 (innerHTML-blob) migration -------------------------------------------
 
@@ -631,6 +563,8 @@ function previewChronicle() {
 
     el('previewContent').innerHTML = html;
     el('previewModal').style.display = 'flex';
+    var closeBtn = el('previewModal').querySelector('button');
+    if (closeBtn) closeBtn.focus();
 }
 
 function renderMemoriesPreview(list, faded) {
@@ -833,6 +767,7 @@ function rollAndMove() {
 
     updatePromptDisplay(state.currentPrompt, visits);
     addToHistoryLog('Prompt ' + state.currentPrompt + tier + ' (' + detail + ')');
+    announce('Moved ' + m.diff + '. Prompt ' + state.currentPrompt + tier + '. ' + state.display.promptText);
 
     tickRollCounters();
     applyDisplay();
@@ -860,6 +795,7 @@ function jumpToPrompt() {
     state.display.promptResult = 'Proceed to Prompt ' + target + tier;
     updatePromptDisplay(target, visits);
     addToHistoryLog('Jumped to Prompt ' + target + tier);
+    announce('Jumped to Prompt ' + target + tier + '. ' + state.display.promptText);
 
     applyDisplay();
     updatePromptMeta();
@@ -880,6 +816,7 @@ function stepBackOnePrompt() {
     state.display.promptResult = 'Stepped back to Prompt ' + state.currentPrompt;
     updatePromptDisplay(state.currentPrompt, visits);
     addToHistoryLog('Stepped back to Prompt ' + state.currentPrompt);
+    announce('Stepped back to Prompt ' + state.currentPrompt + '. ' + state.display.promptText);
     applyDisplay();
     updatePromptMeta();
     checkTriggers();
@@ -900,6 +837,7 @@ function advanceToNextPrompt() {
     state.display.promptResult = 'Proceed to Prompt ' + state.currentPrompt + tier;
     updatePromptDisplay(state.currentPrompt, visits);
     addToHistoryLog('Advanced to Prompt ' + state.currentPrompt + tier);
+    announce('Advanced to Prompt ' + state.currentPrompt + tier + '. ' + state.display.promptText);
     applyDisplay();
     updatePromptMeta();
     checkTriggers();
@@ -969,6 +907,7 @@ function declareGameOver(reason) {
     checkGameOver();
     updatePromptMeta();
     toast('The game is over. ' + reason, 'warn');
+    announce('The game is over. ' + reason);
     persist();
 }
 
@@ -1613,12 +1552,41 @@ document.addEventListener('focusin', function (e) {
     }
 });
 
-// Esc closes the in-app modal (as Cancel) or the oracle panel.
+// --- Modal a11y: focus trap + Esc (B10) ---
+function focusablesIn(container) {
+    return Array.prototype.slice.call(container.querySelectorAll(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), ' +
+        'textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )).filter(function (x) { return x.offsetParent !== null; });
+}
+// The currently-open overlay whose focus should be trapped, or null.
+function openModalEl() {
+    var am = el('appModal'); if (am && am.classList.contains('show')) return am;
+    var sw = el('setupWizard'); if (sw && sw.style.display === 'flex') return sw;
+    var pm = el('previewModal'); if (pm && pm.style.display === 'flex') return pm;
+    return null;
+}
+
 document.addEventListener('keydown', function (e) {
-    if (e.key !== 'Escape') return;
-    if (isAppModalOpen()) { closeAppModal(); return; }
-    var op = el('oraclePanel');
-    if (op && op.classList.contains('show')) toggleOracle();
+    if (e.key === 'Escape') {
+        // Esc dismisses dismissable overlays (not the required setup wizard).
+        if (isAppModalOpen()) { closeAppModal(); return; }
+        var pm = el('previewModal');
+        if (pm && pm.style.display === 'flex') { pm.style.display = 'none'; return; }
+        var op = el('oraclePanel');
+        if (op && op.classList.contains('show')) toggleOracle();
+        return;
+    }
+    if (e.key === 'Tab') {
+        var modal = openModalEl();
+        if (!modal) return;
+        var f = focusablesIn(modal);
+        if (!f.length) return;
+        var first = f[0], last = f[f.length - 1], a = document.activeElement;
+        if (e.shiftKey && a === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && a === last) { e.preventDefault(); first.focus(); }
+        else if (f.indexOf(a) === -1) { e.preventDefault(); first.focus(); }
+    }
 });
 
 window.addEventListener('load', function () {

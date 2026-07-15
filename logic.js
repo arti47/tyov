@@ -119,6 +119,95 @@
         return { roll: roll, word: word };
     }
 
+    // --- Save-state shape + validation (pure; shared with the app & tests) ----
+
+    var SAVE_VERSION = 2;
+
+    function genId() {
+        return 'e' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-3);
+    }
+
+    // A complete, empty v2 state.
+    function defaultState() {
+        return {
+            version: SAVE_VERSION,
+            maxMemories: 5,
+            maxDiary: 4,
+            currentPrompt: 0,
+            promptVisits: {},
+            futureTriggers: [],
+            namesHistory: [],
+            turnCount: 0,
+            rollsSinceOldAge: 0,
+            rollsSinceBackup: 0,
+            gameOver: false,
+            rollHistory: [],
+            journalHistory: [],
+            currentName: '',
+            boxedExp: '',
+            currentJournal: '',
+            skills: [],      // { id, text, lost, checked }
+            resources: [],   // { id, text, lost, isDiary? }
+            characters: [],  // { id, text, type: 'Mortal'|'Immortal', doom, lost }
+            marks: [],       // { id, text, lost }
+            memories: [],    // { id, theme, experiences[], memState, lost }
+            diary: [],       // same shape as memories
+            settings: {},
+            display: {
+                promptResult: 'Awaiting First Roll...',
+                rollDetails: '',
+                promptText: 'Your prompt narrative will appear here.'
+            }
+        };
+    }
+
+    // Normalize a Memory/Diary entry: compact experiences (≥1, trailing empties
+    // trimmed), and fill id/theme/memState/lost.
+    function normMem(m) {
+        m = m || {};
+        var exps = Array.isArray(m.experiences) ? m.experiences.slice() : [];
+        while (exps.length > 1 && exps[exps.length - 1] === '') exps.pop();
+        if (exps.length === 0) exps.push('');
+        return {
+            id: m.id || genId(),
+            theme: m.theme || '',
+            experiences: exps,
+            memState: m.memState || 'normal',
+            lost: !!m.lost
+        };
+    }
+
+    // Validate/repair an arbitrary parsed object into a complete v2 state.
+    function normalizeState(d) {
+        var s = Object.assign(defaultState(), d || {});
+        s.version = SAVE_VERSION;
+        s.skills = (s.skills || []).map(function (x) {
+            return { id: x.id || genId(), text: x.text || '', lost: !!x.lost, checked: !!x.checked };
+        });
+        s.resources = (s.resources || []).map(function (x) {
+            var r = { id: x.id || genId(), text: x.text || '', lost: !!x.lost };
+            if (x.isDiary) r.isDiary = true; // the auto-managed Diary Resource (A6)
+            return r;
+        });
+        s.marks = (s.marks || []).map(function (x) {
+            return { id: x.id || genId(), text: x.text || '', lost: !!x.lost };
+        });
+        s.characters = (s.characters || []).map(function (x) {
+            return {
+                id: x.id || genId(),
+                text: x.text || '',
+                type: x.type === 'Immortal' ? 'Immortal' : 'Mortal',
+                doom: x.doom || 0,
+                lost: !!x.lost
+            };
+        });
+        s.memories = (s.memories || []).map(normMem);
+        s.diary = (s.diary || []).map(normMem);
+        s.settings = s.settings || {};
+        s.display = Object.assign(defaultState().display, s.display || {});
+        return s;
+    }
+
     var api = {
         escapeHtml: escapeHtml,
         getTier: getTier,
@@ -126,7 +215,12 @@
         parseMarkdown: parseMarkdown,
         rollDice: rollDice,
         resolveTraitAction: resolveTraitAction,
-        rollMeaning: rollMeaning
+        rollMeaning: rollMeaning,
+        genId: genId,
+        defaultState: defaultState,
+        normMem: normMem,
+        normalizeState: normalizeState,
+        SAVE_VERSION: SAVE_VERSION
     };
 
     if (typeof module !== 'undefined' && module.exports) {

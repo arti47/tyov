@@ -14,12 +14,16 @@ const browserGlobals = {
     Blob: 'readonly',
     URL: 'readonly',
     DOMParser: 'readonly',
+    Event: 'readonly',
     setTimeout: 'readonly',
     clearTimeout: 'readonly',
+    setInterval: 'readonly',
+    clearInterval: 'readonly',
     console: 'readonly',
     module: 'writable',
     globalThis: 'readonly',
     promptDB: 'readonly',
+    meaningTable: 'readonly',
     TYOV: 'readonly'
 };
 

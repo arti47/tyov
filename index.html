@@ -23,7 +23,7 @@
     <audio id="sfxDice" src="assets/dice.wav" preload="auto"></audio>
     <audio id="sfxPage" src="assets/page.wav" preload="auto"></audio>
 
-    <div id="setupWizard" class="modal-overlay">
+    <div id="setupWizard" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Vampire creation">
         <div class="modal-content">
             
             <div id="step1" class="wizard-step">
@@ -132,7 +132,7 @@
         </div>
     </div>
 
-    <div id="previewModal" class="modal-overlay">
+    <div id="previewModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="previewTitle">
         <div class="modal-content" style="max-width: 800px;">
             <h2 id="previewTitle" style="text-align: center;">The Chronicle</h2>
             <div id="previewContent"></div>
@@ -158,7 +158,7 @@
             <button class="btn-small" onclick="changeFontSize(2)" aria-label="Increase font size">A+</button>
             <button class="btn-small" onclick="changeFontSize(-2)" aria-label="Decrease font size">A-</button>
             <label><input type="checkbox" id="optMuteSound" onchange="saveGame()"> Mute Sounds</label>
-            <span id="saveStatus" aria-live="polite" style="font-size: 0.8em; color: #888; min-width: 90px;"></span>
+            <span id="saveStatus" style="font-size: 0.8em; color: #888; min-width: 90px;"></span>
         </div>
         <div>
             <button class="btn-small" style="background: #9c27b0;" onclick="exportSaveData()">Backup Save (.json)</button>
@@ -203,7 +203,7 @@
         <div id="diceAnim" class="dice-anim" aria-hidden="true"></div>
 
         <h3 id="promptResult" style="margin-top: 15px; color: #ff4d4d;">Awaiting First Roll...</h3>
-        <div id="tierBadge" aria-live="polite" style="font-size: 0.85em; color: #aaa; min-height: 1.2em;"></div>
+        <div id="tierBadge" style="font-size: 0.85em; color: #aaa; min-height: 1.2em;"></div>
         <p id="rollResultDetails" style="font-size: 0.9em; color: #aaa;"></p>
         <div id="promptTextDisplay" style="margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.1); border-left: 4px solid var(--accent-color); font-style: italic; text-align: left;">
             Your prompt narrative will appear here.
@@ -301,6 +301,7 @@
     </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <div id="srAnnounce" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
     <div id="updateToast" class="update-toast" role="alert">
         <span>✨ A new version is available.</span>
