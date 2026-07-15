@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Thousand Year Old Vampire - Companion</title>
     <meta name="description" content="Companion app for the solo journaling RPG Thousand Year Old Vampire.">
     <link rel="manifest" href="manifest.json">
@@ -210,9 +210,11 @@
         <div id="advanceNote" class="prompt-note">You've answered all entries (a, b, c) for this Prompt. <button class="btn-small" onclick="advanceToNextPrompt()">Move to next Prompt →</button></div>
 
         <div class="prompt-actions" id="promptActions" role="group" aria-label="Guided prompt actions">
-            <span style="font-size:0.8em; color:#aaa;">When a Prompt instructs you:</span>
-            <button class="btn-small" id="btnCheckSkill" onclick="promptCheckSkill()">Check a Skill</button>
-            <button class="btn-small btn-strike" id="btnLoseResource" onclick="promptLoseResource()">Lose a Resource</button>
+            <span class="prompt-actions-label">When a Prompt instructs you:</span>
+            <div class="prompt-action-btns">
+                <button class="btn-small" id="btnCheckSkill" onclick="promptCheckSkill()">Check a Skill</button>
+                <button class="btn-small btn-strike" id="btnLoseResource" onclick="promptLoseResource()">Lose a Resource</button>
+            </div>
         </div>
 
         <textarea id="promptJournal" placeholder="Write your detailed narrative response to this prompt here... (This automatically saves to your Chronicle when you roll the dice)" style="margin-top: 15px; min-height: 120px; font-size: 1.05em; border-color: var(--accent-color);"></textarea>

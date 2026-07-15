@@ -32,7 +32,13 @@ body {
     font-size: var(--base-font-size);
     max-width: 1100px;
     margin: 0 auto;
-    padding: 20px;
+    /* Add the device safe-area insets (notch / status bar / home indicator) to
+       the base 20px so header content never hides under the iOS status bar when
+       running as a translucent-status-bar PWA. env() falls back to 0 elsewhere. */
+    padding: calc(20px + env(safe-area-inset-top, 0px))
+             calc(20px + env(safe-area-inset-right, 0px))
+             calc(20px + env(safe-area-inset-bottom, 0px))
+             calc(20px + env(safe-area-inset-left, 0px));
     line-height: 1.5;
     overflow-x: hidden; /* safety net: never scroll the page body sideways */
     transition: background 0.3s, color 0.3s;
@@ -374,10 +380,27 @@ body.light-mode .trait-recap {
     position: relative; /* anchors the floating trait picker (.trait-picker) */
     margin-top: 12px;
     display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
+    gap: 8px;
+}
+.prompt-actions-label {
+    font-size: 0.8em;
+    color: #aaa;
+    text-align: center;
+}
+/* Two equal-width buttons on one row under the caption (no ragged wrap). */
+.prompt-action-btns {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+    max-width: 420px;
+}
+.prompt-action-btns .btn-small {
+    flex: 1 1 0;
+    margin-left: 0; /* override the default btn-small left margin */
+    padding: 8px 10px;
+    white-space: nowrap;
 }
 
 /* Guided prompt-action picker: a hovering popover of Skills / Resources that
