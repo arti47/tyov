@@ -151,30 +151,16 @@
         </div>
     </div>
 
-    <div class="options-bar" style="border-style: solid; background: var(--panel-bg);">
-        <div style="display: flex; gap: 10px; align-items: center;">
-            <b>Settings:</b>
-            <button class="btn-small" onclick="toggleTheme()" id="btnTheme">Toggle Light Mode</button>
-            <button class="btn-small" onclick="changeFontSize(2)" aria-label="Increase font size">A+</button>
-            <button class="btn-small" onclick="changeFontSize(-2)" aria-label="Decrease font size">A-</button>
-            <label><input type="checkbox" id="optMuteSound" onchange="saveGame()"> Mute Sounds</label>
-            <span id="saveStatus" style="font-size: 0.8em; color: #888; min-width: 90px;"></span>
-        </div>
-        <div>
-            <button class="btn-small" style="background: #9c27b0;" onclick="exportSaveData()">Backup Save (.json)</button>
-            <input type="file" id="importSaveFile" accept=".json" style="display: none;" onchange="importSaveData(event)">
-            <button class="btn-small" style="background: #673ab7;" onclick="document.getElementById('importSaveFile').click()">Restore Save</button>
-            <button class="btn-small" style="background: #d32f2f;" onclick="resetGame()">Wipe Data</button>
-        </div>
-    </div>
-
     <h1 style="border: none; margin: 0; padding: 0;">Vampire Chronicle</h1>
-    
+
     <div class="name-row" style="display: flex; gap: 10px; margin-top: 10px; margin-bottom: 5px;">
         <input type="text" id="currentName" placeholder="Enter your current alias/name..." style="font-size: 1.2em; font-weight: bold;">
         <button onclick="changeName()">Adopt New Name</button>
     </div>
-    <div id="nameHistory" style="font-size: 0.8em; color: #aaa; margin-bottom: 20px; font-style: italic;">Forgotten Names: None yet.</div>
+    <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+        <span id="nameHistory" style="font-size: 0.8em; color: #aaa; font-style: italic;">Forgotten Names: None yet.</span>
+        <span id="saveStatus" style="font-size: 0.75em; color: #888;"></span>
+    </div>
 
     <div id="gameWarning" role="alert" aria-live="assertive">⚠️ SURVIVAL WARNING: You have 0 available Skills or Resources. If a Prompt makes you check a Skill or lose a Resource now, the game is over.</div>
     <div id="triggerAlert" role="alert" aria-live="assertive">🔔 FUTURE PROMPT TRIGGERED: <span id="triggerAlertText"></span></div>
@@ -188,10 +174,11 @@
     </button>
 
     <div class="tabs" role="tablist" aria-label="Sections">
-        <button class="tab-btn" id="tab-play" role="tab" aria-selected="true" aria-controls="panel-play" onclick="showTab('play')">▶ Play</button>
-        <button class="tab-btn" id="tab-character" role="tab" aria-selected="false" aria-controls="panel-character" onclick="showTab('character')">📜 Character</button>
-        <button class="tab-btn" id="tab-diary" role="tab" aria-selected="false" aria-controls="panel-diary" onclick="showTab('diary')">📔 Diary</button>
-        <button class="tab-btn" id="tab-journal" role="tab" aria-selected="false" aria-controls="panel-journal" onclick="showTab('journal')">📖 Journal</button>
+        <button class="tab-btn" id="tab-play" role="tab" aria-selected="true" aria-controls="panel-play" aria-label="Play" onclick="showTab('play')"><span class="tab-icon">▶</span><span class="tab-label">Play</span></button>
+        <button class="tab-btn" id="tab-character" role="tab" aria-selected="false" aria-controls="panel-character" aria-label="Character" onclick="showTab('character')"><span class="tab-icon">📜</span><span class="tab-label">Character</span></button>
+        <button class="tab-btn" id="tab-diary" role="tab" aria-selected="false" aria-controls="panel-diary" aria-label="Diary" onclick="showTab('diary')"><span class="tab-icon">📔</span><span class="tab-label">Diary</span></button>
+        <button class="tab-btn" id="tab-journal" role="tab" aria-selected="false" aria-controls="panel-journal" aria-label="Journal" onclick="showTab('journal')"><span class="tab-icon">📖</span><span class="tab-label">Journal</span></button>
+        <button class="tab-btn" id="tab-settings" role="tab" aria-selected="false" aria-controls="panel-settings" aria-label="Settings" onclick="showTab('settings')"><span class="tab-icon">⚙</span><span class="tab-label">Settings</span></button>
     </div>
 
     <section id="panel-play" class="tab-panel" role="tabpanel" aria-labelledby="tab-play">
@@ -313,6 +300,29 @@
             <button class="btn-small" style="background:#4CAF50;" onclick="exportJournal()">Export (.txt)</button>
         </div>
         <div id="journalTabContent"><p style="color:#888; font-style:italic;">Your chronicle will appear here as you answer prompts.</p></div>
+    </div>
+    </section>
+
+    <section id="panel-settings" class="tab-panel" role="tabpanel" aria-labelledby="tab-settings" hidden>
+    <div class="panel full-width">
+        <h2 style="border:none;">Settings</h2>
+        <div class="settings-group">
+            <button class="btn-small" onclick="toggleTheme()" id="btnTheme">Toggle Light Mode</button>
+            <span>Font size:
+                <button class="btn-small" onclick="changeFontSize(2)" aria-label="Increase font size">A+</button>
+                <button class="btn-small" onclick="changeFontSize(-2)" aria-label="Decrease font size">A-</button>
+            </span>
+            <label><input type="checkbox" id="optMuteSound" onchange="saveGame()"> Mute Sounds</label>
+        </div>
+
+        <h3 style="margin-top:20px;">Save Data</h3>
+        <p style="font-size:0.8em; color:#aaa; margin:0 0 10px;">Everything is stored in this browser. Back up regularly — clearing browser data will erase your chronicle.</p>
+        <div class="settings-group">
+            <button class="btn-small" style="background:#9c27b0;" onclick="exportSaveData()">Backup Save (.json)</button>
+            <input type="file" id="importSaveFile" accept=".json" style="display:none;" onchange="importSaveData(event)">
+            <button class="btn-small" style="background:#673ab7;" onclick="document.getElementById('importSaveFile').click()">Restore Save</button>
+            <button class="btn-small" style="background:#d32f2f;" onclick="resetGame()">Wipe Data</button>
+        </div>
     </div>
     </section>
 

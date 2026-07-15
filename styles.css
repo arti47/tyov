@@ -68,8 +68,9 @@ h1, h2, h3, h4 {
    ========================================== */
 .tabs {
     display: flex;
-    gap: 4px;
-    flex-wrap: wrap;
+    gap: 3px;
+    flex-wrap: nowrap;          /* all tabs on one row */
+    overflow-x: auto;           /* scroll rather than spill if ever too wide */
     border-bottom: 2px solid var(--border-color);
     margin-bottom: 16px;
     position: sticky;
@@ -84,10 +85,13 @@ h1, h2, h3, h4 {
     border: 1px solid transparent;
     border-bottom: none;
     border-radius: 6px 6px 0 0;
-    padding: 8px 14px;
+    padding: 8px 12px;
     font-size: 0.95em;
+    white-space: nowrap;
+    flex: 0 1 auto;
     opacity: 0.65;
 }
+.tab-icon { margin-right: 5px; }
 .tab-btn:hover { opacity: 1; filter: none; }
 .tab-btn.active {
     opacity: 1;
@@ -97,6 +101,15 @@ h1, h2, h3, h4 {
     font-weight: bold;
 }
 .tab-panel[hidden] { display: none; }
+
+/* Settings tab groupings. */
+.settings-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+.settings-group > * { margin: 0; }
 
 .prompt-banner[hidden] { display: none; }
 .prompt-banner {
@@ -689,6 +702,12 @@ body.light-mode .oracle-word { background: rgba(0, 0, 0, 0.05); }
     body { padding: 12px; }
 
     h1 { font-size: 1.6em; }
+
+    /* Tabs collapse to icons so all of them stay on one row. */
+    .tabs { gap: 2px; }
+    .tab-btn { flex: 1 1 0; padding: 9px 4px; text-align: center; min-width: 0; }
+    .tab-label { display: none; }
+    .tab-icon { margin-right: 0; font-size: 1.25em; }
 
     /* Toolbars: let the grouped controls wrap instead of overflowing. */
     .options-bar { gap: 8px; }

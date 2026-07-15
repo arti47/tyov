@@ -104,7 +104,7 @@ function announce(msg) {
 // ==========================================
 // TABS + STICKY PROMPT BANNER
 // ==========================================
-var TABS = ['play', 'character', 'diary', 'journal'];
+var TABS = ['play', 'character', 'diary', 'journal', 'settings'];
 
 function showTab(name) {
     if (TABS.indexOf(name) === -1) name = 'play';
