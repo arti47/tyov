@@ -4,8 +4,10 @@
 :root {
     --bg-color: #121212;
     --text-color: #e0e0e0;
-    --accent-color: #8b0000;
-    --border-color: #444;
+    /* Brightened blood-red so accent text/headings clear WCAG AA (~4.6:1)
+       on the dark background; #8b0000 was ~1.8:1 and unreadable. */
+    --accent-color: #c62828;
+    --border-color: #5a5a5a;
     --panel-bg: #1e1e1e;
     --warning-color: #ff9800;
     --boxed-color: #4CAF50;
