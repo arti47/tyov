@@ -68,7 +68,7 @@ npm run lint      # ESLint (needs `npm install` first; no network = skip)
 | `assets/dice.wav`, `assets/page.wav` | Bundled, precached sound effects (dice roll, page turn) — local so audio works offline. Generated lightweight WAVs. |
 | `assets/icon-192.png`, `assets/icon-512.png`, `assets/icon-180.png` | PWA / home-screen icons (192 & 512 for the manifest incl. `maskable`; 180 for the iOS `apple-touch-icon`). Generated PNGs (blood-red field, dark moon, white fangs). |
 | `manifest.json` | PWA manifest: name/short_name/description, `start_url`/`scope`/`id` (all relative so it works under a Pages subpath), `standalone`, colors, and PNG icons (`any` + `maskable`). Drives "Add to Home Screen". |
-| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v11`. Precaches assets (incl. `assets/*.wav` and `assets/icon-*.png`), deletes old caches on activate, network-first for navigations, stale-while-revalidate for other GETs. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
+| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v12`. Precaches assets (incl. `assets/*.wav` and `assets/icon-*.png`), deletes old caches on activate, network-first for navigations + same-origin html/js/css/json (avoids version skew), stale-while-revalidate for other assets. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
 | `.github/workflows/pages.yml` | GitHub Actions workflow: on push to `main`, runs `npm test` then deploys the repo root to **GitHub Pages**. Requires Pages Source = "GitHub Actions" (one-time repo setting). |
 | `.github/workflows/ci.yml` | CI workflow: on push to `main` and on PRs, runs `npm ci` → `npm test` → `npm run lint`. |
 | `tests/logic.test.js` | Unit tests for `logic.js` (escaping, tiers, prompt text, markdown, dice, `resolveTraitAction`, `rollMeaning`, and state normalization: `normalizeState`/`normMem`/`defaultState`). |
@@ -240,7 +240,7 @@ under that subpath. Every asset the SW precaches must stay same-origin/relative.
 ### Bumping the service worker cache
 If you change any cached asset (`index.html`, `styles.css`, `logic.js`,
 `app.js`, `data.js`, `manifest.json`, `assets/*.wav`, `assets/icon-*.png`), bump
-`CACHE_NAME` in `sw.js` (currently `-v11`). Bumping it is also what makes the
+`CACHE_NAME` in `sw.js` (currently `-v12`). Bumping it is also what makes the
 deployed `sw.js` byte-different, which is what triggers the tap-to-update toast
 for existing installs. The SW also network-first-loads navigations, so updates
 generally land on next load even without a bump — but bump for certainty, and

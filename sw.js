@@ -1,6 +1,6 @@
 // sw.js — Service worker for the Vampire Chronicle PWA.
 // Bump CACHE_NAME whenever you ship changes to any cached asset.
-const CACHE_NAME = 'vampire-chronicle-v11';
+const CACHE_NAME = 'vampire-chronicle-v12';
 const ASSETS = [
     './index.html',
     './styles.css',
@@ -44,10 +44,18 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
     const req = e.request;
+    if (req.method !== 'GET') return;
 
-    // Navigations: network-first so code/markup updates land immediately,
-    // falling back to cache (then index.html) when offline.
-    if (req.mode === 'navigate') {
+    const url = new URL(req.url);
+    const sameOrigin = url.origin === self.location.origin;
+    // Core code/markup must load as one consistent version. Serving app.js from
+    // cache while index.html came from the network causes version skew (e.g. new
+    // markup referencing functions the stale script doesn't have). So treat
+    // navigations AND same-origin .html/.js/.css/.json as NETWORK-FIRST.
+    const isCore = req.mode === 'navigate' ||
+        (sameOrigin && /\.(?:html|js|css|json)$/i.test(url.pathname));
+
+    if (isCore) {
         e.respondWith(
             fetch(req)
                 .then((res) => {
@@ -55,16 +63,17 @@ self.addEventListener('fetch', (e) => {
                     caches.open(CACHE_NAME).then((c) => c.put(req, copy));
                     return res;
                 })
-                .catch(() => caches.match(req).then((r) => r || caches.match('./index.html')))
+                .catch(() => caches.match(req).then((r) =>
+                    r || (req.mode === 'navigate' ? caches.match('./index.html') : undefined)))
         );
         return;
     }
 
-    // Other GETs: stale-while-revalidate — serve cache fast, refresh in background.
+    // Static assets (audio, icons) are version-independent: stale-while-revalidate.
     e.respondWith(
         caches.match(req).then((cached) => {
             const network = fetch(req).then((res) => {
-                if (res && res.status === 200 && req.method === 'GET') {
+                if (res && res.status === 200) {
                     const copy = res.clone();
                     caches.open(CACHE_NAME).then((c) => c.put(req, copy));
                 }
