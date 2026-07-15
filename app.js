@@ -12,6 +12,7 @@ var escapeHtml = TYOV.escapeHtml;
 var getTier = TYOV.getTier;
 var getPromptText = TYOV.getPromptText;
 var parseMarkdown = TYOV.parseMarkdown;
+var rollMeaning = TYOV.rollMeaning;
 
 var SAVE_KEY = 'tyov_save';
 var SAVE_VERSION = 2;
@@ -1313,6 +1314,109 @@ function applyState() {
 // ==========================================
 
 // ==========================================
+// MEANING ORACLE (floating d100 idea generator)
+// ==========================================
+// A floating button opens a panel that rolls a d100 three times against the
+// meaningTable (data.js) and offers to insert the three words into whichever
+// text field you last had focused. Not a rule — just an idea spark.
+
+var oracleResults = [];   // [{ roll, word } x3]
+var lastActiveField = null; // the text input/textarea focused before the oracle
+
+// Track the last-focused text field so we can insert back into it after the
+// oracle button steals focus. Only plain text inputs and textareas qualify.
+function isInsertableField(elm) {
+    if (!elm || elm.readOnly || elm.disabled) return false;
+    if (elm.tagName === 'TEXTAREA') return true;
+    return elm.tagName === 'INPUT' && (elm.type === 'text' || elm.type === 'search');
+}
+
+function toggleOracle() {
+    var p = el('oraclePanel');
+    if (!p) return;
+    var opening = !p.classList.contains('show');
+    p.classList.toggle('show', opening);
+    if (opening) {
+        if (!oracleResults.length) rerollOracle();
+        setOracleHint('');
+    }
+}
+
+function rerollOracle() {
+    oracleResults = [
+        rollMeaning(meaningTable), rollMeaning(meaningTable), rollMeaning(meaningTable)
+    ];
+    renderOracle();
+    setOracleHint('');
+}
+
+function renderOracle() {
+    var box = el('oracleWords');
+    if (!box) return;
+    box.innerHTML = oracleResults.map(function (r) {
+        return '<div class="oracle-word"><span class="oracle-roll">' + r.roll + '</span>' +
+               '<span class="oracle-term">' + escapeHtml(r.word) + '</span></div>';
+    }).join('');
+}
+
+function setOracleHint(msg) {
+    var h = el('oracleHint');
+    if (h) h.textContent = msg || '';
+}
+
+// Insert text at the caret of a field (or replacing its selection), then fire an
+// 'input' event so autosave and per-field state handlers pick up the change.
+function insertAtCaret(field, text) {
+    var start = field.selectionStart;
+    var end = field.selectionEnd;
+    if (typeof start === 'number' && typeof end === 'number') {
+        var v = field.value;
+        field.value = v.slice(0, start) + text + v.slice(end);
+        var pos = start + text.length;
+        field.setSelectionRange(pos, pos);
+    } else {
+        field.value += text;
+    }
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    field.focus();
+}
+
+function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text).catch(function () { fallbackCopy(text); });
+    }
+    fallbackCopy(text);
+}
+function fallbackCopy(text) {
+    try {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+    } catch (e) { /* clipboard is best-effort */ }
+}
+
+function insertOracle() {
+    if (!oracleResults.length) return;
+    var words = oracleResults.map(function (r) { return r.word; });
+    var f = lastActiveField;
+    if (f && f.isConnected && isInsertableField(f)) {
+        // "Each on its own line" for textareas; single-line inputs can't hold
+        // newlines, so fall back to a comma separator there.
+        var sep = f.tagName === 'TEXTAREA' ? '\n' : ', ';
+        insertAtCaret(f, words.join(sep));
+        setOracleHint('Inserted into your text field.');
+    } else {
+        copyToClipboard(words.join('\n'));
+        setOracleHint('No active text field — copied to the clipboard.');
+    }
+}
+
+// ==========================================
 // SERVICE WORKER + "TAP TO UPDATE" FLOW
 // ==========================================
 // When a new build is deployed, the browser installs the updated worker in the
@@ -1370,6 +1474,16 @@ function initServiceWorker() {
 
 document.addEventListener('input', saveGame);
 document.addEventListener('change', saveGame);
+
+// Remember the last text field focused (outside the oracle panel) so the
+// Meaning Oracle can insert back into it after its button takes focus.
+document.addEventListener('focusin', function (e) {
+    var t = e.target;
+    if (isInsertableField(t) && !(t.closest && t.closest('#oraclePanel'))) {
+        lastActiveField = t;
+    }
+});
+
 window.addEventListener('load', function () {
     loadGame();
     initServiceWorker();

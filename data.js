@@ -1,6 +1,22 @@
 // data.js
 // Thousand Year Old Vampire - Standard Prompt Database (1-80)
 
+// Meaning Oracle table: 100 evocative words, indexed 1..100 by a d100 roll
+// (entries 1-50 = "Element 1", 51-100 = "Element 2"). Used by the floating
+// oracle to spark ideas; not part of the rules-as-written.
+const meaningTable = [
+    'Abandon', 'Age', 'Ancestor', 'Antique', 'Art', 'Artifact', 'Ash', 'Beast', 'Betray', 'Blood',
+    'Bone', 'Burn', 'Century', 'Change', 'Child', 'Coin', 'Continue', 'Cult', 'Curse', 'Dark',
+    'Death', 'Decay', 'Deceive', 'Decrease', 'Descendant', 'Destroy', 'Diary', 'Disease', 'Dream', 'Dust',
+    'Empire', 'Enemy', 'Escape', 'Extra', 'Faded', 'Feast', 'Feral', 'Flee', 'Forget', 'Forgive',
+    'Friend', 'Generation', 'Ghost', 'Grave', 'Grief', 'Guilt', 'Hide', 'History', 'Hoard', 'Hunger',
+    'Hunt', 'Identity', 'Illness', 'Immortal', 'Imprison', 'Increase', 'Innocent', 'Knowledge', 'Lair', 'Legend',
+    'Lineage', 'Loss', 'Love', 'Mark', 'Mask', 'Memory', 'Monster', 'Mortal', 'Mundane', 'Murder',
+    'Mysterious', 'Myth', 'Night', 'Oblivion', 'Obscure', 'Parasite', 'Plague', 'Power', 'Predator', 'Prey',
+    'Regret', 'Relic', 'Resource', 'Ritual', 'Ruin', 'Secret', 'Shadow', 'Skill', 'Sleep', 'Society',
+    'Start', 'Starve', 'Stop', 'Strange', 'Sun', 'Time', 'Tomb', 'Treasure', 'Vengeance', 'Victim'
+];
+
 const promptDB = {
     1: {
         a: "In your blood-hunger, you destroy someone close to you. Kill a mortal Character. Create a mortal if none are available. Take the skill Bloodthirsty.",

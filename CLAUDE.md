@@ -62,13 +62,13 @@ npm run lint      # ESLint (needs `npm install` first; no network = skip)
 |------|---------|
 | `index.html` | The UI markup only: setup wizard, dice/prompt panel, traits & memories panels, modals. Loads `logic.js` → `data.js` → `app.js`. No inline CSS. |
 | `styles.css` | All styles (themes/variables, layout, components, `:focus-visible` a11y outlines). |
-| `logic.js` | **Pure**, DOM-free helpers shared by the app and tests: `escapeHtml`, `getTier`, `getPromptText`, `parseMarkdown`, `rollDice` (RNG injectable), `resolveTraitAction` (Skill/Resource substitution ladder). Exposed as `window.TYOV` in the browser and `module.exports` in Node. |
-| `app.js` | The game engine: the `state` object, render-from-state functions, save/load + v1→v2 migration, full-state undo stack, dice/prompts, traits/memories/diary, triggers, guided prompt actions, nudges, import/export. |
-| `data.js` | The prompt database: `const promptDB`, keyed `1..80`, each with tiers `a`/`b`/`c` (first/second/third visit). |
+| `logic.js` | **Pure**, DOM-free helpers shared by the app and tests: `escapeHtml`, `getTier`, `getPromptText`, `parseMarkdown`, `rollDice` (RNG injectable), `resolveTraitAction` (Skill/Resource substitution ladder), `rollMeaning` (d100 → meaning-table word). Exposed as `window.TYOV` in the browser and `module.exports` in Node. |
+| `app.js` | The game engine: the `state` object, render-from-state functions, save/load + v1→v2 migration, full-state undo stack, dice/prompts, traits/memories/diary, triggers, guided prompt actions, nudges, the Meaning Oracle, import/export. |
+| `data.js` | The prompt database: `const promptDB`, keyed `1..80`, each with tiers `a`/`b`/`c` (first/second/third visit). Also `const meaningTable` — the 100-word Meaning Oracle list (1-indexed by a d100 roll). |
 | `assets/dice.wav`, `assets/page.wav` | Bundled, precached sound effects (dice roll, page turn) — local so audio works offline. Generated lightweight WAVs. |
 | `assets/icon-192.png`, `assets/icon-512.png`, `assets/icon-180.png` | PWA / home-screen icons (192 & 512 for the manifest incl. `maskable`; 180 for the iOS `apple-touch-icon`). Generated PNGs (blood-red field, dark moon, white fangs). |
 | `manifest.json` | PWA manifest: name/short_name/description, `start_url`/`scope`/`id` (all relative so it works under a Pages subpath), `standalone`, colors, and PNG icons (`any` + `maskable`). Drives "Add to Home Screen". |
-| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v5`. Precaches assets (incl. `assets/*.wav` and `assets/icon-*.png`), deletes old caches on activate, network-first for navigations, stale-while-revalidate for other GETs. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
+| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v6`. Precaches assets (incl. `assets/*.wav` and `assets/icon-*.png`), deletes old caches on activate, network-first for navigations, stale-while-revalidate for other GETs. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
 | `.github/workflows/pages.yml` | GitHub Actions workflow: on push to `main`, runs `npm test` then deploys the repo root to **GitHub Pages**. Requires Pages Source = "GitHub Actions" (one-time repo setting). |
 | `tests/logic.test.js` | Unit tests for `logic.js` (escaping, tiers, prompt text, markdown, dice, `resolveTraitAction`). |
 | `package.json` | Scripts: `test`, `serve`, `lint`. ESLint as a dev dependency. |
@@ -168,6 +168,17 @@ or no `version`.
    shows autosave state; dismissable banners nudge old-age deaths (`#ageNudge`)
    and periodic backups (`#backupNudge`).
 
+### Meaning Oracle (floating idea generator)
+A floating 🎲 button (`#oracleFab`) toggles the `#oraclePanel`. `rerollOracle()`
+rolls `TYOV.rollMeaning(meaningTable)` three times; `renderOracle()` shows each
+word with its d100 roll. `insertOracle()` drops the three words into the text
+field you last had focused — a global `focusin` listener records the last
+insertable field (`lastActiveField`) so the button taking focus doesn't lose it;
+`insertAtCaret()` splices at the caret and fires an `input` event so autosave and
+per-field handlers run. Textareas get one word per line; single-line inputs get a
+comma separator; with no active field it copies to the clipboard. Not a rule —
+purely a brainstorming aid.
+
 ### PWA install & self-update
 - **Add to Home Screen**: `manifest.json` (PNG icons `any` + `maskable`,
   `standalone`, relative `start_url`/`scope`) plus iOS `apple-touch-icon` and
@@ -208,7 +219,7 @@ under that subpath. Every asset the SW precaches must stay same-origin/relative.
 ### Bumping the service worker cache
 If you change any cached asset (`index.html`, `styles.css`, `logic.js`,
 `app.js`, `data.js`, `manifest.json`, `assets/*.wav`, `assets/icon-*.png`), bump
-`CACHE_NAME` in `sw.js` (currently `-v5`). Bumping it is also what makes the
+`CACHE_NAME` in `sw.js` (currently `-v6`). Bumping it is also what makes the
 deployed `sw.js` byte-different, which is what triggers the tap-to-update toast
 for existing installs. The SW also network-first-loads navigations, so updates
 generally land on next load even without a bump — but bump for certainty, and

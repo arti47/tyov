@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const {
-    escapeHtml, getTier, getPromptText, parseMarkdown, rollDice, resolveTraitAction
+    escapeHtml, getTier, getPromptText, parseMarkdown, rollDice, resolveTraitAction, rollMeaning
 } = require('../logic.js');
 
 test('escapeHtml neutralises HTML metacharacters', () => {
@@ -98,4 +98,20 @@ test('resolveTraitAction: missing/zero counts default to game over', () => {
     ['check', 'lose'].forEach((a) => {
         assert.ok(resolveTraitAction(a, 1, 1).message.length > 0);
     });
+});
+
+test('rollMeaning maps a d100 roll to the 1-indexed table word', () => {
+    const table = Array.from({ length: 100 }, (_, i) => 'w' + (i + 1));
+    assert.deepStrictEqual(rollMeaning(table, () => 0), { roll: 1, word: 'w1' });      // 0 → 1
+    assert.deepStrictEqual(rollMeaning(table, () => 0.999), { roll: 100, word: 'w100' }); // → 100
+    assert.deepStrictEqual(rollMeaning(table, () => 0.26), { roll: 27, word: 'w27' });  // 0.26→27
+});
+
+test('rollMeaning stays in [1,100] and never returns undefined word', () => {
+    const table = Array.from({ length: 100 }, (_, i) => 'w' + (i + 1));
+    for (let n = 0; n < 1000; n++) {
+        const r = rollMeaning(table);
+        assert.ok(r.roll >= 1 && r.roll <= 100);
+        assert.ok(typeof r.word === 'string' && r.word.length > 0);
+    }
 });

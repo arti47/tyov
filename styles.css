@@ -300,6 +300,83 @@ body.light-mode .trait-recap {
 .toast-warn { border-left-color: var(--warning-color); }
 .toast-info { border-left-color: #2196F3; }
 
+/* ==========================================
+   MEANING ORACLE (floating button + panel)
+   ========================================== */
+.oracle-fab {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    width: 52px;
+    height: 52px;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 1.5em;
+    line-height: 52px;
+    text-align: center;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+    z-index: 900;
+}
+.oracle-panel {
+    position: fixed;
+    right: 20px;
+    bottom: 82px;
+    width: 260px;
+    max-width: calc(100vw - 40px);
+    background: var(--panel-bg);
+    border: 1px solid var(--accent-color);
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+    padding: 12px;
+    z-index: 900;
+    display: none;
+}
+.oracle-panel.show { display: block; }
+.oracle-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.oracle-head strong { color: var(--accent-color); }
+.oracle-words {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+.oracle-word {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.18);
+    border-left: 3px solid var(--accent-color);
+    border-radius: 4px;
+    padding: 6px 8px;
+}
+body.light-mode .oracle-word { background: rgba(0, 0, 0, 0.05); }
+.oracle-roll {
+    font-size: 0.72em;
+    color: #888;
+    min-width: 2.2em;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.oracle-term { font-weight: bold; font-size: 1.05em; }
+.oracle-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+}
+.oracle-actions .btn-small { margin-left: 0; flex: 1; }
+.oracle-hint {
+    font-size: 0.78em;
+    color: #aaa;
+    margin-top: 8px;
+    min-height: 1em;
+    text-align: center;
+}
+
 /* Persistent, clickable "new version available" banner (bottom-center). */
 .update-toast {
     position: fixed;

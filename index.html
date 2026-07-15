@@ -273,6 +273,20 @@
 
     </div>
 
+    <button id="oracleFab" class="oracle-fab" aria-label="Open the meaning oracle" title="Meaning oracle — roll d100 ×3" onclick="toggleOracle()">🎲</button>
+    <div id="oraclePanel" class="oracle-panel" role="dialog" aria-label="Meaning oracle" aria-modal="false">
+        <div class="oracle-head">
+            <strong>Meaning Oracle</strong>
+            <button class="btn-small btn-strike" aria-label="Close oracle" onclick="toggleOracle()">✕</button>
+        </div>
+        <div id="oracleWords" class="oracle-words" aria-live="polite"></div>
+        <div class="oracle-actions">
+            <button class="btn-small" onclick="rerollOracle()">🎲 Reroll</button>
+            <button class="btn-small" style="background:#4CAF50;" onclick="insertOracle()">Insert all three</button>
+        </div>
+        <div id="oracleHint" class="oracle-hint"></div>
+    </div>
+
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <div id="updateToast" class="update-toast" role="alert">

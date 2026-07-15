@@ -110,13 +110,23 @@
         };
     }
 
+    // Roll a d100 against a 100-entry meaning table (1-indexed by roll).
+    // `rng` is injectable for deterministic tests. Returns { roll, word }.
+    function rollMeaning(table, rng) {
+        rng = rng || Math.random;
+        var roll = Math.floor(rng() * 100) + 1;
+        var word = (table && table[roll - 1]) || '';
+        return { roll: roll, word: word };
+    }
+
     var api = {
         escapeHtml: escapeHtml,
         getTier: getTier,
         getPromptText: getPromptText,
         parseMarkdown: parseMarkdown,
         rollDice: rollDice,
-        resolveTraitAction: resolveTraitAction
+        resolveTraitAction: resolveTraitAction,
+        rollMeaning: rollMeaning
     };
 
     if (typeof module !== 'undefined' && module.exports) {
