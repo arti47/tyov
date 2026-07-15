@@ -68,7 +68,7 @@ npm run lint      # ESLint (needs `npm install` first; no network = skip)
 | `assets/dice.wav`, `assets/page.wav` | Bundled, precached sound effects (dice roll, page turn) — local so audio works offline. Generated lightweight WAVs. |
 | `assets/icon-192.png`, `assets/icon-512.png`, `assets/icon-180.png` | PWA / home-screen icons (192 & 512 for the manifest incl. `maskable`; 180 for the iOS `apple-touch-icon`). Generated PNGs (blood-red field, dark moon, white fangs). |
 | `manifest.json` | PWA manifest: name/short_name/description, `start_url`/`scope`/`id` (all relative so it works under a Pages subpath), `standalone`, colors, and PNG icons (`any` + `maskable`). Drives "Add to Home Screen". |
-| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v7`. Precaches assets (incl. `assets/*.wav` and `assets/icon-*.png`), deletes old caches on activate, network-first for navigations, stale-while-revalidate for other GETs. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
+| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v8`. Precaches assets (incl. `assets/*.wav` and `assets/icon-*.png`), deletes old caches on activate, network-first for navigations, stale-while-revalidate for other GETs. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
 | `.github/workflows/pages.yml` | GitHub Actions workflow: on push to `main`, runs `npm test` then deploys the repo root to **GitHub Pages**. Requires Pages Source = "GitHub Actions" (one-time repo setting). |
 | `tests/logic.test.js` | Unit tests for `logic.js` (escaping, tiers, prompt text, markdown, dice, `resolveTraitAction`). |
 | `package.json` | Scripts: `test`, `serve`, `lint`. ESLint as a dev dependency. |
@@ -89,7 +89,9 @@ A single source of truth, serialized to `localStorage` under key **`tyov_save`**
   `resources` (`{ id, text, lost, isDiary? }` — `isDiary` marks the one
   auto-managed Diary Resource), `characters` (`{ id, text, type, doom, lost }`).
 - `memories` / `diary` (`{ id, theme, experiences[], memState, lost }` — `lost`
-  strikes out a Memory, e.g. when the Diary Resource is lost).
+  strikes out a Memory, e.g. when the Diary Resource is lost). `experiences` is a
+  **compact** array (≥1, up to 3 — or 5 when Vast); trailing empties are trimmed
+  by `normMem`, and rows are added/removed via `addExperience`/`removeExperience`.
 - `settings` (`isLightMode`, `fontSize`, `hideGraveyard`, `muteSound`,
   `multiplayer`). **`reverseTime` is intentionally NOT persisted** — it is a
   one-shot cleared after each roll.
@@ -137,8 +139,9 @@ or no `version`.
    Resources/Characters you entered earlier while writing combining Experiences.
 2. **Roll** (`rollAndMove`): snapshots undo, archives the journal entry, rolls via
    `TYOV.rollDice` (d10−d6; d6−d10 if "Rev. Time"; two d10s if "Multi"),
-   **clears the one-shot Rev. Time**, advances `currentPrompt`, picks tier a/b/c
-   from visit count, updates the tier/visit badge (`updatePromptMeta`), ticks the
+   **clears the one-shot Rev. Time**, plays a brief dice animation (`animateDice`
+   → the `#diceAnim` faces + net), advances `currentPrompt`, picks tier a/b/c from
+   visit count, updates the tier/visit badge (`updatePromptMeta`), ticks the
    old-age/backup nudge counters, logs history, checks triggers/game-over.
 3. **Navigation**: `jumpToPrompt`, `stepBackOnePrompt` (manual back-one; formerly
    "Accursed Strings"), `advanceToNextPrompt` (offered once all three tiers are
@@ -153,20 +156,23 @@ or no `version`.
    Marks. Every structural mutation calls `pushUndo()` first. A periodic old-age
    **nudge** suggests striking mortals; "Pass a Century" (`killAllMortals`) and
    `loseMemorySlot` **confirm** first.
-6. **Memories & Diary**: limited blocks with Theme + Experiences. States:
-   normal / starred (excluded from active count) / hazy (verbs+adjectives only) /
-   vast (5 experiences) / primal (feelings clause only) — each shows a writing
-   reminder. The **Diary is an auto-managed Resource** (`ensureDiaryResource`,
-   `isDiary` flag): holds ≤4 Memories, its Memories are **frozen** (read-only
-   Experiences), and losing the Diary Resource strikes out (`lost`) its Memories.
-   No Diary-expand or "2nd Season" homebrew.
+6. **Memories & Diary**: blocks with Theme + **flexible Experience rows**
+   (`addExperience`/`removeExperience`, each row has a `×`, `+ Experience` up to
+   the cap). States: normal / starred (excluded from active count) / hazy
+   (verbs+adjectives only) / vast (up to 5 experiences) / primal (feelings clause
+   only) — each shows a writing reminder. The **Diary is an auto-managed Resource**
+   (`ensureDiaryResource`, `isDiary` flag): holds ≤4 Memories, its Memories are
+   **frozen** (read-only Experiences, no add/remove), and losing the Diary
+   Resource strikes out (`lost`) its Memories. No Diary-expand or "2nd Season".
 7. **Journal**: per-prompt text is archived into `journalHistory` (tagged
    `<prompt><tier>`). `previewChronicle` renders it; `exportJournal` downloads
    `.txt` (both skip struck-out Memories). `parseMarkdown` supports
    `*italics*`/`**bold**` and **escapes first**.
 8. **Nudges & feedback**: `toast()` shows non-blocking messages; `#saveStatus`
    shows autosave state; dismissable banners nudge old-age deaths (`#ageNudge`)
-   and periodic backups (`#backupNudge`).
+   and periodic backups (`#backupNudge`). Blocking decisions use the in-app modal
+   `showConfirm`/`showAlert` (`#appModal`, callback-based, Esc = cancel) instead
+   of native `alert()`/`confirm()`.
 
 ### Meaning Oracle (floating idea generator)
 A floating 🎲 button (`#oracleFab`) toggles the `#oraclePanel`. `rerollOracle()`
@@ -205,6 +211,8 @@ under that subpath. Every asset the SW precaches must stay same-origin/relative.
   template-literal HTML that `render*()` emits.
 - **Always escape user text** with `escapeHtml` (or `parseMarkdown`, which
   escapes) before putting it in `innerHTML`. Never interpolate raw user input.
+- **No native `alert()`/`confirm()`** — use `showAlert`/`showConfirm` (callback
+  onConfirm) or `toast()` for non-blocking notices.
 - After mutating `state`, call the relevant `render*()` and `persist()`
   (or rely on the global autosave listener for plain text edits).
 - **Call `pushUndo()` BEFORE any structural mutation** (add/lose/delete/state
@@ -219,7 +227,7 @@ under that subpath. Every asset the SW precaches must stay same-origin/relative.
 ### Bumping the service worker cache
 If you change any cached asset (`index.html`, `styles.css`, `logic.js`,
 `app.js`, `data.js`, `manifest.json`, `assets/*.wav`, `assets/icon-*.png`), bump
-`CACHE_NAME` in `sw.js` (currently `-v7`). Bumping it is also what makes the
+`CACHE_NAME` in `sw.js` (currently `-v8`). Bumping it is also what makes the
 deployed `sw.js` byte-different, which is what triggers the tap-to-update toast
 for existing installs. The SW also network-first-loads navigations, so updates
 generally land on next load even without a bump — but bump for certainty, and
@@ -234,16 +242,9 @@ Severity reflects how far the app drifts from the rules-as-written, not effort.
 
 **Design principle:** *Guided* — the app surfaces the correct move and nudges
 toward it, but the player can override. (Exception: setup is fully faithful and
-required.) Delivery is **phased**; Phase 1 is done, Phases 2–3 are planned.
+required.) Delivery is **phased**; Phases 1–2 are done, Phase 3 is planned.
 
 ### Planned / open
-
-**Phase 2 — UX polish**
-- **B3** Replace `alert()`/`confirm()` with in-app modals + reuse the `toast()`
-  surface (the Guided flows currently still use `confirm()` for the game-over
-  decision).
-- **B7** Flexible Experience lines (add/remove rows, up to 3, or 5 when Vast).
-- **B11** Dice-roll animation showing the d10/d6 faces and net movement.
 
 **Phase 3 — Saves / export / a11y / CI**
 - **B8** Multiple save slots / vampires (keyed save collection + chooser).
@@ -262,10 +263,16 @@ required.) Delivery is **phased**; Phase 1 is done, Phases 2–3 are planned.
 
 ### Done
 
-**Phase 2 (in progress)**
+**Phase 2 — UX polish** (complete)
 - **B2** Responsive/mobile layout pass — verified in a real 390px viewport
   (headless Chromium via an iframe; note `--window-size` alone does **not** set
   `innerWidth`, so measure inside a sized iframe or via `getBoundingClientRect`).
+- **B3** In-app `showConfirm`/`showAlert` modal (`#appModal`) replacing every
+  native `alert()`/`confirm()`; non-critical notices became `toast()`s.
+- **B7** Flexible Experience rows (compact `experiences[]`, `addExperience`/
+  `removeExperience`, `×` per row + `+ Experience`, capped at 3 / 5 when Vast).
+- **B11** Dice-roll animation (`animateDice` → `#diceAnim`), with
+  `prefers-reduced-motion` respected.
 
 **Phase 1 — rules fidelity + audio + data safety** (this commit)
 - **A1** Setup wizard rebuilt (8 steps, required): 5 seeded Memories + Immortal sire.

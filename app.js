@@ -73,8 +73,7 @@ function debounce(fn, ms) {
     return function () { clearTimeout(t); t = setTimeout(fn, ms); };
 }
 
-// Lightweight non-blocking toast. (Phase 2 will replace confirm()/alert() with
-// full modals; this is the shared surface for Guided nudges in the meantime.)
+// Lightweight non-blocking toast — the shared surface for Guided nudges.
 var toastTimer;
 function toast(msg, kind) {
     var box = el('toast');
@@ -84,6 +83,43 @@ function toast(msg, kind) {
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { box.className = 'toast'; }, 4200);
 }
+
+// In-app modal replacing blocking alert()/confirm(). Callback-based since a
+// modal is async. `showConfirm` has Cancel + Confirm; `showAlert` is OK-only.
+var _modalOnConfirm = null;
+var _modalLastFocus = null;
+function showConfirm(o) {
+    o = o || {};
+    _modalLastFocus = document.activeElement;
+    setText('appModalTitle', o.title || 'Confirm');
+    setText('appModalMsg', o.message || '');
+    var ok = el('appModalOk'), cancel = el('appModalCancel');
+    ok.textContent = o.confirmLabel || 'Confirm';
+    ok.className = o.danger ? 'btn-danger' : '';
+    cancel.textContent = o.cancelLabel || 'Cancel';
+    cancel.style.display = o.alert ? 'none' : '';
+    _modalOnConfirm = o.onConfirm || null;
+    el('appModal').classList.add('show');
+    ok.focus();
+}
+function showAlert(o) {
+    o = o || {};
+    showConfirm({
+        title: o.title || 'Notice', message: o.message, alert: true,
+        confirmLabel: o.okLabel || 'OK', onConfirm: o.onClose
+    });
+}
+function closeAppModal() {
+    el('appModal').classList.remove('show');
+    _modalOnConfirm = null;
+    if (_modalLastFocus && _modalLastFocus.focus) { try { _modalLastFocus.focus(); } catch (e) { /* ignore */ } }
+}
+function appModalConfirm() {
+    var fn = _modalOnConfirm;
+    closeAppModal();
+    if (fn) fn();
+}
+function isAppModalOpen() { var m = el('appModal'); return m && m.classList.contains('show'); }
 
 function setSaveStatus(text) {
     var s = el('saveStatus');
@@ -198,7 +234,7 @@ function gotoStep(nextStepNum) {
 }
 
 function newMemory(theme, exp1) {
-    return { id: genId(), theme: theme || '', experiences: [exp1 || '', '', ''], memState: 'normal', lost: false };
+    return { id: genId(), theme: theme || '', experiences: [exp1 || ''], memState: 'normal', lost: false };
 }
 
 function finishSetup() {
@@ -300,7 +336,9 @@ var saveGame = debounce(persist, 300);
 function normMem(m) {
     m = m || {};
     var exps = Array.isArray(m.experiences) ? m.experiences.slice() : [];
-    while (exps.length < 3) exps.push('');
+    // Compact model: trim trailing empty rows but always keep at least one.
+    while (exps.length > 1 && exps[exps.length - 1] === '') exps.pop();
+    if (exps.length === 0) exps.push('');
     return {
         id: m.id || genId(),
         theme: m.theme || '',
@@ -461,14 +499,19 @@ function loadGame() {
         var recovered = null;
         if (backup) { try { recovered = JSON.parse(backup); } catch (e3) { recovered = null; } }
         if (recovered) {
-            alert('Your saved chronicle was corrupted, but a recent automatic backup was ' +
-                  'found and restored. The raw corrupt data was kept under "tyov_save_corrupt".');
+            showAlert({
+                title: 'Chronicle recovered',
+                message: 'Your saved chronicle was corrupted, but a recent automatic backup was ' +
+                         'found and restored. The raw corrupt data was kept under "tyov_save_corrupt".'
+            });
             data = recovered;
         } else {
-            alert('Your saved chronicle could not be read (corrupted data), and no automatic ' +
-                  'backup was available. Starting fresh; a backup of the raw data was kept ' +
-                  'under "tyov_save_corrupt".');
-            showWizard();
+            showAlert({
+                title: 'Save could not be read',
+                message: 'Your saved chronicle was corrupted and no automatic backup was available. ' +
+                         'Starting fresh; a backup of the raw data was kept under "tyov_save_corrupt".',
+                onClose: showWizard
+            });
             return;
         }
     }
@@ -480,10 +523,16 @@ function loadGame() {
 }
 
 function resetGame() {
-    if (confirm('Are you sure you want to wipe this chronicle? This cannot be undone.')) {
-        localStorage.removeItem(SAVE_KEY);
-        location.reload();
-    }
+    showConfirm({
+        title: 'Wipe this chronicle?',
+        message: 'This permanently deletes your saved vampire. This cannot be undone.',
+        confirmLabel: 'Wipe Data',
+        danger: true,
+        onConfirm: function () {
+            localStorage.removeItem(SAVE_KEY);
+            location.reload();
+        }
+    });
 }
 
 // Multi-level undo now snapshots the FULL gameplay + traits + memories state,
@@ -542,7 +591,7 @@ function importSaveData(e) {
             parsed = JSON.parse(event.target.result);
             if (!parsed || typeof parsed !== 'object') throw new Error('Not a JSON object');
         } catch (err) {
-            alert('Import failed: the file is not valid JSON.\n\n' + err.message);
+            showAlert({ title: 'Import failed', message: 'The file is not valid JSON.\n\n' + err.message });
             return;
         }
         try {
@@ -550,7 +599,7 @@ function importSaveData(e) {
             localStorage.setItem(SAVE_KEY, JSON.stringify(migrated));
             location.reload();
         } catch (err) {
-            alert('Import failed: the file is not a valid Vampire Chronicle save.\n\n' + err.message);
+            showAlert({ title: 'Import failed', message: 'The file is not a valid Vampire Chronicle save.\n\n' + err.message });
         }
     };
     r.readAsText(f);
@@ -665,6 +714,37 @@ function calculateMove() {
     return TYOV.rollDice({ reverse: checked('optReverseTime'), multi: checked('optMultiplayer') });
 }
 
+// B11: brief dice-roll animation. Flashes random faces, then settles on the
+// actual d10/d6 and the net movement. Purely cosmetic; state updates happen
+// immediately in rollAndMove regardless.
+function dieFace(val, cls) { return '<span class="die die-' + cls + '">' + val + '</span>'; }
+function animateDice(m) {
+    var box = el('diceAnim');
+    if (!box) return;
+    clearInterval(box._t);
+    var d10Final = m.multi ? (m.d10_1 + ' + ' + m.d10_2) : ('' + m.d10_1);
+    var op = m.reverse ? '−' : '−'; // d10 − d6 (or d6 − d10 shown by order below)
+    var ticks = 0;
+    box.classList.add('rolling');
+    box._t = setInterval(function () {
+        ticks++;
+        if (ticks <= 8) {
+            var a = 1 + Math.floor(Math.random() * 10);
+            var b = 1 + Math.floor(Math.random() * 6);
+            box.innerHTML = m.reverse
+                ? dieFace(b, 'd6') + '<span class="die-op">' + op + '</span>' + dieFace(a, 'd10')
+                : dieFace(a, 'd10') + '<span class="die-op">' + op + '</span>' + dieFace(b, 'd6');
+        } else {
+            clearInterval(box._t);
+            box.classList.remove('rolling');
+            var faces = m.reverse
+                ? dieFace(m.d6, 'd6') + '<span class="die-op">' + op + '</span>' + dieFace(d10Final, 'd10')
+                : dieFace(d10Final, 'd10') + '<span class="die-op">' + op + '</span>' + dieFace(m.d6, 'd6');
+            box.innerHTML = faces + '<span class="die-net">= ' + (m.diff >= 0 ? '+' : '') + m.diff + '</span>';
+        }
+    }, 55);
+}
+
 function updatePromptDisplay(promptNum, visits) {
     state.display.promptText = getPromptText(promptDB, promptNum, visits);
     el('promptTextDisplay').innerText = state.display.promptText;
@@ -736,6 +816,7 @@ function rollAndMove() {
     if (state.currentPrompt === 0) state.currentPrompt = 1;
 
     var m = calculateMove();
+    animateDice(m);
     setChecked('optReverseTime', false); // Rev. Time is a one-shot; clear it now (A4).
     state.currentPrompt = Math.max(1, state.currentPrompt + m.diff);
     state.promptVisits[state.currentPrompt] = (state.promptVisits[state.currentPrompt] || 0) + 1;
@@ -764,7 +845,7 @@ function rollAndMove() {
 function jumpToPrompt() {
     var target = parseInt(val('jumpPromptNum'), 10);
     if (!(target >= 1 && target <= 80)) {
-        alert('Please enter a valid prompt number between 1 and 80.');
+        toast('Enter a prompt number between 1 and 80.', 'warn');
         return;
     }
     pushUndo();
@@ -870,11 +951,14 @@ function promptLoseResource() {
 }
 
 function offerGameOver(msg) {
-    if (confirm(msg + '\n\nEnd the chronicle now?')) {
-        declareGameOver(msg);
-    } else {
-        toast(msg, 'warn');
-    }
+    showConfirm({
+        title: 'The game is over?',
+        message: msg + '\n\nEnd the chronicle now?',
+        confirmLabel: 'End the Game',
+        cancelLabel: 'Not yet',
+        danger: true,
+        onConfirm: function () { declareGameOver(msg); }
+    });
 }
 
 function declareGameOver(reason) {
@@ -1016,16 +1100,22 @@ function addMark(v) {
 }
 
 function killAllMortals() {
-    if (!confirm('Pass a century? Every living mortal Character will be struck out.')) return;
-    pushUndo();
-    state.characters.forEach(function (c) {
-        if (c.type === 'Mortal' && !c.lost) c.lost = true;
+    showConfirm({
+        title: 'Pass a century?',
+        message: 'Every living mortal Character will be struck out (they have died of old age).',
+        confirmLabel: 'Pass a Century',
+        onConfirm: function () {
+            pushUndo();
+            state.characters.forEach(function (c) {
+                if (c.type === 'Mortal' && !c.lost) c.lost = true;
+            });
+            state.rollsSinceOldAge = 0;
+            toggleNote('ageNudge', false);
+            renderCharacters();
+            checkSurvivalState();
+            persist();
+        }
     });
-    state.rollsSinceOldAge = 0;
-    toggleNote('ageNudge', false);
-    renderCharacters();
-    checkSurvivalState();
-    persist();
 }
 
 function checkSurvivalState() {
@@ -1120,11 +1210,11 @@ function ensureDiaryResource() {
 function addMemoryBlock(containerId) {
     var name = containerId === 'diaryContainer' ? 'diary' : 'memories';
     if (name === 'memories' && state.memories.length >= state.maxMemories) {
-        alert('Memory Limit Reached (' + state.maxMemories + '). Delete a memory or move it to a Diary.');
+        toast('Memory limit reached (' + state.maxMemories + '). Move a Memory to the Diary or delete one.', 'warn');
         return;
     }
     if (name === 'diary' && state.diary.length >= state.maxDiary) {
-        alert('Diary Limit Reached (' + state.maxDiary + '). A Diary holds at most ' + state.maxDiary + ' Memories.');
+        toast('Diary limit reached (' + state.maxDiary + ' Memories).', 'warn');
         return;
     }
     pushUndo();
@@ -1136,24 +1226,48 @@ function addMemoryBlock(containerId) {
     persist();
 }
 
+function memExpCap(m) { return m.memState === 'vast' ? 5 : 3; }
+
 function changeMemoryState(name, id, memState) {
     var m = findMem(name, id);
     if (!m) return;
     pushUndo();
     m.memState = memState;
-    if (memState === 'vast') {
-        while (m.experiences.length < 5) m.experiences.push('');
-    } else if (m.experiences.length > 3) {
-        m.experiences = m.experiences.slice(0, 3); // Lose the extra Vast experiences.
+    // Leaving Vast drops any Experiences beyond the normal three (rules).
+    if (memState !== 'vast' && m.experiences.length > 3) {
+        m.experiences = m.experiences.slice(0, 3);
     }
+    if (m.experiences.length === 0) m.experiences.push('');
     renderMemoryList(name);
     updateMemoryCount();
     persist();
 }
 
+// B7: add/remove Experience rows (up to 3, or 5 when Vast).
+function addExperience(name, id) {
+    var m = findMem(name, id);
+    if (!m || m.experiences.length >= memExpCap(m)) return;
+    pushUndo();
+    m.experiences.push('');
+    renderMemoryList(name);
+    var last = el('exp-' + id + '-' + (m.experiences.length - 1));
+    if (last) last.focus();
+    persist();
+}
+
+function removeExperience(name, id, index) {
+    var m = findMem(name, id);
+    if (!m) return;
+    pushUndo();
+    m.experiences.splice(index, 1);
+    if (m.experiences.length === 0) m.experiences.push('');
+    renderMemoryList(name);
+    persist();
+}
+
 function migrateToDiary(id) {
     if (state.diary.length >= state.maxDiary) {
-        alert('Your Diary is full! (' + state.maxDiary + ' Memories). Delete a Diary entry first.');
+        toast('Your Diary is full (' + state.maxDiary + ' Memories). Delete a Diary entry first.', 'warn');
         return;
     }
     var i = state.memories.map(function (m) { return m.id; }).indexOf(id);
@@ -1183,14 +1297,23 @@ function deleteMemory(name, id) {
 
 function memoryBlockHtml(m, name) {
     var inDiary = name === 'diary';
-    var expCount = m.memState === 'vast' ? 5 : 3;
+    var cap = memExpCap(m);
     var exps = '';
-    for (var i = 0; i < expCount; i++) {
+    for (var i = 0; i < m.experiences.length; i++) {
         // Memories in the Diary are frozen — no new/edited Experiences (A6).
-        exps += '<input type="text" class="experience-input" aria-label="Experience ' + (i + 1) +
-                '" placeholder="- Experience ' + (i + 1) + '" value="' + escapeHtml(m.experiences[i] || '') +
-                '"' + (inDiary ? ' readonly' : ' oninput="setExperience(\'' + name + '\',\'' + m.id + '\',' + i + ', this.value)"') + '>';
+        var delBtn = (!inDiary && m.experiences.length > 1)
+            ? '<button class="btn-small btn-strike exp-del" aria-label="Remove experience ' + (i + 1) +
+              '" onclick="removeExperience(\'' + name + '\',\'' + m.id + '\',' + i + ')">×</button>'
+            : '';
+        exps += '<div class="exp-row">' +
+            '<input type="text" id="exp-' + m.id + '-' + i + '" class="experience-input" aria-label="Experience ' + (i + 1) +
+            '" placeholder="- Experience ' + (i + 1) + '" value="' + escapeHtml(m.experiences[i] || '') +
+            '"' + (inDiary ? ' readonly' : ' oninput="setExperience(\'' + name + '\',\'' + m.id + '\',' + i + ', this.value)"') + '>' +
+            delBtn + '</div>';
     }
+    var addExpBtn = (!inDiary && m.experiences.length < cap)
+        ? '<button class="btn-small exp-add" onclick="addExperience(\'' + name + '\',\'' + m.id + '\')">+ Experience</button>'
+        : '';
     var states = [['normal', 'Normal'], ['starred', '⭐ Starred'], ['hazy', '🌫️ Hazy'],
                   ['vast', '🌌 Vast'], ['primal', '🐾 Primal']];
     var options = states.map(function (s) {
@@ -1209,7 +1332,7 @@ function memoryBlockHtml(m, name) {
     return '<div class="' + cls + '" id="' + m.id + '">' +
         '<input type="text" aria-label="Memory theme" placeholder="Memory Theme" value="' + escapeHtml(m.theme) +
             '"' + (inDiary ? ' readonly' : ' oninput="setMemoryTheme(\'' + name + '\',\'' + m.id + '\', this.value)"') + '>' +
-        '<div class="exp-container">' + exps + '</div>' + hint +
+        '<div class="exp-container">' + exps + '</div>' + addExpBtn + hint +
         '<div class="mem-controls">' +
             '<select aria-label="Memory state" onchange="changeMemoryState(\'' + name + '\',\'' + m.id + '\', this.value)">' +
                 options + '</select>' +
@@ -1238,12 +1361,18 @@ function updateDiaryCount() {
 }
 
 function loseMemorySlot() {
-    if (!confirm('Permanently lose a memory slot? (You can Undo this.)')) return;
-    pushUndo();
-    state.maxMemories = Math.max(1, state.maxMemories - 1);
-    updateMemoryCount();
-    toast('You have lost a memory slot. Max is now ' + state.maxMemories + '.', 'warn');
-    persist();
+    showConfirm({
+        title: 'Lose a memory slot?',
+        message: 'This permanently reduces your maximum Memories. (You can Undo this.)',
+        confirmLabel: 'Lose a Slot',
+        onConfirm: function () {
+            pushUndo();
+            state.maxMemories = Math.max(1, state.maxMemories - 1);
+            updateMemoryCount();
+            toast('You have lost a memory slot. Max is now ' + state.maxMemories + '.', 'warn');
+            persist();
+        }
+    });
 }
 
 // ==========================================
@@ -1482,6 +1611,14 @@ document.addEventListener('focusin', function (e) {
     if (isInsertableField(t) && !(t.closest && t.closest('#oraclePanel'))) {
         lastActiveField = t;
     }
+});
+
+// Esc closes the in-app modal (as Cancel) or the oracle panel.
+document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (isAppModalOpen()) { closeAppModal(); return; }
+    var op = el('oraclePanel');
+    if (op && op.classList.contains('show')) toggleOracle();
 });
 
 window.addEventListener('load', function () {

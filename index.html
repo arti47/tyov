@@ -140,6 +140,17 @@
         </div>
     </div>
 
+    <div id="appModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="appModalTitle">
+        <div class="modal-content" style="max-width: 460px;">
+            <h2 id="appModalTitle"></h2>
+            <p id="appModalMsg" style="white-space: pre-line;"></p>
+            <div class="modal-actions">
+                <button id="appModalCancel" class="btn-strike" onclick="closeAppModal()">Cancel</button>
+                <button id="appModalOk" onclick="appModalConfirm()">Confirm</button>
+            </div>
+        </div>
+    </div>
+
     <div class="options-bar" style="border-style: solid; background: var(--panel-bg);">
         <div style="display: flex; gap: 10px; align-items: center;">
             <b>Settings:</b>
@@ -188,6 +199,8 @@
         </div>
 
         <button id="btnRoll" onclick="rollAndMove()" aria-label="Roll dice and advance to the next prompt" style="font-size: 1.2em; padding: 10px 20px;">Roll Dice & Advance</button>
+
+        <div id="diceAnim" class="dice-anim" aria-hidden="true"></div>
 
         <h3 id="promptResult" style="margin-top: 15px; color: #ff4d4d;">Awaiting First Roll...</h3>
         <div id="tierBadge" aria-live="polite" style="font-size: 0.85em; color: #aaa; min-height: 1.2em;"></div>
