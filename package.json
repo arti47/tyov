@@ -4,7 +4,7 @@
   "description": "Thousand Year Old Vampire — a no-build, offline-capable companion PWA for the solo journaling RPG.",
   "private": true,
   "scripts": {
-    "test": "node --test \"tests/*.test.js\"",
+    "test": "node --test tests/*.test.js",
     "serve": "python3 -m http.server 8000",
     "lint": "eslint ."
   },
