@@ -66,8 +66,10 @@ npm run lint      # ESLint (needs `npm install` first; no network = skip)
 | `app.js` | The game engine: the `state` object, render-from-state functions, save/load + v1→v2 migration, full-state undo stack, dice/prompts, traits/memories/diary, triggers, guided prompt actions, nudges, import/export. |
 | `data.js` | The prompt database: `const promptDB`, keyed `1..80`, each with tiers `a`/`b`/`c` (first/second/third visit). |
 | `assets/dice.wav`, `assets/page.wav` | Bundled, precached sound effects (dice roll, page turn) — local so audio works offline. Generated lightweight WAVs. |
-| `manifest.json` | PWA manifest (name, colors, bat emoji icon). |
-| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v3`. Precaches assets (incl. `assets/*.wav`), deletes old caches on activate, network-first for navigations, stale-while-revalidate for other GETs. |
+| `assets/icon-192.png`, `assets/icon-512.png`, `assets/icon-180.png` | PWA / home-screen icons (192 & 512 for the manifest incl. `maskable`; 180 for the iOS `apple-touch-icon`). Generated PNGs (blood-red field, dark moon, white fangs). |
+| `manifest.json` | PWA manifest: name/short_name/description, `start_url`/`scope`/`id` (all relative so it works under a Pages subpath), `standalone`, colors, and PNG icons (`any` + `maskable`). Drives "Add to Home Screen". |
+| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v4`. Precaches assets (incl. `assets/*.wav` and `assets/icon-*.png`), deletes old caches on activate, network-first for navigations, stale-while-revalidate for other GETs. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
+| `.github/workflows/pages.yml` | GitHub Actions workflow: on push to `main`, runs `npm test` then deploys the repo root to **GitHub Pages**. Requires Pages Source = "GitHub Actions" (one-time repo setting). |
 | `tests/logic.test.js` | Unit tests for `logic.js` (escaping, tiers, prompt text, markdown, dice, `resolveTraitAction`). |
 | `package.json` | Scripts: `test`, `serve`, `lint`. ESLint as a dev dependency. |
 | `eslint.config.js` | Flat ESLint config with browser + test globals. |
@@ -164,6 +166,26 @@ or no `version`.
    shows autosave state; dismissable banners nudge old-age deaths (`#ageNudge`)
    and periodic backups (`#backupNudge`).
 
+### PWA install & self-update
+- **Add to Home Screen**: `manifest.json` (PNG icons `any` + `maskable`,
+  `standalone`, relative `start_url`/`scope`) plus iOS `apple-touch-icon` and
+  `apple-mobile-web-app-*` meta tags in `<head>` make the app installable on
+  Android (Chrome install prompt) and iOS (Share → Add to Home Screen).
+- **Tap-to-update**: `initServiceWorker()` (in `app.js`, run on `load`) registers
+  `./sw.js` and watches for an updated worker. When one finishes installing (and
+  a controller already exists), it calls `showUpdateToast()` → the `#updateToast`
+  banner. `applyUpdate()` posts `SKIP_WAITING` to the waiting worker; the worker
+  activates, `controllerchange` fires, and the page reloads onto the new code.
+  For this to trigger on a deploy, the changed build must produce a byte-different
+  `sw.js` — i.e. **bump `CACHE_NAME`** (see below).
+
+### Deployment (GitHub Pages)
+`.github/workflows/pages.yml` deploys the repo root to GitHub Pages on push to
+`main` (running `npm test` first as a gate). Enable it once via
+**Settings → Pages → Source: "GitHub Actions"**. The site serves at
+`https://<owner>.github.io/<repo>/`; all asset paths are relative so it works
+under that subpath. Every asset the SW precaches must stay same-origin/relative.
+
 ### Conventions to follow
 - **Public functions are global** and called from inline `onclick`/`onchange`.
   If you rename one, update every reference in `index.html` and in the
@@ -183,8 +205,10 @@ or no `version`.
 
 ### Bumping the service worker cache
 If you change any cached asset (`index.html`, `styles.css`, `logic.js`,
-`app.js`, `data.js`, `manifest.json`, `assets/*.wav`), bump `CACHE_NAME` in
-`sw.js` (currently `-v3`). The SW also network-first-loads navigations, so updates
+`app.js`, `data.js`, `manifest.json`, `assets/*.wav`, `assets/icon-*.png`), bump
+`CACHE_NAME` in `sw.js` (currently `-v4`). Bumping it is also what makes the
+deployed `sw.js` byte-different, which is what triggers the tap-to-update toast
+for existing installs. The SW also network-first-loads navigations, so updates
 generally land on next load even without a bump — but bump for certainty, and
 keep the `ASSETS` precache list in sync when you add/remove files.
 

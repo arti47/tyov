@@ -1,6 +1,6 @@
 // sw.js — Service worker for the Vampire Chronicle PWA.
 // Bump CACHE_NAME whenever you ship changes to any cached asset.
-const CACHE_NAME = 'vampire-chronicle-v3';
+const CACHE_NAME = 'vampire-chronicle-v4';
 const ASSETS = [
     './index.html',
     './styles.css',
@@ -9,15 +9,26 @@ const ASSETS = [
     './data.js',
     './manifest.json',
     './assets/dice.wav',
-    './assets/page.wav'
+    './assets/page.wav',
+    './assets/icon-192.png',
+    './assets/icon-512.png',
+    './assets/icon-180.png'
 ];
 
-// Precache core assets and activate immediately.
+// Precache core assets. We DON'T skipWaiting() here: a freshly-installed worker
+// waits so the page can show a "new version — tap to update" toast, and only
+// takes over when the user opts in (see the SKIP_WAITING message below).
 self.addEventListener('install', (e) => {
-    self.skipWaiting();
     e.waitUntil(
         caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
     );
+});
+
+// The page posts this when the user taps "Update now".
+self.addEventListener('message', (e) => {
+    if (e.data === 'SKIP_WAITING' || (e.data && e.data.type === 'SKIP_WAITING')) {
+        self.skipWaiting();
+    }
 });
 
 // Remove stale caches from previous versions, then take control.

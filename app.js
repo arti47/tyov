@@ -1293,6 +1293,65 @@ function applyState() {
 // BOOT
 // ==========================================
 
+// ==========================================
+// SERVICE WORKER + "TAP TO UPDATE" FLOW
+// ==========================================
+// When a new build is deployed, the browser installs the updated worker in the
+// background; we surface a clickable toast and only swap in the new version when
+// the user taps "Update now" (posts SKIP_WAITING; the controllerchange reload
+// then loads the fresh code).
+
+var waitingWorker = null;
+
+function showUpdateToast(worker) {
+    waitingWorker = worker;
+    var b = el('updateToast');
+    if (b) b.classList.add('show');
+}
+
+function applyUpdate() {
+    var b = el('updateToast');
+    if (b) b.classList.remove('show');
+    if (waitingWorker) {
+        waitingWorker.postMessage('SKIP_WAITING'); // triggers controllerchange → reload
+    } else {
+        window.location.reload();
+    }
+}
+
+function dismissUpdate() {
+    var b = el('updateToast');
+    if (b) b.classList.remove('show');
+}
+
+function initServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register('./sw.js').then(function (reg) {
+        // A new worker was already waiting when we loaded (updated while away).
+        if (reg.waiting && navigator.serviceWorker.controller) showUpdateToast(reg.waiting);
+        reg.addEventListener('updatefound', function () {
+            var nw = reg.installing;
+            if (!nw) return;
+            nw.addEventListener('statechange', function () {
+                // 'installed' + an existing controller = an update (not first install).
+                if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+                    showUpdateToast(nw);
+                }
+            });
+        });
+    }).catch(function () { /* SW registration is best-effort */ });
+
+    var refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
+    });
+}
+
 document.addEventListener('input', saveGame);
 document.addEventListener('change', saveGame);
-window.onload = loadGame;
+window.addEventListener('load', function () {
+    loadGame();
+    initServiceWorker();
+});

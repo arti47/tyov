@@ -4,7 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Thousand Year Old Vampire - Companion</title>
+    <meta name="description" content="Companion app for the solo journaling RPG Thousand Year Old Vampire.">
     <link rel="manifest" href="manifest.json">
+
+    <!-- Theme + installable PWA (Add to Home Screen) -->
+    <meta name="theme-color" content="#8b0000">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Chronicle">
+    <link rel="apple-touch-icon" href="assets/icon-180.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
+
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -260,13 +271,14 @@
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+    <div id="updateToast" class="update-toast" role="alert">
+        <span>✨ A new version is available.</span>
+        <button class="btn-small" onclick="applyUpdate()">Update now</button>
+        <button class="btn-small btn-strike" onclick="dismissUpdate()" aria-label="Dismiss update">Later</button>
+    </div>
+
     <script src="logic.js"></script>
     <script src="data.js"></script>
     <script src="app.js"></script>
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js').then(() => console.log('Service Worker Registered'));
-        }
-    </script>
 </body>
 </html>
