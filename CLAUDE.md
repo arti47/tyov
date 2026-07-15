@@ -60,7 +60,7 @@ npm run lint      # ESLint (needs `npm install` first; no network = skip)
 
 | File | Purpose |
 |------|---------|
-| `index.html` | The UI markup only: setup wizard, dice/prompt panel, traits & memories panels, modals. Loads `logic.js` → `data.js` → `app.js`. No inline CSS. |
+| `index.html` | The UI markup only. A global header (settings, name, warnings/nudges) + a sticky **tab bar** (`▶ Play`, `📜 Character`, `📔 Diary`, `📖 Journal`) over four `.tab-panel` sections, a sticky `#promptBanner` (current prompt, shown on non-Play tabs), the setup wizard, the confirm modal (`#appModal`), and the floating oracle. Loads `logic.js` → `data.js` → `app.js`. No inline CSS. |
 | `styles.css` | All styles (themes/variables, layout, components, `:focus-visible` a11y outlines). Ends with a `@media (max-width: 680px)` block for the responsive/mobile layout; form controls use `min-width: 0` and the body has `overflow-x: hidden` so nothing scrolls sideways on phones. |
 | `logic.js` | **Pure**, DOM-free helpers shared by the app and tests: `escapeHtml`, `getTier`, `getPromptText`, `parseMarkdown`, `rollDice` (RNG injectable), `resolveTraitAction` (Skill/Resource substitution ladder), `rollMeaning` (d100 → meaning-table word), and the save-state helpers `genId`/`defaultState`/`normMem`/`normalizeState` (+`SAVE_VERSION`). Exposed as `window.TYOV` in the browser and `module.exports` in Node. |
 | `app.js` | The game engine: the `state` object, render-from-state functions, save/load + v1→v2 migration, full-state undo stack, dice/prompts, traits/memories/diary, triggers, guided prompt actions, nudges, the Meaning Oracle, import/export. |
@@ -68,7 +68,7 @@ npm run lint      # ESLint (needs `npm install` first; no network = skip)
 | `assets/dice.wav`, `assets/page.wav` | Bundled, precached sound effects (dice roll, page turn) — local so audio works offline. Generated lightweight WAVs. |
 | `assets/icon-192.png`, `assets/icon-512.png`, `assets/icon-180.png` | PWA / home-screen icons (192 & 512 for the manifest incl. `maskable`; 180 for the iOS `apple-touch-icon`). Generated PNGs (blood-red field, dark moon, white fangs). |
 | `manifest.json` | PWA manifest: name/short_name/description, `start_url`/`scope`/`id` (all relative so it works under a Pages subpath), `standalone`, colors, and PNG icons (`any` + `maskable`). Drives "Add to Home Screen". |
-| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v9`. Precaches assets (incl. `assets/*.wav` and `assets/icon-*.png`), deletes old caches on activate, network-first for navigations, stale-while-revalidate for other GETs. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
+| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v10`. Precaches assets (incl. `assets/*.wav` and `assets/icon-*.png`), deletes old caches on activate, network-first for navigations, stale-while-revalidate for other GETs. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
 | `.github/workflows/pages.yml` | GitHub Actions workflow: on push to `main`, runs `npm test` then deploys the repo root to **GitHub Pages**. Requires Pages Source = "GitHub Actions" (one-time repo setting). |
 | `.github/workflows/ci.yml` | CI workflow: on push to `main` and on PRs, runs `npm ci` → `npm test` → `npm run lint`. |
 | `tests/logic.test.js` | Unit tests for `logic.js` (escaping, tiers, prompt text, markdown, dice, `resolveTraitAction`, `rollMeaning`, and state normalization: `normalizeState`/`normMem`/`defaultState`). |
@@ -86,7 +86,8 @@ A single source of truth, serialized to `localStorage` under key **`tyov_save`**
 - `futureTriggers` (`[{ prompt, text }]`), `namesHistory`, `turnCount`,
   `rollsSinceOldAge`, `rollsSinceBackup` (drive the old-age / backup nudges),
   `gameOver` (bool), `rollHistory` (strings), `journalHistory` (`[{ prompt, text }]`).
-- `currentName`, `boxedExp`, `currentJournal`.
+- `currentName`, `boxedExp`, `currentJournal`, `activeTab` (last-viewed tab:
+  `play`|`character`|`diary`|`journal`, restored on load).
 - `skills` (`{ id, text, lost, checked }`), `marks` (`{ id, text, lost }`),
   `resources` (`{ id, text, lost, isDiary? }` — `isDiary` marks the one
   auto-managed Diary Resource), `characters` (`{ id, text, type, doom, lost }`).
@@ -167,9 +168,17 @@ or no `version`.
    **frozen** (read-only Experiences, no add/remove), and losing the Diary
    Resource strikes out (`lost`) its Memories. No Diary-expand or "2nd Season".
 7. **Journal**: per-prompt text is archived into `journalHistory` (tagged
-   `<prompt><tier>`). `previewChronicle` renders it; `exportJournal` downloads
-   `.txt` (both skip struck-out Memories). `parseMarkdown` supports
-   `*italics*`/`**bold**` and **escapes first**.
+   `<prompt><tier>`). The **Journal tab** (`renderJournalTab` → `#journalTabContent`)
+   renders the chronicle inline; `exportJournal` downloads `.txt` (both skip
+   struck-out Memories). `parseMarkdown` supports `*italics*`/`**bold**` and
+   **escapes first**.
+   **Tabs** (`showTab`, persisted in `state.activeTab`): Play (dice/prompt/response/
+   history/triggers) · Character (traits + Memories) · Diary · Journal. The
+   `#promptBanner` (`updatePromptBanner`) shows the current prompt on non-Play tabs
+   and jumps back to Play when tapped.
+   **Meaning spark** (`sparkInto`): a 🎲 button on setup memory steps and each
+   Character-tab Memory block rolls `rollMeaning` ×3 and **shows** the words as
+   inspiration beside the field (not inserted). The floating oracle still inserts.
 8. **Nudges & feedback**: `toast()` shows non-blocking messages; `#saveStatus`
    shows autosave state; dismissable banners nudge old-age deaths (`#ageNudge`)
    and periodic backups (`#backupNudge`). Blocking decisions use the in-app modal
@@ -229,7 +238,7 @@ under that subpath. Every asset the SW precaches must stay same-origin/relative.
 ### Bumping the service worker cache
 If you change any cached asset (`index.html`, `styles.css`, `logic.js`,
 `app.js`, `data.js`, `manifest.json`, `assets/*.wav`, `assets/icon-*.png`), bump
-`CACHE_NAME` in `sw.js` (currently `-v9`). Bumping it is also what makes the
+`CACHE_NAME` in `sw.js` (currently `-v10`). Bumping it is also what makes the
 deployed `sw.js` byte-different, which is what triggers the tap-to-update toast
 for existing installs. The SW also network-first-loads navigations, so updates
 generally land on next load even without a bump — but bump for certainty, and

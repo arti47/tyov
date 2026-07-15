@@ -101,6 +101,43 @@ function announce(msg) {
     if (r) r.textContent = msg;
 }
 
+// ==========================================
+// TABS + STICKY PROMPT BANNER
+// ==========================================
+var TABS = ['play', 'character', 'diary', 'journal'];
+
+function showTab(name) {
+    if (TABS.indexOf(name) === -1) name = 'play';
+    state.activeTab = name;
+    TABS.forEach(function (t) {
+        var panel = el('panel-' + t), btn = el('tab-' + t);
+        if (panel) panel.hidden = (t !== name);
+        if (btn) {
+            btn.classList.toggle('active', t === name);
+            btn.setAttribute('aria-selected', t === name ? 'true' : 'false');
+        }
+    });
+    if (name === 'journal') renderJournalTab();
+    updatePromptBanner();
+    window.scrollTo(0, 0);
+    persist();
+}
+
+// Slim banner (shown on non-Play tabs) with the current prompt so you can act on
+// it while editing traits/memories. Tapping it jumps to the Play tab.
+function updatePromptBanner() {
+    var b = el('promptBanner');
+    if (!b) return;
+    var show = state.currentPrompt >= 1 && state.activeTab !== 'play';
+    if (show) {
+        var visits = state.promptVisits[state.currentPrompt] || 1;
+        setText('promptBannerLabel', 'Prompt ' + state.currentPrompt + (visits <= 3 ? getTier(visits) : ''));
+        var txt = state.display.promptText || '';
+        setText('promptBannerText', txt.length > 100 ? txt.slice(0, 100) + '…' : txt);
+    }
+    b.hidden = !show;
+}
+
 function pad2(n) { return (n < 10 ? '0' : '') + n; }
 function nowHM() {
     var d = new Date();
@@ -537,17 +574,17 @@ function importSaveData(e) {
     r.readAsText(f);
 }
 
-function previewChronicle() {
+// Render the accumulated chronicle into the Journal tab (was the preview modal).
+function renderJournalTab() {
+    var box = el('journalTabContent');
+    if (!box) return;
     var name = state.currentName || 'Unnamed Vampire';
-    el('previewTitle').innerText = 'The Chronicle of ' + name;
-
-    var html = '';
+    var html = '<p style="font-style:italic; color:#aaa; margin-top:0;">The Chronicle of ' + escapeHtml(name) + '</p>';
     var boxed = val('boxedExpText');
     if (boxed.trim()) {
         html += '<div style="background:rgba(76,175,80,0.1);padding:15px;border-left:4px solid #4CAF50;margin-bottom:20px;">' +
                 '<i>"A serendipitous moment that never fades..."</i><br><br>' + parseMarkdown(boxed) + '</div>';
     }
-
     if (state.journalHistory.length > 0) {
         html += '<h3>Narrative Journal</h3><div style="margin-bottom: 30px; padding: 15px; background: rgba(0,0,0,0.05); border: 1px solid var(--border-color);">';
         state.journalHistory.forEach(function (entry) {
@@ -556,15 +593,10 @@ function previewChronicle() {
         });
         html += '</div>';
     }
-
     html += '<h3>Active Memories</h3>' + renderMemoriesPreview(state.memories, false);
     html += '<hr style="border-color: var(--border-color); margin: 30px 0;">';
     html += '<h3>The Diary / Lost Storage</h3>' + renderMemoriesPreview(state.diary, true);
-
-    el('previewContent').innerHTML = html;
-    el('previewModal').style.display = 'flex';
-    var closeBtn = el('previewModal').querySelector('button');
-    if (closeBtn) closeBtn.focus();
+    box.innerHTML = html;
 }
 
 function renderMemoriesPreview(list, faded) {
@@ -705,6 +737,7 @@ function updatePromptMeta() {
     }
     toggleNote('advanceNote', p >= 1 && visits > 3 && !state.gameOver);
     toggleNote('endNote', p === 69 && visits === 3 && !state.gameOver);
+    updatePromptBanner();
 }
 
 function checkGameOver() {
@@ -1253,6 +1286,10 @@ function memoryBlockHtml(m, name) {
     var addExpBtn = (!inDiary && m.experiences.length < cap)
         ? '<button class="btn-small exp-add" onclick="addExperience(\'' + name + '\',\'' + m.id + '\')">+ Experience</button>'
         : '';
+    // Meaning-table inspiration (Character-tab Memories only; the Diary is frozen).
+    var sparkBtn = inDiary ? ''
+        : '<button type="button" class="btn-small spark-btn" onclick="sparkInto(\'spark-' + m.id + '\')">🎲 Spark</button>';
+    var sparkDiv = inDiary ? '' : '<div class="meaning-spark" id="spark-' + m.id + '"></div>';
     var states = [['normal', 'Normal'], ['starred', '⭐ Starred'], ['hazy', '🌫️ Hazy'],
                   ['vast', '🌌 Vast'], ['primal', '🐾 Primal']];
     var options = states.map(function (s) {
@@ -1271,7 +1308,7 @@ function memoryBlockHtml(m, name) {
     return '<div class="' + cls + '" id="' + m.id + '">' +
         '<input type="text" aria-label="Memory theme" placeholder="Memory Theme" value="' + escapeHtml(m.theme) +
             '"' + (inDiary ? ' readonly' : ' oninput="setMemoryTheme(\'' + name + '\',\'' + m.id + '\', this.value)"') + '>' +
-        '<div class="exp-container">' + exps + '</div>' + addExpBtn + hint +
+        '<div class="exp-container">' + exps + '</div>' + addExpBtn + sparkBtn + hint + sparkDiv +
         '<div class="mem-controls">' +
             '<select aria-label="Memory state" onchange="changeMemoryState(\'' + name + '\',\'' + m.id + '\', this.value)">' +
                 options + '</select>' +
@@ -1375,6 +1412,7 @@ function applyState() {
     checkGameOver();
     showAgeNudgeIfDue();
     showBackupNudgeIfDue();
+    showTab(state.activeTab || 'play');
 }
 
 // ==========================================
@@ -1484,6 +1522,18 @@ function insertOracle() {
     }
 }
 
+// Inline "spark" — roll the meaning table 3× and show the words as inspiration
+// (NOT inserted) beside a Memory/Experience field. Used in the setup wizard and
+// on Character-tab Memory blocks.
+function sparkInto(id) {
+    var target = el(id);
+    if (!target) return;
+    var words = [rollMeaning(meaningTable), rollMeaning(meaningTable), rollMeaning(meaningTable)];
+    target.innerHTML = '<span class="spark-label">Spark:</span> ' + words.map(function (r) {
+        return '<span class="spark-word"><span class="spark-roll">' + r.roll + '</span>' + escapeHtml(r.word) + '</span>';
+    }).join(' ');
+}
+
 // ==========================================
 // SERVICE WORKER + "TAP TO UPDATE" FLOW
 // ==========================================
@@ -1563,7 +1613,6 @@ function focusablesIn(container) {
 function openModalEl() {
     var am = el('appModal'); if (am && am.classList.contains('show')) return am;
     var sw = el('setupWizard'); if (sw && sw.style.display === 'flex') return sw;
-    var pm = el('previewModal'); if (pm && pm.style.display === 'flex') return pm;
     return null;
 }
 
@@ -1571,8 +1620,6 @@ document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
         // Esc dismisses dismissable overlays (not the required setup wizard).
         if (isAppModalOpen()) { closeAppModal(); return; }
-        var pm = el('previewModal');
-        if (pm && pm.style.display === 'flex') { pm.style.display = 'none'; return; }
         var op = el('oraclePanel');
         if (op && op.classList.contains('show')) toggleOracle();
         return;

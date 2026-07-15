@@ -64,6 +64,76 @@ h1, h2, h3, h4 {
 }
 
 /* ==========================================
+   TABS + PROMPT BANNER
+   ========================================== */
+.tabs {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    border-bottom: 2px solid var(--border-color);
+    margin-bottom: 16px;
+    position: sticky;
+    top: 0;
+    background: var(--bg-color);
+    z-index: 500;
+    padding-top: 4px;
+}
+.tab-btn {
+    background: transparent;
+    color: var(--text-color);
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    padding: 8px 14px;
+    font-size: 0.95em;
+    opacity: 0.65;
+}
+.tab-btn:hover { opacity: 1; filter: none; }
+.tab-btn.active {
+    opacity: 1;
+    background: var(--panel-bg);
+    border-color: var(--border-color);
+    color: var(--accent-color);
+    font-weight: bold;
+}
+.tab-panel[hidden] { display: none; }
+
+.prompt-banner[hidden] { display: none; }
+.prompt-banner {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: rgba(139, 0, 0, 0.12);
+    border: 1px solid var(--accent-color);
+    border-radius: 5px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    color: var(--text-color);
+    cursor: pointer;
+    font-size: 0.9em;
+}
+.prompt-banner .pb-label { font-weight: bold; color: var(--accent-color); margin-right: 8px; }
+.prompt-banner .pb-text { font-style: italic; color: #ccc; }
+.prompt-banner .pb-go { float: right; font-size: 0.8em; color: var(--accent-color); }
+body.light-mode .prompt-banner .pb-text { color: #555; }
+
+/* Meaning-table "spark" inspiration (words shown, not inserted). */
+.spark-btn { margin: 6px 0 2px; }
+.meaning-spark { font-size: 0.85em; margin: 2px 0 6px; }
+.meaning-spark:empty { display: none; }
+.spark-label { color: #aaa; margin-right: 4px; }
+.spark-word {
+    display: inline-block;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    padding: 2px 7px;
+    margin: 2px 3px 2px 0;
+    font-weight: bold;
+}
+body.light-mode .spark-word { background: rgba(0, 0, 0, 0.06); }
+.spark-roll { color: #888; font-size: 0.8em; margin-right: 4px; }
+
+/* ==========================================
    BUTTONS & INPUTS
    ========================================== */
 button {

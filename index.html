@@ -79,6 +79,8 @@
                 <div class="trait-recap"></div>
                 <input type="text" id="setupMemTheme1" placeholder="Memory 1 Theme (e.g. Mortal Life)" style="margin-bottom: 5px;">
                 <textarea id="setupMemExp1" placeholder="Your life-summary Experience..."></textarea>
+                <button type="button" class="btn-small spark-btn" onclick="sparkInto('sparkSetup1')">🎲 Spark idea</button>
+                <div class="meaning-spark" id="sparkSetup1"></div>
                 <div class="wizard-error" id="err5"></div>
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
                     <button class="btn-strike" onclick="nextStep(4)" style="flex: 1;">Back</button>
@@ -94,6 +96,8 @@
                 <textarea id="setupMemExp2" placeholder="Experience 2 (combine two traits)..." style="margin-bottom: 10px;"></textarea>
                 <input type="text" id="setupMemTheme3" placeholder="Memory 3 Theme" style="margin-bottom: 5px;">
                 <textarea id="setupMemExp3" placeholder="Experience 3 (combine two traits)..."></textarea>
+                <button type="button" class="btn-small spark-btn" onclick="sparkInto('sparkSetup6')">🎲 Spark idea</button>
+                <div class="meaning-spark" id="sparkSetup6"></div>
                 <div class="wizard-error" id="err6"></div>
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
                     <button class="btn-strike" onclick="nextStep(5)" style="flex: 1;">Back</button>
@@ -107,6 +111,8 @@
                 <div class="trait-recap"></div>
                 <input type="text" id="setupMemTheme4" placeholder="Memory 4 Theme" style="margin-bottom: 5px;">
                 <textarea id="setupMemExp4" placeholder="Experience 4 (combine two traits)..."></textarea>
+                <button type="button" class="btn-small spark-btn" onclick="sparkInto('sparkSetup7')">🎲 Spark idea</button>
+                <div class="meaning-spark" id="sparkSetup7"></div>
                 <div class="wizard-error" id="err7"></div>
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
                     <button class="btn-strike" onclick="nextStep(6)" style="flex: 1;">Back</button>
@@ -122,6 +128,8 @@
                 <input type="text" id="setupMark" placeholder="The Mark your turning left..." style="margin-bottom: 5px;">
                 <input type="text" id="setupMemTheme5" placeholder="Memory 5 Theme (e.g. The Night I Died)" style="margin-bottom: 5px;">
                 <textarea id="setupMemExp5" placeholder="The Experience of your transformation..."></textarea>
+                <button type="button" class="btn-small spark-btn" onclick="sparkInto('sparkSetup8')">🎲 Spark idea</button>
+                <div class="meaning-spark" id="sparkSetup8"></div>
                 <div class="wizard-error" id="err8"></div>
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
                     <button class="btn-strike" onclick="nextStep(7)" style="flex: 1;">Back</button>
@@ -129,14 +137,6 @@
                 </div>
             </div>
 
-        </div>
-    </div>
-
-    <div id="previewModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="previewTitle">
-        <div class="modal-content" style="max-width: 800px;">
-            <h2 id="previewTitle" style="text-align: center;">The Chronicle</h2>
-            <div id="previewContent"></div>
-            <button onclick="document.getElementById('previewModal').style.display='none'" style="width: 100%; margin-top: 15px;">Close Journal</button>
         </div>
     </div>
 
@@ -181,6 +181,21 @@
     <div id="ageNudge" class="nudge-bar">🕰️ A generation may have passed — some mortal Characters have likely died of old age. <button class="btn-small" onclick="killAllMortals()">Pass a Century</button> <button class="btn-small btn-strike" onclick="dismissAgeNudge()">Dismiss</button></div>
     <div id="backupNudge" class="nudge-bar">💾 It's been a while — consider exporting a backup of your chronicle. <button class="btn-small" onclick="exportSaveData()">Backup now</button> <button class="btn-small btn-strike" onclick="dismissBackupNudge()">Dismiss</button></div>
 
+    <button id="promptBanner" class="prompt-banner" hidden onclick="showTab('play')" aria-label="Go to the current prompt on the Play tab">
+        <span id="promptBannerLabel" class="pb-label"></span>
+        <span id="promptBannerText" class="pb-text"></span>
+        <span class="pb-go">→ Play</span>
+    </button>
+
+    <div class="tabs" role="tablist" aria-label="Sections">
+        <button class="tab-btn" id="tab-play" role="tab" aria-selected="true" aria-controls="panel-play" onclick="showTab('play')">▶ Play</button>
+        <button class="tab-btn" id="tab-character" role="tab" aria-selected="false" aria-controls="panel-character" onclick="showTab('character')">📜 Character</button>
+        <button class="tab-btn" id="tab-diary" role="tab" aria-selected="false" aria-controls="panel-diary" onclick="showTab('diary')">📔 Diary</button>
+        <button class="tab-btn" id="tab-journal" role="tab" aria-selected="false" aria-controls="panel-journal" onclick="showTab('journal')">📖 Journal</button>
+    </div>
+
+    <section id="panel-play" class="tab-panel" role="tabpanel" aria-labelledby="tab-play">
+
     <div class="panel full-width" style="text-align: center; margin-bottom: 20px;">
         <div class="options-bar">
             <div style="display: flex; gap: 10px; align-items: center;">
@@ -190,11 +205,6 @@
                 <button id="btnUndo" class="btn-small" style="background: #607d8b;" onclick="undoLastRoll()" disabled>Undo</button>
                 <input type="number" id="jumpPromptNum" placeholder="#" style="width: 50px; padding: 4px; margin-left: 10px;">
                 <button class="btn-small" style="background: #ff5722;" onclick="jumpToPrompt()">Jump</button>
-            </div>
-            <div style="display: flex; gap: 10px;">
-                <button class="btn-small btn-strike" onclick="loseMemorySlot()">-1 Mem Slot</button>
-                <button class="btn-small" style="background: #2196F3;" onclick="previewChronicle()">Read Journal</button>
-                <button class="btn-small" style="background: #4CAF50;" onclick="exportJournal()">Export (.txt)</button>
             </div>
         </div>
 
@@ -234,8 +244,11 @@
         <div id="triggersList"></div>
     </div>
 
+    </section>
+
+    <section id="panel-character" class="tab-panel" role="tabpanel" aria-labelledby="tab-character" hidden>
     <div class="container">
-        
+
         <div class="panel">
             <div style="display: flex; justify-content: space-between; align-items: baseline;">
                 <h2>Traits</h2>
@@ -266,8 +279,11 @@
         </div>
 
         <div class="panel">
-            <h2>Memories <span id="memoryCount">(0/5 Active)</span></h2>
-            
+            <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                <h2 style="border:none;">Memories <span id="memoryCount">(0/5 Active)</span></h2>
+                <button class="btn-small btn-strike" onclick="loseMemorySlot()" title="Permanently lose a Memory slot">-1 Slot</button>
+            </div>
+
             <div class="boxed-experience">
                 <h4 style="margin: 0; color: var(--boxed-color); border-bottom: none;">The Boxed Experience</h4>
                 <p style="font-size: 0.8em; margin: 5px 0;">This serendipitous moment never fades and does not count towards your limit.</p>
@@ -276,15 +292,29 @@
             
             <div id="memoriesContainer"></div>
             <button class="btn-small" onclick="addMemoryBlock('memoriesContainer')" style="margin-bottom: 20px; width: 100%;">+ Add Memory</button>
-
-            <h2 style="margin-top: 30px;">Diary / Storage <span id="diaryCount">(0/4 Slots)</span></h2>
-            <p style="font-size: 0.8em; color: #aaa; margin: 0 0 10px;">The Diary is a Resource that holds up to 4 Memories. Memories moved here are frozen — no new Experiences. If the Diary Resource is lost, its Memories are struck out.</p>
-
-            <div id="diaryContainer"></div>
-            <button class="btn-small" onclick="addMemoryBlock('diaryContainer')" style="width: 100%;">+ Add Storage Entry</button>
         </div>
 
     </div>
+    </section>
+
+    <section id="panel-diary" class="tab-panel" role="tabpanel" aria-labelledby="tab-diary" hidden>
+    <div class="panel full-width">
+        <h2 style="border:none;">Diary / Storage <span id="diaryCount">(0/4 Slots)</span></h2>
+        <p style="font-size: 0.8em; color: #aaa; margin: 0 0 10px;">The Diary is a Resource that holds up to 4 Memories. Memories moved here are frozen — no new Experiences. If the Diary Resource is lost, its Memories are struck out.</p>
+        <div id="diaryContainer"></div>
+        <button class="btn-small" onclick="addMemoryBlock('diaryContainer')" style="width: 100%;">+ Add Storage Entry</button>
+    </div>
+    </section>
+
+    <section id="panel-journal" class="tab-panel" role="tabpanel" aria-labelledby="tab-journal" hidden>
+    <div class="panel full-width">
+        <div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:10px;">
+            <h2 style="border:none;">The Chronicle</h2>
+            <button class="btn-small" style="background:#4CAF50;" onclick="exportJournal()">Export (.txt)</button>
+        </div>
+        <div id="journalTabContent"><p style="color:#888; font-style:italic;">Your chronicle will appear here as you answer prompts.</p></div>
+    </div>
+    </section>
 
     <button id="oracleFab" class="oracle-fab" aria-label="Open the meaning oracle" title="Meaning oracle — roll d100 ×3" onclick="toggleOracle()">🎲</button>
     <div id="oraclePanel" class="oracle-panel" role="dialog" aria-label="Meaning oracle" aria-modal="false">

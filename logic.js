@@ -146,6 +146,7 @@
             currentName: '',
             boxedExp: '',
             currentJournal: '',
+            activeTab: 'play', // last-viewed tab (play|character|diary|journal)
             skills: [],      // { id, text, lost, checked }
             resources: [],   // { id, text, lost, isDiary? }
             characters: [],  // { id, text, type: 'Mortal'|'Immortal', doom, lost }
