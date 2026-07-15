@@ -62,12 +62,13 @@ npm run lint      # ESLint (needs `npm install` first; no network = skip)
 |------|---------|
 | `index.html` | The UI markup only: setup wizard, dice/prompt panel, traits & memories panels, modals. Loads `logic.js` → `data.js` → `app.js`. No inline CSS. |
 | `styles.css` | All styles (themes/variables, layout, components, `:focus-visible` a11y outlines). |
-| `logic.js` | **Pure**, DOM-free helpers shared by the app and tests: `escapeHtml`, `getTier`, `getPromptText`, `parseMarkdown`, `rollDice` (RNG injectable). Exposed as `window.TYOV` in the browser and `module.exports` in Node. |
-| `app.js` | The game engine: the `state` object, render-from-state functions, save/load + v1→v2 migration, undo stack, dice/prompts, traits/memories/diary, triggers, import/export. |
+| `logic.js` | **Pure**, DOM-free helpers shared by the app and tests: `escapeHtml`, `getTier`, `getPromptText`, `parseMarkdown`, `rollDice` (RNG injectable), `resolveTraitAction` (Skill/Resource substitution ladder). Exposed as `window.TYOV` in the browser and `module.exports` in Node. |
+| `app.js` | The game engine: the `state` object, render-from-state functions, save/load + v1→v2 migration, full-state undo stack, dice/prompts, traits/memories/diary, triggers, guided prompt actions, nudges, import/export. |
 | `data.js` | The prompt database: `const promptDB`, keyed `1..80`, each with tiers `a`/`b`/`c` (first/second/third visit). |
+| `assets/dice.wav`, `assets/page.wav` | Bundled, precached sound effects (dice roll, page turn) — local so audio works offline. Generated lightweight WAVs. |
 | `manifest.json` | PWA manifest (name, colors, bat emoji icon). |
-| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v2`. Precaches assets, deletes old caches on activate, network-first for navigations, stale-while-revalidate for other GETs. |
-| `tests/logic.test.js` | Unit tests for `logic.js` (escaping, tiers, prompt text, markdown, dice). |
+| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v3`. Precaches assets (incl. `assets/*.wav`), deletes old caches on activate, network-first for navigations, stale-while-revalidate for other GETs. |
+| `tests/logic.test.js` | Unit tests for `logic.js` (escaping, tiers, prompt text, markdown, dice, `resolveTraitAction`). |
 | `package.json` | Scripts: `test`, `serve`, `lint`. ESLint as a dev dependency. |
 | `eslint.config.js` | Flat ESLint config with browser + test globals. |
 | `README.md` | Minimal. |
@@ -79,17 +80,23 @@ A single source of truth, serialized to `localStorage` under key **`tyov_save`**
 - `version` (currently **2**), `maxMemories` (5), `maxDiary` (4).
 - `currentPrompt` (0 before first roll), `promptVisits` (`{ num: count }`).
 - `futureTriggers` (`[{ prompt, text }]`), `namesHistory`, `turnCount`,
-  `rollHistory` (strings), `journalHistory` (`[{ prompt, text }]`).
+  `rollsSinceOldAge`, `rollsSinceBackup` (drive the old-age / backup nudges),
+  `gameOver` (bool), `rollHistory` (strings), `journalHistory` (`[{ prompt, text }]`).
 - `currentName`, `boxedExp`, `currentJournal`.
-- `skills` (`{ id, text, lost, checked }`), `resources`/`marks`
-  (`{ id, text, lost }`), `characters` (`{ id, text, type, doom, lost }`).
-- `memories` / `diary` (`{ id, theme, experiences[], memState }`).
+- `skills` (`{ id, text, lost, checked }`), `marks` (`{ id, text, lost }`),
+  `resources` (`{ id, text, lost, isDiary? }` — `isDiary` marks the one
+  auto-managed Diary Resource), `characters` (`{ id, text, type, doom, lost }`).
+- `memories` / `diary` (`{ id, theme, experiences[], memState, lost }` — `lost`
+  strikes out a Memory, e.g. when the Diary Resource is lost).
 - `settings` (`isLightMode`, `fontSize`, `hideGraveyard`, `muteSound`,
-  `reverseTime`, `multiplayer`).
+  `multiplayer`). **`reverseTime` is intentionally NOT persisted** — it is a
+  one-shot cleared after each roll.
 - `display` (`promptResult`, `rollDetails`, `promptText`).
 
-`undoStack` (in `app.js`, not persisted) holds JSON snapshots of the
-gameplay-relevant slice for multi-level undo (cap 50).
+`undoStack` (in `app.js`, not persisted) holds JSON snapshots of the **full**
+`state` plus the journal textarea (`pushUndo()`), for multi-level undo (cap 50)
+covering rolls **and** trait/memory edits. `tyov_save_history` is a separate
+rolling backup of the last 10 good saves used to recover a corrupt `tyov_save`.
 
 ### Persistence
 - **Render from state, never read the DOM as truth.** Each list has a
@@ -101,10 +108,13 @@ gameplay-relevant slice for multi-level undo (cap 50).
   mutate `state` then re-render that list.
 - Autosave: global `input`/`change` listeners call a **debounced** `persist()`
   (300 ms). `persist()` pulls the few free-form DOM fields (name, boxed exp,
-  current journal, settings) into `state`, then writes JSON.
+  current journal, settings) into `state`, writes JSON, appends to the rolling
+  `tyov_save_history` backup, and updates the `#saveStatus` indicator.
 - `loadGame()` (on `window.onload`) parses the save, runs **migration** if it's
   legacy (`migrateV1`, see below), `normalizeState()`s it, renders, and re-saves.
-  Corrupt JSON is preserved under `tyov_save_corrupt` and the wizard opens.
+  Corrupt JSON is preserved under `tyov_save_corrupt`; the loader then tries to
+  **recover from the newest `tyov_save_history` snapshot** before falling back to
+  opening the wizard.
 - Backup/restore export and import the same JSON. **Import is validated**
   (`importSaveData` → migrate/normalize in a `try/catch`) before replacing the save.
 
@@ -115,25 +125,44 @@ is backed up to `tyov_save_v1_backup`. A save is "legacy" if it has `htmlData`
 or no `version`.
 
 ### Gameplay flow
-1. **Setup wizard** (`#setupWizard`, `nextStep`/`finishSetup`) seeds name, 3
-   skills, 3 resources, 3 characters, a Mark, and a first Memory (+4 empty).
-2. **Roll** (`rollAndMove`): archives the journal entry, rolls via
+1. **Setup wizard** (`#setupWizard`, 8 steps) rebuilds the rules-faithful vampire
+   creation. `gotoStep`/`validateStep` require every field before advancing;
+   `finishSetup` seeds name, 3 Skills, 3 Resources, 3 Mortal Characters, the
+   **Immortal sire** (created as an Immortal), a Mark, and **five Memories each
+   seeded with one Experience** (life summary, three trait-combining, the
+   transformation).
+2. **Roll** (`rollAndMove`): snapshots undo, archives the journal entry, rolls via
    `TYOV.rollDice` (d10−d6; d6−d10 if "Rev. Time"; two d10s if "Multi"),
-   advances `currentPrompt`, picks tier a/b/c from visit count, shows prompt
-   text, logs history, checks triggers/game-over.
-3. **Navigation**: `jumpToPrompt`, `useAccursedStrings` (step back one),
-   `undoLastRoll` (multi-level).
-4. **Traits**: add/lose (strikethrough = "graveyard") Skills, Resources,
-   Characters (Mortal/Immortal + Doom Dots), Marks. `checkSurvivalState()` warns
-   at zero active skills+resources; `checkGameOver()` fires on prompts 72–80.
-   "Pass a Century" (`killAllMortals`) and `loseMemorySlot` now **confirm** first.
-5. **Memories & Diary**: limited blocks with Theme + Experiences. States:
-   normal / starred (excluded from the active count) / hazy / vast (5
-   experiences) / primal. Memories migrate to the Diary. Limits change via
-   `loseMemorySlot`, `expandDiary`, `unlockSecondSeason` (sets max memories 8).
-6. **Journal**: per-prompt text is archived into `journalHistory` (tagged
+   **clears the one-shot Rev. Time**, advances `currentPrompt`, picks tier a/b/c
+   from visit count, updates the tier/visit badge (`updatePromptMeta`), ticks the
+   old-age/backup nudge counters, logs history, checks triggers/game-over.
+3. **Navigation**: `jumpToPrompt`, `stepBackOnePrompt` (manual back-one; formerly
+   "Accursed Strings"), `advanceToNextPrompt` (offered once all three tiers are
+   answered), `undoLastRoll` (multi-level, full-state).
+4. **Guided prompt actions** (`promptCheckSkill`/`promptLoseResource`): apply the
+   rules substitution ladder via `TYOV.resolveTraitAction` — check↔lose, and when
+   neither is possible `offerGameOver`→`declareGameOver`. `checkSurvivalState()`
+   warns at zero active skills+resources; `checkGameOver()` sets `gameOver` on
+   prompts 72–80 (each a "the game is over" prompt) and disables the roll button.
+5. **Traits**: add/lose (strikethrough = "graveyard") Skills, Resources,
+   Characters (Mortal/Immortal + Doom Dots, tooltip = Prompt-98 lifespan halving),
+   Marks. Every structural mutation calls `pushUndo()` first. A periodic old-age
+   **nudge** suggests striking mortals; "Pass a Century" (`killAllMortals`) and
+   `loseMemorySlot` **confirm** first.
+6. **Memories & Diary**: limited blocks with Theme + Experiences. States:
+   normal / starred (excluded from active count) / hazy (verbs+adjectives only) /
+   vast (5 experiences) / primal (feelings clause only) — each shows a writing
+   reminder. The **Diary is an auto-managed Resource** (`ensureDiaryResource`,
+   `isDiary` flag): holds ≤4 Memories, its Memories are **frozen** (read-only
+   Experiences), and losing the Diary Resource strikes out (`lost`) its Memories.
+   No Diary-expand or "2nd Season" homebrew.
+7. **Journal**: per-prompt text is archived into `journalHistory` (tagged
    `<prompt><tier>`). `previewChronicle` renders it; `exportJournal` downloads
-   `.txt`. `parseMarkdown` supports `*italics*`/`**bold**` and **escapes first**.
+   `.txt` (both skip struck-out Memories). `parseMarkdown` supports
+   `*italics*`/`**bold**` and **escapes first**.
+8. **Nudges & feedback**: `toast()` shows non-blocking messages; `#saveStatus`
+   shows autosave state; dismissable banners nudge old-age deaths (`#ageNudge`)
+   and periodic backups (`#backupNudge`).
 
 ### Conventions to follow
 - **Public functions are global** and called from inline `onclick`/`onchange`.
@@ -143,6 +172,9 @@ or no `version`.
   escapes) before putting it in `innerHTML`. Never interpolate raw user input.
 - After mutating `state`, call the relevant `render*()` and `persist()`
   (or rely on the global autosave listener for plain text edits).
+- **Call `pushUndo()` BEFORE any structural mutation** (add/lose/delete/state
+  change, rolls, jumps) so multi-level undo stays complete. Do **not** call it on
+  per-keystroke text edits — those flood the stack and are covered by autosave.
 - Keep pure, testable logic in `logic.js` and add a test in
   `tests/logic.test.js`. Keep `app.js` for DOM/state wiring.
 - No external libraries — keep it dependency-free and vanilla.
@@ -151,8 +183,8 @@ or no `version`.
 
 ### Bumping the service worker cache
 If you change any cached asset (`index.html`, `styles.css`, `logic.js`,
-`app.js`, `data.js`, `manifest.json`), bump `CACHE_NAME` in `sw.js`
-(e.g. `-v2` → `-v3`). The SW also network-first-loads navigations, so updates
+`app.js`, `data.js`, `manifest.json`, `assets/*.wav`), bump `CACHE_NAME` in
+`sw.js` (currently `-v3`). The SW also network-first-loads navigations, so updates
 generally land on next load even without a bump — but bump for certainty, and
 keep the `ASSETS` precache list in sync when you add/remove files.
 
@@ -163,36 +195,27 @@ Tracked differences between this app and *Thousand Year Old Vampire* as written
 live: when you close a gap, move it to **Done**; if you find a new one, add it.
 Severity reflects how far the app drifts from the rules-as-written, not effort.
 
+**Design principle:** *Guided* — the app surfaces the correct move and nudges
+toward it, but the player can override. (Exception: setup is fully faithful and
+required.) Delivery is **phased**; Phase 1 is done, Phases 2–3 are planned.
+
 ### Planned / open
 
-1. **Vampire creation is incomplete.** _(Notable)_ The rules seed **five
-   Memories, each with one Experience** (life summary + three trait-combining
-   Experiences + the transformation) and create the **Immortal who turned you**.
-   The setup wizard (`finishSetup` in `app.js`, steps in `index.html`) collects
-   only one Memory and three **Mortal**-only Characters, leaving four Memories
-   empty and no immortal maker. Fix: collect all five starting Experiences and
-   the immortal sire in the wizard.
-2. **Skill/Resource substitution & death-by-exhaustion not modeled.** _(Minor)_
-   Rules: if you can't check a Skill, lose a Resource instead (and vice-versa);
-   if you can do neither, the game ends. `checkSurvivalState()` only shows a
-   passive warning at 0 active Skills **and** 0 Resources — no substitution
-   prompt, no auto game-over. This is the game's *primary* end condition.
-3. **"Rev. Time" is a sticky toggle**, but in the source reversing the dice
-   (d6 − d10) is a **one-shot next-roll** effect from a single Prompt. Consider
-   making it auto-clear after one roll.
-4. **"Strings (-1)" skips its cost.** _(Minor)_ The Accursed Strings Resource
-   lets you step back one page **by striking out X checked Skills**;
-   `useAccursedStrings()` steps back for free.
-5. **Diary rules loosely enforced.** _(Minor)_ Source: one Diary at a time, it
-   is a Resource, must hold ≥1 Memory, and a Memory moved into it can gain no
-   further Experiences. The app treats the Diary as a separate panel with freely
-   editable experiences and an "Expand Limit (+2)" button with no rules basis.
-6. **"2nd Season" (max Memories → 8) has no basis in the core rulebook** — it
-   appears to come from an unconfirmed supplement. Verify against a source or
-   relabel/remove.
-7. **No auto-advance after all three tiers are exhausted.** _(Cosmetic)_ Rules
-   say "move along to the next Prompt"; the app shows a message and waits for the
-   player.
+**Phase 2 — UX polish**
+- **B3** Replace `alert()`/`confirm()` with in-app modals + reuse the `toast()`
+  surface (the Guided flows currently still use `confirm()` for the game-over
+  decision).
+- **B2** Responsive/mobile layout pass (panels, toolbars, modals, touch targets).
+- **B7** Flexible Experience lines (add/remove rows, up to 3, or 5 when Vast).
+- **B11** Dice-roll animation showing the d10/d6 faces and net movement.
+
+**Phase 3 — Saves / export / a11y / CI**
+- **B8** Multiple save slots / vampires (keyed save collection + chooser).
+- **B9** Markdown export and a print-friendly chronicle stylesheet.
+- **B10** ARIA live regions for roll/prompt/alerts; modal focus traps + full
+  keyboard nav.
+- **C1** Extract & unit-test the v1→v2 migration and `normalizeState`.
+- **C2** GitHub Actions CI running `npm test` + ESLint on push/PR.
 
 ### Scoping decisions (not bugs)
 
@@ -203,7 +226,23 @@ Severity reflects how far the app drifts from the rules-as-written, not effort.
 
 ### Done
 
-- _(none yet — record closed gaps here with the commit that closed them)_
+**Phase 1 — rules fidelity + audio + data safety** (this commit)
+- **A1** Setup wizard rebuilt (8 steps, required): 5 seeded Memories + Immortal sire.
+- **A2/A3** Guided `promptCheckSkill`/`promptLoseResource` substitution ladder
+  (`resolveTraitAction`) with game-over-on-exhaustion offer.
+- **A4** Rev. Time is now a one-shot (auto-clears after a roll).
+- **A5** "Strings (-1)" relabeled to a neutral "Step Back" (`stepBackOnePrompt`).
+- **A6** Faithful Diary: frozen Experiences, auto Diary Resource (`isDiary`),
+  4-cap, and lose-Resource-strikes-Memories.
+- **A7** Removed the unfounded "2nd Season" (and the Diary "Expand Limit").
+- **A8/A12** Doom-dots tooltip (Prompt-98 lifespan) + periodic old-age nudge.
+- **A9** Auto-advance offer once all three tiers are answered.
+- **A10** Optional-end note on Prompt 69c.
+- **A11** Hazy/Primal/Vast/Starred writing reminders; **B6** tier + visit badge.
+- **B1** Bundled local `assets/*.wav` audio, precached in the SW.
+- **B4** Autosave `#saveStatus` indicator; **B12** periodic backup nudge.
+- **C4** Rolling `tyov_save_history` snapshots + corrupt-save recovery.
+- **B5** Undo extended to full-state (covers trait/memory edits too).
 
 ## Keeping this file up to date
 

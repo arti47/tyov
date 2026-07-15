@@ -2,7 +2,9 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { escapeHtml, getTier, getPromptText, parseMarkdown, rollDice } = require('../logic.js');
+const {
+    escapeHtml, getTier, getPromptText, parseMarkdown, rollDice, resolveTraitAction
+} = require('../logic.js');
 
 test('escapeHtml neutralises HTML metacharacters', () => {
     assert.strictEqual(
@@ -75,4 +77,25 @@ test('rollDice stays within die bounds across many rolls', () => {
         assert.ok(r.d10_2 >= 1 && r.d10_2 <= 10);
         assert.ok(r.d6 >= 1 && r.d6 <= 6);
     }
+});
+
+test('resolveTraitAction: check a Skill uses the substitution ladder', () => {
+    assert.strictEqual(resolveTraitAction('check', 2, 3).result, 'check');
+    assert.strictEqual(resolveTraitAction('check', 0, 3).result, 'substitute-lose');
+    assert.strictEqual(resolveTraitAction('check', 0, 0).result, 'gameover');
+});
+
+test('resolveTraitAction: lose a Resource uses the substitution ladder', () => {
+    assert.strictEqual(resolveTraitAction('lose', 2, 3).result, 'lose');
+    assert.strictEqual(resolveTraitAction('lose', 2, 0).result, 'substitute-check');
+    assert.strictEqual(resolveTraitAction('lose', 0, 0).result, 'gameover');
+});
+
+test('resolveTraitAction: missing/zero counts default to game over', () => {
+    assert.strictEqual(resolveTraitAction('check').result, 'gameover');
+    assert.strictEqual(resolveTraitAction('lose').result, 'gameover');
+    // Every branch carries a human-readable message.
+    ['check', 'lose'].forEach((a) => {
+        assert.ok(resolveTraitAction(a, 1, 1).message.length > 0);
+    });
 });

@@ -193,6 +193,85 @@ textarea:focus-visible {
     color: var(--text-color);
 }
 
+/* Inline validation message in the setup wizard. */
+.wizard-error {
+    color: var(--accent-color);
+    font-size: 0.85em;
+    margin-top: 8px;
+    min-height: 1em;
+    font-weight: bold;
+}
+
+/* Dismissable Guided nudge banners (old-age, backup). */
+.nudge-bar {
+    display: none;
+    background: rgba(255, 152, 0, 0.15);
+    border: 1px solid var(--warning-color);
+    color: var(--text-color);
+    padding: 8px 12px;
+    border-radius: 5px;
+    margin-bottom: 15px;
+    font-size: 0.9em;
+    text-align: center;
+}
+
+/* Auto-advance / optional-end notes under the prompt. */
+.prompt-note {
+    display: none;
+    margin-top: 12px;
+    padding: 8px 12px;
+    border-radius: 5px;
+    background: rgba(33, 150, 243, 0.12);
+    border: 1px dashed #2196F3;
+    font-size: 0.9em;
+    text-align: center;
+}
+
+/* Guided prompt-action row (Check a Skill / Lose a Resource). */
+.prompt-actions {
+    margin-top: 12px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Small writing-constraint reminder inside a memory block. */
+.mem-hint {
+    font-size: 0.78em;
+    color: #aaa;
+    margin: 4px 0 2px;
+    font-style: italic;
+}
+
+/* Non-blocking toast, bottom-center. */
+.toast {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translate(-50%, 20px);
+    background: #222;
+    color: #fff;
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--accent-color);
+    padding: 12px 18px;
+    border-radius: 5px;
+    max-width: 90%;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s, transform 0.25s;
+    z-index: 2000;
+    font-size: 0.9em;
+}
+.toast.show {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+.toast-warn { border-left-color: var(--warning-color); }
+.toast-info { border-left-color: #2196F3; }
+
 /* ==========================================
    TRAITS & GRAVEYARD
    ========================================== */
@@ -266,6 +345,14 @@ textarea:focus-visible {
 .mem-primal input[type="text"] {
     font-family: monospace;
     color: #bcaaa4;
+}
+
+/* A struck-out (lost) Memory — e.g. when the Diary Resource is lost. */
+.memory-block.strikethrough {
+    opacity: 0.5;
+}
+.memory-block.strikethrough input {
+    text-decoration: line-through;
 }
 
 .boxed-experience {

@@ -66,12 +66,57 @@
         };
     }
 
+    // Resolve a "check a Skill" / "lose a Resource" instruction against the
+    // vampire's current stock, applying the rulebook substitution:
+    //   - can't check a Skill  -> lose a Resource instead
+    //   - can't lose a Resource -> check a Skill instead
+    //   - can do neither        -> the game is over
+    // `action` is 'check' (a Skill) or 'lose' (a Resource). Pure: takes counts,
+    // returns { result, message } where result is one of
+    //   'check' | 'lose' | 'substitute-lose' | 'substitute-check' | 'gameover'.
+    function resolveTraitAction(action, uncheckedSkills, activeResources) {
+        uncheckedSkills = uncheckedSkills || 0;
+        activeResources = activeResources || 0;
+        if (action === 'check') {
+            if (uncheckedSkills > 0) {
+                return { result: 'check', message: 'Check one of your Skills below.' };
+            }
+            if (activeResources > 0) {
+                return {
+                    result: 'substitute-lose',
+                    message: 'No unchecked Skills — per the rules you lose a Resource instead. ' +
+                             'Narrate the worst outcome.'
+                };
+            }
+            return {
+                result: 'gameover',
+                message: 'You cannot check a Skill or lose a Resource. The game is over.'
+            };
+        }
+        // action === 'lose' (a Resource)
+        if (activeResources > 0) {
+            return { result: 'lose', message: 'Lose one of your Resources below.' };
+        }
+        if (uncheckedSkills > 0) {
+            return {
+                result: 'substitute-check',
+                message: 'No Resources to lose — per the rules you check a Skill instead. ' +
+                         'Narrate the worst outcome.'
+            };
+        }
+        return {
+            result: 'gameover',
+            message: 'You cannot lose a Resource or check a Skill. The game is over.'
+        };
+    }
+
     var api = {
         escapeHtml: escapeHtml,
         getTier: getTier,
         getPromptText: getPromptText,
         parseMarkdown: parseMarkdown,
-        rollDice: rollDice
+        rollDice: rollDice,
+        resolveTraitAction: resolveTraitAction
     };
 
     if (typeof module !== 'undefined' && module.exports) {

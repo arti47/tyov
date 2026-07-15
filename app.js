@@ -29,6 +29,9 @@ function defaultState() {
         futureTriggers: [],
         namesHistory: [],
         turnCount: 0,
+        rollsSinceOldAge: 0,   // Rolls since the last old-age nudge (see rules p.155).
+        rollsSinceBackup: 0,   // Rolls since the last export, drives the backup reminder.
+        gameOver: false,       // True once a game-ending Prompt/exhaustion has fired.
         rollHistory: [],
         journalHistory: [],
         currentName: '',
@@ -67,6 +70,29 @@ function genId() {
 function debounce(fn, ms) {
     var t;
     return function () { clearTimeout(t); t = setTimeout(fn, ms); };
+}
+
+// Lightweight non-blocking toast. (Phase 2 will replace confirm()/alert() with
+// full modals; this is the shared surface for Guided nudges in the meantime.)
+var toastTimer;
+function toast(msg, kind) {
+    var box = el('toast');
+    if (!box) { console.log('toast:', msg); return; }
+    box.textContent = msg;
+    box.className = 'toast show' + (kind ? ' toast-' + kind : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { box.className = 'toast'; }, 4200);
+}
+
+function setSaveStatus(text) {
+    var s = el('saveStatus');
+    if (s) s.textContent = text;
+}
+
+function pad2(n) { return (n < 10 ? '0' : '') + n; }
+function nowHM() {
+    var d = new Date();
+    return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
 }
 
 // ==========================================
@@ -112,11 +138,52 @@ function nextStep(stepNum) {
     el('step' + stepNum).style.display = 'block';
 }
 
+function setStepError(fromStep, msg) {
+    var e = el('err' + fromStep);
+    if (e) e.textContent = msg || '';
+}
+
+// Required-field validation for the faithful creation sequence. Every field a
+// field the rules seed on the character record must be present before Begin.
+function validateStep(stepNum) {
+    var missing = [];
+    function need(id, label) { if (!val(id).trim()) missing.push(label); }
+    if (stepNum === 1) { need('setupName', 'your mortal name'); }
+    if (stepNum === 2) { ['setupSkill1', 'setupSkill2', 'setupSkill3'].forEach(function (id, i) { need(id, 'Skill ' + (i + 1)); }); }
+    if (stepNum === 3) { ['setupRes1', 'setupRes2', 'setupRes3'].forEach(function (id, i) { need(id, 'Resource ' + (i + 1)); }); }
+    if (stepNum === 4) { ['setupChar1', 'setupChar2', 'setupChar3'].forEach(function (id, i) { need(id, 'Character ' + (i + 1)); }); }
+    if (stepNum === 5) { need('setupMemTheme1', 'Memory 1 theme'); need('setupMemExp1', 'Memory 1 Experience'); }
+    if (stepNum === 6) {
+        need('setupMemTheme2', 'Memory 2 theme'); need('setupMemExp2', 'Experience 2');
+        need('setupMemTheme3', 'Memory 3 theme'); need('setupMemExp3', 'Experience 3');
+    }
+    if (stepNum === 7) { need('setupMemTheme4', 'Memory 4 theme'); need('setupMemExp4', 'Experience 4'); }
+    if (stepNum === 8) {
+        need('setupSire', 'the immortal who turned you'); need('setupMark', 'your Mark');
+        need('setupMemTheme5', 'Memory 5 theme'); need('setupMemExp5', 'the transformation Experience');
+    }
+    if (missing.length) {
+        setStepError(stepNum, 'Please fill in: ' + missing.join(', ') + '.');
+        return false;
+    }
+    setStepError(stepNum, '');
+    return true;
+}
+
+// Advance from `fromStep`, validating it first.
+function gotoStep(nextStepNum) {
+    var fromStep = nextStepNum - 1;
+    if (!validateStep(fromStep)) return;
+    nextStep(nextStepNum);
+}
+
 function newMemory(theme, exp1) {
-    return { id: genId(), theme: theme || '', experiences: [exp1 || '', '', ''], memState: 'normal' };
+    return { id: genId(), theme: theme || '', experiences: [exp1 || '', '', ''], memState: 'normal', lost: false };
 }
 
 function finishSetup() {
+    if (!validateStep(8)) return;
+
     state.currentName = val('setupName');
 
     ['setupSkill1', 'setupSkill2', 'setupSkill3'].forEach(function (id) {
@@ -131,11 +198,20 @@ function finishSetup() {
         var v = val(id);
         if (v) state.characters.push({ id: genId(), text: v, type: 'Mortal', doom: 0, lost: false });
     });
+    // The immortal who turned you — created last, per the rules (an enemy Immortal).
+    var sire = val('setupSire');
+    if (sire) state.characters.push({ id: genId(), text: sire, type: 'Immortal', doom: 0, lost: false });
+
     var mark = val('setupMark');
     if (mark) state.marks.push({ id: genId(), text: mark, lost: false });
 
-    state.memories.push(newMemory(val('setupMemTheme'), val('setupMemExp')));
-    for (var i = 1; i < 5; i++) state.memories.push(newMemory());
+    // Five Memories, each seeded with one Experience (life summary, three
+    // trait-combining, and the transformation).
+    state.memories.push(newMemory(val('setupMemTheme1'), val('setupMemExp1')));
+    state.memories.push(newMemory(val('setupMemTheme2'), val('setupMemExp2')));
+    state.memories.push(newMemory(val('setupMemTheme3'), val('setupMemExp3')));
+    state.memories.push(newMemory(val('setupMemTheme4'), val('setupMemExp4')));
+    state.memories.push(newMemory(val('setupMemTheme5'), val('setupMemExp5')));
 
     el('setupWizard').style.display = 'none';
     isGameLoaded = true;
@@ -163,14 +239,40 @@ function persist() {
         fontSize: getComputedStyle(document.body).getPropertyValue('--base-font-size'),
         hideGraveyard: checked('hideGraveyardToggle'),
         muteSound: checked('optMuteSound'),
-        reverseTime: checked('optReverseTime'),
+        // reverseTime is a one-shot (clears after each roll), so it is not persisted.
         multiplayer: checked('optMultiplayer')
     };
     try {
-        localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+        var json = JSON.stringify(state);
+        localStorage.setItem(SAVE_KEY, json);
+        pushSaveHistory(json);
+        setSaveStatus('Saved ✓ ' + nowHM());
     } catch (e) {
         console.error('Save failed', e);
+        setSaveStatus('Save failed!');
     }
+}
+
+// Rolling backup: keep the last few good saves so a corrupt write is recoverable.
+var HISTORY_KEY = 'tyov_save_history';
+var HISTORY_MAX = 10;
+function pushSaveHistory(json) {
+    try {
+        var hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+        if (!Array.isArray(hist)) hist = [];
+        var last = hist[hist.length - 1];
+        if (last && last.data === json) return; // no change, don't churn
+        hist.push({ t: Date.now(), data: json });
+        while (hist.length > HISTORY_MAX) hist.shift();
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(hist));
+    } catch (e) { /* history is best-effort */ }
+}
+function latestHistorySave() {
+    try {
+        var hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+        if (Array.isArray(hist) && hist.length) return hist[hist.length - 1].data;
+    } catch (e) { /* ignore */ }
+    return null;
 }
 
 var saveGame = debounce(persist, 300);
@@ -183,7 +285,8 @@ function normMem(m) {
         id: m.id || genId(),
         theme: m.theme || '',
         experiences: exps,
-        memState: m.memState || 'normal'
+        memState: m.memState || 'normal',
+        lost: !!m.lost
     };
 }
 
@@ -195,7 +298,9 @@ function normalizeState(d) {
         return { id: x.id || genId(), text: x.text || '', lost: !!x.lost, checked: !!x.checked };
     });
     s.resources = (s.resources || []).map(function (x) {
-        return { id: x.id || genId(), text: x.text || '', lost: !!x.lost };
+        var r = { id: x.id || genId(), text: x.text || '', lost: !!x.lost };
+        if (x.isDiary) r.isDiary = true; // the auto-managed Diary Resource (A6)
+        return r;
     });
     s.marks = (s.marks || []).map(function (x) {
         return { id: x.id || genId(), text: x.text || '', lost: !!x.lost };
@@ -330,11 +435,22 @@ function loadGame() {
     try {
         data = JSON.parse(saved);
     } catch (e) {
-        alert('Your saved chronicle could not be read (corrupted data). Starting fresh; ' +
-              'a backup of the raw data was kept under "tyov_save_corrupt".');
         try { localStorage.setItem('tyov_save_corrupt', saved); } catch (e2) { /* ignore */ }
-        showWizard();
-        return;
+        // Try to recover from the newest rolling-backup snapshot before giving up.
+        var backup = latestHistorySave();
+        var recovered = null;
+        if (backup) { try { recovered = JSON.parse(backup); } catch (e3) { recovered = null; } }
+        if (recovered) {
+            alert('Your saved chronicle was corrupted, but a recent automatic backup was ' +
+                  'found and restored. The raw corrupt data was kept under "tyov_save_corrupt".');
+            data = recovered;
+        } else {
+            alert('Your saved chronicle could not be read (corrupted data), and no automatic ' +
+                  'backup was available. Starting fresh; a backup of the raw data was kept ' +
+                  'under "tyov_save_corrupt".');
+            showWizard();
+            return;
+        }
     }
 
     state = isLegacy(data) ? migrateV1(data) : normalizeState(data);
@@ -350,36 +466,28 @@ function resetGame() {
     }
 }
 
-function saveStateForUndo() {
-    undoStack.push(JSON.stringify({
-        currentPrompt: state.currentPrompt,
-        promptVisits: state.promptVisits,
-        turnCount: state.turnCount,
-        rollHistory: state.rollHistory,
-        journalHistory: state.journalHistory,
-        display: state.display,
-        currentJournal: val('promptJournal')
-    }));
+// Multi-level undo now snapshots the FULL gameplay + traits + memories state,
+// so it also covers add/lose/delete of Skills, Resources, Characters, Marks and
+// Memories — not just rolls. Call pushUndo() BEFORE any structural mutation.
+// (Free-form text typing does not snapshot; it is saved by the debounced
+// autosave and would flood the stack.)
+function pushUndo() {
+    undoStack.push(JSON.stringify({ state: state, journal: val('promptJournal') }));
     if (undoStack.length > 50) undoStack.shift();
-    el('btnUndo').disabled = false;
+    var b = el('btnUndo');
+    if (b) b.disabled = false;
 }
+// Back-compat alias for the roll/jump/step callers.
+var saveStateForUndo = pushUndo;
 
 function undoLastRoll() {
     if (!undoStack.length) return;
-    var s = JSON.parse(undoStack.pop());
-    state.currentPrompt = s.currentPrompt;
-    state.promptVisits = s.promptVisits;
-    state.turnCount = s.turnCount;
-    state.rollHistory = s.rollHistory;
-    state.journalHistory = s.journalHistory;
-    state.display = s.display;
-    setVal('promptJournal', s.currentJournal);
-
-    applyDisplay();
-    renderRollLog();
-    checkTriggers();
-    checkGameOver();
-    el('btnUndo').disabled = undoStack.length === 0;
+    var snap = JSON.parse(undoStack.pop());
+    state = normalizeState(snap.state);
+    applyState();
+    setVal('promptJournal', snap.journal || '');
+    var b = el('btnUndo');
+    if (b) b.disabled = undoStack.length === 0;
     persist();
 }
 
@@ -394,7 +502,9 @@ function addToHistoryLog(text) {
 // ==========================================
 
 function exportSaveData() {
+    state.rollsSinceBackup = 0; // Reset the backup reminder — you just backed up.
     persist();
+    dismissBackupNudge();
     var blob = new Blob([localStorage.getItem(SAVE_KEY) || '{}'], { type: 'application/json' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -457,7 +567,7 @@ function previewChronicle() {
 function renderMemoriesPreview(list, faded) {
     var out = '';
     list.forEach(function (m) {
-        if (!m.theme) return;
+        if (!m.theme || m.lost) return;
         out += '<div style="margin-bottom: 15px;' + (faded ? ' color:#888;' : '') + '"><b>Theme: ' +
                escapeHtml(m.theme) + '</b><ul>';
         m.experiences.forEach(function (x) {
@@ -495,6 +605,7 @@ function exportJournal() {
 function journalMemoriesText(list) {
     var out = '';
     list.forEach(function (m) {
+        if (m.lost) return;
         out += '[' + m.theme + ']\n';
         m.experiences.forEach(function (x) {
             if (x.trim() !== '') out += '- ' + x + '\n';
@@ -539,20 +650,73 @@ function updatePromptDisplay(promptNum, visits) {
     el('promptTextDisplay').innerText = state.display.promptText;
 }
 
+// Show/hide a small note element under the prompt.
+function toggleNote(id, show) { var e = el(id); if (e) e.style.display = show ? 'block' : 'none'; }
+
+// Update the tier/visit badge (B6) and the auto-advance (A9) / optional-end
+// (A10) notes from the current position.
+function updatePromptMeta() {
+    var p = state.currentPrompt;
+    var visits = state.promptVisits[p] || 0;
+    var badge = el('tierBadge');
+    if (badge) {
+        if (p >= 1 && visits >= 1) {
+            badge.textContent = visits > 3
+                ? 'Prompt ' + p + ' — all entries (a, b, c) answered'
+                : 'Entry ' + p + getTier(visits) + ' · visit ' + visits +
+                  (visits === 1 ? ' (first)' : visits === 2 ? ' (second)' : ' (third)');
+        } else {
+            badge.textContent = '';
+        }
+    }
+    toggleNote('advanceNote', p >= 1 && visits > 3 && !state.gameOver);
+    toggleNote('endNote', p === 69 && visits === 3 && !state.gameOver);
+}
+
 function checkGameOver() {
-    var over = state.currentPrompt >= 72 && state.currentPrompt <= 80;
-    el('btnRoll').disabled = over;
-    if (over) el('promptResult').innerText = state.display.promptResult + ' [GAME OVER]';
+    if (state.currentPrompt >= 72 && state.currentPrompt <= 80) state.gameOver = true;
+    var roll = el('btnRoll');
+    if (roll) roll.disabled = !!state.gameOver;
+    if (state.gameOver && state.display.promptResult.indexOf('[GAME OVER]') === -1) {
+        state.display.promptResult += ' [GAME OVER]';
+        setText('promptResult', state.display.promptResult);
+    }
+}
+
+// Roll counters that drive the old-age (A12) and backup (B12) nudges.
+function tickRollCounters() {
+    state.rollsSinceOldAge = (state.rollsSinceOldAge || 0) + 1;
+    state.rollsSinceBackup = (state.rollsSinceBackup || 0) + 1;
+    showAgeNudgeIfDue();
+    showBackupNudgeIfDue();
+}
+
+function showAgeNudgeIfDue() {
+    var activeMortals = state.characters.filter(function (c) { return c.type === 'Mortal' && !c.lost; }).length;
+    toggleNote('ageNudge', (state.rollsSinceOldAge || 0) >= 5 && activeMortals > 0 && !state.gameOver);
+}
+function dismissAgeNudge() {
+    state.rollsSinceOldAge = 0;
+    toggleNote('ageNudge', false);
+    persist();
+}
+function showBackupNudgeIfDue() {
+    toggleNote('backupNudge', (state.rollsSinceBackup || 0) >= 20);
+}
+function dismissBackupNudge() {
+    toggleNote('backupNudge', false);
 }
 
 function rollAndMove() {
+    if (state.gameOver) return;
+    pushUndo();
     archiveJournal();
     playSound('dice');
-    saveStateForUndo();
 
     if (state.currentPrompt === 0) state.currentPrompt = 1;
 
     var m = calculateMove();
+    setChecked('optReverseTime', false); // Rev. Time is a one-shot; clear it now (A4).
     state.currentPrompt = Math.max(1, state.currentPrompt + m.diff);
     state.promptVisits[state.currentPrompt] = (state.promptVisits[state.currentPrompt] || 0) + 1;
 
@@ -569,7 +733,9 @@ function rollAndMove() {
     updatePromptDisplay(state.currentPrompt, visits);
     addToHistoryLog('Prompt ' + state.currentPrompt + tier + ' (' + detail + ')');
 
+    tickRollCounters();
     applyDisplay();
+    updatePromptMeta();
     checkTriggers();
     checkGameOver();
     persist();
@@ -581,9 +747,9 @@ function jumpToPrompt() {
         alert('Please enter a valid prompt number between 1 and 80.');
         return;
     }
+    pushUndo();
     archiveJournal();
     playSound('page');
-    saveStateForUndo();
     state.currentPrompt = target;
     state.promptVisits[target] = (state.promptVisits[target] || 0) + 1;
     var visits = state.promptVisits[target];
@@ -595,22 +761,110 @@ function jumpToPrompt() {
     addToHistoryLog('Jumped to Prompt ' + target + tier);
 
     applyDisplay();
+    updatePromptMeta();
     checkTriggers();
     checkGameOver();
     persist();
     setVal('jumpPromptNum', '');
 }
 
-function useAccursedStrings() {
+// Manual back-one-Prompt navigation (formerly "Accursed Strings"; that named
+// Resource is an Appendix I mechanic, out of scope for the 1–80 app — A5).
+function stepBackOnePrompt() {
     if (state.currentPrompt <= 1) return;
+    pushUndo();
     archiveJournal();
-    saveStateForUndo();
     state.currentPrompt -= 1;
+    var visits = state.promptVisits[state.currentPrompt] || 1;
     state.display.promptResult = 'Stepped back to Prompt ' + state.currentPrompt;
-    state.display.promptText = 'You have stepped backward using the Accursed Strings.';
-    addToHistoryLog('Used Accursed Strings: Back to Prompt ' + state.currentPrompt);
+    updatePromptDisplay(state.currentPrompt, visits);
+    addToHistoryLog('Stepped back to Prompt ' + state.currentPrompt);
     applyDisplay();
+    updatePromptMeta();
     checkTriggers();
+    persist();
+}
+
+// A9: after all three tiers are answered, offer to move to the next Prompt.
+function advanceToNextPrompt() {
+    if (state.currentPrompt >= 80) return;
+    pushUndo();
+    archiveJournal();
+    playSound('page');
+    state.currentPrompt += 1;
+    state.promptVisits[state.currentPrompt] = (state.promptVisits[state.currentPrompt] || 0) + 1;
+    var visits = state.promptVisits[state.currentPrompt];
+    var tier = getTier(visits);
+    state.display.rollDetails = 'Advanced to the next Prompt.';
+    state.display.promptResult = 'Proceed to Prompt ' + state.currentPrompt + tier;
+    updatePromptDisplay(state.currentPrompt, visits);
+    addToHistoryLog('Advanced to Prompt ' + state.currentPrompt + tier);
+    applyDisplay();
+    updatePromptMeta();
+    checkTriggers();
+    checkGameOver();
+    persist();
+}
+
+// ==========================================
+// GUIDED PROMPT ACTIONS (A2 / A3)
+// ==========================================
+
+function uncheckedSkillCount() {
+    return state.skills.filter(function (s) { return !s.lost && !s.checked; }).length;
+}
+function activeResourceCount() {
+    return state.resources.filter(function (r) { return !r.lost; }).length;
+}
+function firstActiveResource() {
+    return state.resources.filter(function (r) { return !r.lost; })[0];
+}
+function firstUncheckedSkill() {
+    return state.skills.filter(function (s) { return !s.lost && !s.checked; })[0];
+}
+
+function promptCheckSkill() {
+    var res = TYOV.resolveTraitAction('check', uncheckedSkillCount(), activeResourceCount());
+    if (res.result === 'check') {
+        toast('Check one of your Skills in the Traits panel.', 'info');
+    } else if (res.result === 'substitute-lose') {
+        var r = firstActiveResource();
+        if (r) { pushUndo(); r.lost = true; renderResources(); checkSurvivalState(); persist(); }
+        toast('Substitution — lost Resource "' + (r ? (r.text || 'Unnamed') : '') + '". ' + res.message, 'warn');
+    } else {
+        offerGameOver(res.message);
+    }
+}
+
+function promptLoseResource() {
+    var res = TYOV.resolveTraitAction('lose', uncheckedSkillCount(), activeResourceCount());
+    if (res.result === 'lose') {
+        toast('Lose (strike out) one of your Resources in the Traits panel.', 'info');
+    } else if (res.result === 'substitute-check') {
+        var s = firstUncheckedSkill();
+        if (s) { pushUndo(); s.checked = true; renderSkills(); persist(); }
+        toast('Substitution — checked Skill "' + (s ? (s.text || 'Unnamed') : '') + '". ' + res.message, 'warn');
+    } else {
+        offerGameOver(res.message);
+    }
+}
+
+function offerGameOver(msg) {
+    if (confirm(msg + '\n\nEnd the chronicle now?')) {
+        declareGameOver(msg);
+    } else {
+        toast(msg, 'warn');
+    }
+}
+
+function declareGameOver(reason) {
+    pushUndo();
+    state.gameOver = true;
+    addToHistoryLog('GAME OVER — ' + reason);
+    applyDisplay();
+    checkGameOver();
+    updatePromptMeta();
+    toast('The game is over. ' + reason, 'warn');
     persist();
 }
 
@@ -680,7 +934,15 @@ function setEntityText(list, id, value) {
 function toggleLoseEntity(list, id) {
     var e = findEntity(list, id);
     if (!e) return;
+    pushUndo();
     e.lost = !e.lost;
+    // The Diary is a Resource: losing/restoring it strikes/unstrikes the
+    // Memories it holds (A6 — rules p.100).
+    if (list === 'resources' && e.isDiary) {
+        state.diary.forEach(function (m) { m.lost = e.lost; });
+        renderMemoryList('diary');
+        updateDiaryCount();
+    }
     renderList(list);
     checkSurvivalState();
     persist();
@@ -688,20 +950,21 @@ function toggleLoseEntity(list, id) {
 
 function setSkillChecked(id, isChecked) {
     var e = findEntity('skills', id);
-    if (e) { e.checked = isChecked; renderSkills(); persist(); }
+    if (e) { pushUndo(); e.checked = isChecked; renderSkills(); persist(); }
 }
 
 function setCharacterType(id, type) {
     var e = findEntity('characters', id);
-    if (e) { e.type = type === 'Immortal' ? 'Immortal' : 'Mortal'; renderCharacters(); persist(); }
+    if (e) { pushUndo(); e.type = type === 'Immortal' ? 'Immortal' : 'Mortal'; renderCharacters(); persist(); }
 }
 
 function addDoom(id) {
     var e = findEntity('characters', id);
-    if (e) { e.doom++; renderCharacters(); persist(); }
+    if (e) { pushUndo(); e.doom++; renderCharacters(); persist(); }
 }
 
 function addSkill(v) {
+    pushUndo();
     state.skills.push({ id: genId(), text: v || '', lost: false, checked: false });
     renderSkills();
     checkSurvivalState();
@@ -709,6 +972,7 @@ function addSkill(v) {
 }
 
 function addResource(v) {
+    pushUndo();
     state.resources.push({ id: genId(), text: v || '', lost: false });
     renderResources();
     checkSurvivalState();
@@ -716,6 +980,7 @@ function addResource(v) {
 }
 
 function addCharacter(v, type) {
+    pushUndo();
     state.characters.push({
         id: genId(), text: v || '', type: type === 'Immortal' ? 'Immortal' : 'Mortal', doom: 0, lost: false
     });
@@ -724,6 +989,7 @@ function addCharacter(v, type) {
 }
 
 function addMark(v) {
+    pushUndo();
     state.marks.push({ id: genId(), text: v || '', lost: false });
     renderMarks();
     persist();
@@ -731,9 +997,12 @@ function addMark(v) {
 
 function killAllMortals() {
     if (!confirm('Pass a century? Every living mortal Character will be struck out.')) return;
+    pushUndo();
     state.characters.forEach(function (c) {
         if (c.type === 'Mortal' && !c.lost) c.lost = true;
     });
+    state.rollsSinceOldAge = 0;
+    toggleNote('ageNudge', false);
     renderCharacters();
     checkSurvivalState();
     persist();
@@ -780,6 +1049,7 @@ function renderMarks() {
 function renderCharacters() {
     el('charactersList').innerHTML = state.characters.map(function (c) {
         var dots = new Array(c.doom + 1).join('•');
+        var doomTip = 'Doom dots (Appendix Prompt 98): each dot halves this mortal’s remaining lifespan.';
         return '<li class="' + (c.lost ? 'strikethrough' : '') + '" id="' + c.id + '">' +
             '<select aria-label="Character mortality" onchange="setCharacterType(\'' + c.id + '\', this.value)">' +
                 '<option value="Mortal" ' + (c.type === 'Mortal' ? 'selected' : '') + '>Mortal</option>' +
@@ -787,8 +1057,8 @@ function renderCharacters() {
             '</select>' +
             '<input type="text" aria-label="Character name" value="' + escapeHtml(c.text) +
                 '" oninput="setEntityText(\'characters\',\'' + c.id + '\', this.value)">' +
-            '<span class="doom-dots">' + dots + '</span>' +
-            '<button class="btn-small doom-btn" aria-label="Add doom dot" style="display:' +
+            '<span class="doom-dots" title="' + doomTip + '">' + dots + '</span>' +
+            '<button class="btn-small doom-btn" aria-label="Add doom dot" title="' + doomTip + '" style="display:' +
                 (c.type === 'Mortal' ? 'inline-block' : 'none') + '" onclick="addDoom(\'' + c.id + '\')">+•</button>' +
             '<button class="btn-small btn-strike" onclick="toggleLoseEntity(\'characters\',\'' + c.id + '\')">' +
                 (c.lost ? 'Restore' : 'Lose') + '</button></li>';
@@ -814,6 +1084,19 @@ function setExperience(name, id, index, value) {
     if (m) m.experiences[index] = value;
 }
 
+// The Diary is a Resource: keep exactly one "Diary" Resource present while it
+// holds ≥1 Memory, and remove it when empty (A6 — rules p.100).
+function ensureDiaryResource() {
+    var existing = state.resources.filter(function (r) { return r.isDiary; })[0];
+    if (state.diary.length > 0 && !existing) {
+        state.resources.push({ id: genId(), text: 'Diary (holds stored Memories)', lost: false, isDiary: true });
+        renderResources();
+    } else if (state.diary.length === 0 && existing) {
+        state.resources = state.resources.filter(function (r) { return !r.isDiary; });
+        renderResources();
+    }
+}
+
 function addMemoryBlock(containerId) {
     var name = containerId === 'diaryContainer' ? 'diary' : 'memories';
     if (name === 'memories' && state.memories.length >= state.maxMemories) {
@@ -821,10 +1104,12 @@ function addMemoryBlock(containerId) {
         return;
     }
     if (name === 'diary' && state.diary.length >= state.maxDiary) {
-        alert('Diary Limit Reached (' + state.maxDiary + '). Expand your limit if a Prompt allows it.');
+        alert('Diary Limit Reached (' + state.maxDiary + '). A Diary holds at most ' + state.maxDiary + ' Memories.');
         return;
     }
+    pushUndo();
     memList(name).push(newMemory());
+    if (name === 'diary') ensureDiaryResource();
     renderMemoryList(name);
     updateMemoryCount();
     updateDiaryCount();
@@ -834,6 +1119,7 @@ function addMemoryBlock(containerId) {
 function changeMemoryState(name, id, memState) {
     var m = findMem(name, id);
     if (!m) return;
+    pushUndo();
     m.memState = memState;
     if (memState === 'vast') {
         while (m.experiences.length < 5) m.experiences.push('');
@@ -847,13 +1133,15 @@ function changeMemoryState(name, id, memState) {
 
 function migrateToDiary(id) {
     if (state.diary.length >= state.maxDiary) {
-        alert('Your Diary is full! (' + state.maxDiary + ' slots). Expand your limit or delete an entry.');
+        alert('Your Diary is full! (' + state.maxDiary + ' Memories). Delete a Diary entry first.');
         return;
     }
     var i = state.memories.map(function (m) { return m.id; }).indexOf(id);
     if (i < 0) return;
+    pushUndo();
     playSound('page');
     state.diary.push(state.memories.splice(i, 1)[0]);
+    ensureDiaryResource();
     renderMemoryList('memories');
     renderMemoryList('diary');
     updateMemoryCount();
@@ -862,9 +1150,11 @@ function migrateToDiary(id) {
 }
 
 function deleteMemory(name, id) {
+    pushUndo();
     var arr = memList(name);
     var i = arr.map(function (m) { return m.id; }).indexOf(id);
     if (i >= 0) arr.splice(i, 1);
+    if (name === 'diary') ensureDiaryResource();
     renderMemoryList(name);
     updateMemoryCount();
     updateDiaryCount();
@@ -872,25 +1162,34 @@ function deleteMemory(name, id) {
 }
 
 function memoryBlockHtml(m, name) {
+    var inDiary = name === 'diary';
     var expCount = m.memState === 'vast' ? 5 : 3;
     var exps = '';
     for (var i = 0; i < expCount; i++) {
+        // Memories in the Diary are frozen — no new/edited Experiences (A6).
         exps += '<input type="text" class="experience-input" aria-label="Experience ' + (i + 1) +
                 '" placeholder="- Experience ' + (i + 1) + '" value="' + escapeHtml(m.experiences[i] || '') +
-                '" oninput="setExperience(\'' + name + '\',\'' + m.id + '\',' + i + ', this.value)">';
+                '"' + (inDiary ? ' readonly' : ' oninput="setExperience(\'' + name + '\',\'' + m.id + '\',' + i + ', this.value)"') + '>';
     }
     var states = [['normal', 'Normal'], ['starred', '⭐ Starred'], ['hazy', '🌫️ Hazy'],
                   ['vast', '🌌 Vast'], ['primal', '🐾 Primal']];
     var options = states.map(function (s) {
         return '<option value="' + s[0] + '" ' + (m.memState === s[0] ? 'selected' : '') + '>' + s[1] + '</option>';
     }).join('');
+    // Writing-constraint reminders for the states that impose them (A11).
+    var hint = '';
+    if (m.memState === 'hazy') hint = '<div class="mem-hint">🌫️ Hazy: only verbs &amp; adjectives may be written here.</div>';
+    else if (m.memState === 'primal') hint = '<div class="mem-hint">🐾 Primal: write only the “how I felt” clause, not “what happened”.</div>';
+    else if (m.memState === 'vast') hint = '<div class="mem-hint">🌌 Vast: holds up to five Experiences.</div>';
+    else if (m.memState === 'starred') hint = '<div class="mem-hint">⭐ Starred: fixed forever and does not count toward your Memory limit.</div>';
     var migrateBtn = name === 'memories'
         ? '<button class="btn-small migrate-btn" style="background:#2196F3; margin-right:5px;" onclick="migrateToDiary(\'' + m.id + '\')">Move to Diary</button>'
         : '';
-    return '<div class="memory-block ' + (m.memState !== 'normal' ? 'mem-' + m.memState : '') + '" id="' + m.id + '">' +
+    var cls = 'memory-block' + (m.memState !== 'normal' ? ' mem-' + m.memState : '') + (m.lost ? ' strikethrough' : '');
+    return '<div class="' + cls + '" id="' + m.id + '">' +
         '<input type="text" aria-label="Memory theme" placeholder="Memory Theme" value="' + escapeHtml(m.theme) +
-            '" oninput="setMemoryTheme(\'' + name + '\',\'' + m.id + '\', this.value)">' +
-        '<div class="exp-container">' + exps + '</div>' +
+            '"' + (inDiary ? ' readonly' : ' oninput="setMemoryTheme(\'' + name + '\',\'' + m.id + '\', this.value)"') + '>' +
+        '<div class="exp-container">' + exps + '</div>' + hint +
         '<div class="mem-controls">' +
             '<select aria-label="Memory state" onchange="changeMemoryState(\'' + name + '\',\'' + m.id + '\', this.value)">' +
                 options + '</select>' +
@@ -906,33 +1205,24 @@ function renderMemoryList(name) {
 }
 
 function updateMemoryCount() {
-    var count = state.memories.filter(function (m) { return m.memState !== 'starred'; }).length;
+    // Starred Memories don't take a slot; struck-out (lost) ones don't count.
+    var count = state.memories.filter(function (m) {
+        return m.memState !== 'starred' && !m.lost;
+    }).length;
     setText('memoryCount', '(' + count + '/' + state.maxMemories + ' Active Slots)');
 }
 
 function updateDiaryCount() {
-    setText('diaryCount', '(' + state.diary.length + '/' + state.maxDiary + ' Slots)');
+    var count = state.diary.filter(function (m) { return !m.lost; }).length;
+    setText('diaryCount', '(' + count + '/' + state.maxDiary + ' Slots)');
 }
 
 function loseMemorySlot() {
-    if (!confirm('Permanently lose a memory slot? This cannot be undone.')) return;
+    if (!confirm('Permanently lose a memory slot? (You can Undo this.)')) return;
+    pushUndo();
     state.maxMemories = Math.max(1, state.maxMemories - 1);
     updateMemoryCount();
-    alert('You have permanently lost a memory slot. Max is now ' + state.maxMemories + '.');
-    persist();
-}
-
-function expandDiary() {
-    state.maxDiary += 2;
-    updateDiaryCount();
-    alert('Diary storage expanded! Max is now ' + state.maxDiary + '.');
-    persist();
-}
-
-function unlockSecondSeason() {
-    state.maxMemories = 8;
-    updateMemoryCount();
-    alert('Second Season unlocked! Max Memories is now 8.');
+    toast('You have lost a memory slot. Max is now ' + state.maxMemories + '.', 'warn');
     persist();
 }
 
@@ -986,14 +1276,17 @@ function applyState() {
     setChecked('hideGraveyardToggle', !!st.hideGraveyard);
     if (st.hideGraveyard) el('traitsContainer').classList.add('hide-graveyard');
     setChecked('optMuteSound', !!st.muteSound);
-    setChecked('optReverseTime', !!st.reverseTime);
+    setChecked('optReverseTime', false); // one-shot, never restored
     setChecked('optMultiplayer', !!st.multiplayer);
 
     renderAll();
     applyDisplay();
+    updatePromptMeta();
     checkSurvivalState();
     checkTriggers();
     checkGameOver();
+    showAgeNudgeIfDue();
+    showBackupNudgeIfDue();
 }
 
 // ==========================================

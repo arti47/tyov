@@ -9,8 +9,8 @@
 </head>
 <body>
 
-    <audio id="sfxDice" src="https://actions.google.com/sounds/v1/foley/rolling_dice.ogg" preload="auto"></audio>
-    <audio id="sfxPage" src="https://actions.google.com/sounds/v1/foley/book_page_flip.ogg" preload="auto"></audio>
+    <audio id="sfxDice" src="assets/dice.wav" preload="auto"></audio>
+    <audio id="sfxPage" src="assets/page.wav" preload="auto"></audio>
 
     <div id="setupWizard" class="modal-overlay">
         <div class="modal-content">
@@ -19,7 +19,8 @@
                 <h2>Step 1: Your Mortal Identity</h2>
                 <p>Before you became a monster, you were a person. What was your name?</p>
                 <input type="text" id="setupName" placeholder="Enter your mortal name..." style="margin-bottom: 5px;">
-                <button onclick="nextStep(2)" style="width: 100%; margin-top: 15px;">Next Step</button>
+                <div class="wizard-error" id="err1"></div>
+                <button onclick="gotoStep(2)" style="width: 100%; margin-top: 15px;">Next Step</button>
             </div>
 
             <div id="step2" class="wizard-step" style="display: none;">
@@ -28,9 +29,10 @@
                 <input type="text" id="setupSkill1" placeholder="Skill 1" style="margin-bottom: 5px;">
                 <input type="text" id="setupSkill2" placeholder="Skill 2" style="margin-bottom: 5px;">
                 <input type="text" id="setupSkill3" placeholder="Skill 3">
+                <div class="wizard-error" id="err2"></div>
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
                     <button class="btn-strike" onclick="nextStep(1)" style="flex: 1;">Back</button>
-                    <button onclick="nextStep(3)" style="flex: 2;">Next Step</button>
+                    <button onclick="gotoStep(3)" style="flex: 2;">Next Step</button>
                 </div>
             </div>
 
@@ -40,41 +42,74 @@
                 <input type="text" id="setupRes1" placeholder="Resource 1" style="margin-bottom: 5px;">
                 <input type="text" id="setupRes2" placeholder="Resource 2" style="margin-bottom: 5px;">
                 <input type="text" id="setupRes3" placeholder="Resource 3">
+                <div class="wizard-error" id="err3"></div>
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
                     <button class="btn-strike" onclick="nextStep(2)" style="flex: 1;">Back</button>
-                    <button onclick="nextStep(4)" style="flex: 2;">Next Step</button>
+                    <button onclick="gotoStep(4)" style="flex: 2;">Next Step</button>
                 </div>
             </div>
 
             <div id="step4" class="wizard-step" style="display: none;">
-                <h2>Step 4: Characters</h2>
-                <p>Name at least three mortals intimately tied to your life. One should be the person who turned you into a vampire. (e.g., "Eliza, my sister", "Marcus, the local priest")</p>
+                <h2>Step 4: Mortal Characters</h2>
+                <p>Name three mortals intimately tied to your life — relatives, friends, lovers, enemies, mentors. (e.g., "Eliza, my sister", "Marcus, the local priest"). The immortal who turns you comes later, in Step 8.</p>
                 <input type="text" id="setupChar1" placeholder="Character 1" style="margin-bottom: 5px;">
                 <input type="text" id="setupChar2" placeholder="Character 2" style="margin-bottom: 5px;">
                 <input type="text" id="setupChar3" placeholder="Character 3">
+                <div class="wizard-error" id="err4"></div>
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
                     <button class="btn-strike" onclick="nextStep(3)" style="flex: 1;">Back</button>
-                    <button onclick="nextStep(5)" style="flex: 2;">Next Step</button>
+                    <button onclick="gotoStep(5)" style="flex: 2;">Next Step</button>
                 </div>
             </div>
 
             <div id="step5" class="wizard-step" style="display: none;">
-                <h2>Step 5: Your First Mark</h2>
-                <p>How has vampirism visibly or physically altered you? You must have at least one Mark. (e.g., "Elongated fangs", "Deathly pale skin", "A hole in my chest where my heart was")</p>
-                <input type="text" id="setupMark" placeholder="Enter your starting Mark...">
+                <h2>Step 5: Memory 1 — Your Mortal Life</h2>
+                <p>Start your first Memory with one broad Experience summarizing who you were before unlife. (e.g. Theme: 'Mortal Life', Experience: 'I am Henri, son of Jon, a poor knight swindled out of my inheritance near the Loire.')</p>
+                <input type="text" id="setupMemTheme1" placeholder="Memory 1 Theme (e.g. Mortal Life)" style="margin-bottom: 5px;">
+                <textarea id="setupMemExp1" placeholder="Your life-summary Experience..."></textarea>
+                <div class="wizard-error" id="err5"></div>
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
                     <button class="btn-strike" onclick="nextStep(4)" style="flex: 1;">Back</button>
-                    <button onclick="nextStep(6)" style="flex: 2;">Next Step</button>
+                    <button onclick="gotoStep(6)" style="flex: 2;">Next Step</button>
                 </div>
             </div>
 
             <div id="step6" class="wizard-step" style="display: none;">
-                <h2>Step 6: Your First Memory</h2>
-                <p>Create a Memory Theme, and record your very first Experience within it—usually the tragic moment of your transformation. (e.g. Theme: 'The Night I Died', Experience: 'I was drained of life by a hooded figure in the rain.')</p>
-                <input type="text" id="setupMemTheme" placeholder="Memory Theme..." style="margin-bottom: 5px;">
-                <textarea id="setupMemExp" placeholder="Write your first experience here..."></textarea>
+                <h2>Step 6: Memories 2 &amp; 3</h2>
+                <p>Create two more Experiences, each in its own Memory, each combining <b>two</b> of your traits. (e.g. "Gundar takes me on my first voyage aboard the Longship Bøkesuden; his touch calms me when we first leave sight of land.")</p>
+                <input type="text" id="setupMemTheme2" placeholder="Memory 2 Theme" style="margin-bottom: 5px;">
+                <textarea id="setupMemExp2" placeholder="Experience 2 (combine two traits)..." style="margin-bottom: 10px;"></textarea>
+                <input type="text" id="setupMemTheme3" placeholder="Memory 3 Theme" style="margin-bottom: 5px;">
+                <textarea id="setupMemExp3" placeholder="Experience 3 (combine two traits)..."></textarea>
+                <div class="wizard-error" id="err6"></div>
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
                     <button class="btn-strike" onclick="nextStep(5)" style="flex: 1;">Back</button>
+                    <button onclick="gotoStep(7)" style="flex: 2;">Next Step</button>
+                </div>
+            </div>
+
+            <div id="step7" class="wizard-step" style="display: none;">
+                <h2>Step 7: Memory 4</h2>
+                <p>One more Experience in its own Memory, again combining two of your traits.</p>
+                <input type="text" id="setupMemTheme4" placeholder="Memory 4 Theme" style="margin-bottom: 5px;">
+                <textarea id="setupMemExp4" placeholder="Experience 4 (combine two traits)..."></textarea>
+                <div class="wizard-error" id="err7"></div>
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn-strike" onclick="nextStep(6)" style="flex: 1;">Back</button>
+                    <button onclick="gotoStep(8)" style="flex: 2;">Next Step</button>
+                </div>
+            </div>
+
+            <div id="step8" class="wizard-step" style="display: none;">
+                <h2>Step 8: The Turning</h2>
+                <p>Lastly, create the <b>Immortal</b> who gifted (or cursed) you with unlife, the <b>Mark</b> it left, and the Memory of your transformation (Memory 5). (e.g. Sire: 'Baron Hollmueller, an Austrian vampire'; Mark: 'My neck is permanently broken'; Experience: 'I duel the eerie Baron across the abbey roof; he nearly takes my head, but I do not die.')</p>
+                <input type="text" id="setupSire" placeholder="The immortal who turned you..." style="margin-bottom: 5px;">
+                <input type="text" id="setupMark" placeholder="The Mark your turning left..." style="margin-bottom: 5px;">
+                <input type="text" id="setupMemTheme5" placeholder="Memory 5 Theme (e.g. The Night I Died)" style="margin-bottom: 5px;">
+                <textarea id="setupMemExp5" placeholder="The Experience of your transformation..."></textarea>
+                <div class="wizard-error" id="err8"></div>
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn-strike" onclick="nextStep(7)" style="flex: 1;">Back</button>
                     <button onclick="finishSetup()" style="flex: 2; background: #4CAF50;">Begin Chronicle</button>
                 </div>
             </div>
@@ -97,6 +132,7 @@
             <button class="btn-small" onclick="changeFontSize(2)" aria-label="Increase font size">A+</button>
             <button class="btn-small" onclick="changeFontSize(-2)" aria-label="Decrease font size">A-</button>
             <label><input type="checkbox" id="optMuteSound" onchange="saveGame()"> Mute Sounds</label>
+            <span id="saveStatus" aria-live="polite" style="font-size: 0.8em; color: #888; min-width: 90px;"></span>
         </div>
         <div>
             <button class="btn-small" style="background: #9c27b0;" onclick="exportSaveData()">Backup Save (.json)</button>
@@ -114,37 +150,48 @@
     </div>
     <div id="nameHistory" style="font-size: 0.8em; color: #aaa; margin-bottom: 20px; font-style: italic;">Forgotten Names: None yet.</div>
 
-    <div id="gameWarning" role="alert" aria-live="assertive">⚠️ SURVIVAL WARNING: You have 0 available Skills or Resources. Game Over imminent!</div>
+    <div id="gameWarning" role="alert" aria-live="assertive">⚠️ SURVIVAL WARNING: You have 0 available Skills or Resources. If a Prompt makes you check a Skill or lose a Resource now, the game is over.</div>
     <div id="triggerAlert" role="alert" aria-live="assertive">🔔 FUTURE PROMPT TRIGGERED: <span id="triggerAlertText"></span></div>
+    <div id="ageNudge" class="nudge-bar">🕰️ A generation may have passed — some mortal Characters have likely died of old age. <button class="btn-small" onclick="killAllMortals()">Pass a Century</button> <button class="btn-small btn-strike" onclick="dismissAgeNudge()">Dismiss</button></div>
+    <div id="backupNudge" class="nudge-bar">💾 It's been a while — consider exporting a backup of your chronicle. <button class="btn-small" onclick="exportSaveData()">Backup now</button> <button class="btn-small btn-strike" onclick="dismissBackupNudge()">Dismiss</button></div>
 
     <div class="panel full-width" style="text-align: center; margin-bottom: 20px;">
         <div class="options-bar">
             <div style="display: flex; gap: 10px; align-items: center;">
-                <label><input type="checkbox" id="optReverseTime"> Rev. Time</label>
-                <label><input type="checkbox" id="optMultiplayer"> Multi</label>
-                <button class="btn-small btn-strike" onclick="useAccursedStrings()">Strings (-1)</button>
+                <label title="Reverse the dice (d6 − d10) for your next roll only, then it clears."><input type="checkbox" id="optReverseTime"> Rev. Time <span style="font-size:0.8em; color:#aaa;">(next roll)</span></label>
+                <label title="Group play: roll two d10s minus a d6."><input type="checkbox" id="optMultiplayer"> Multi</label>
+                <button class="btn-small btn-strike" title="Move back one Prompt (manual navigation)" onclick="stepBackOnePrompt()">Step Back</button>
                 <button id="btnUndo" class="btn-small" style="background: #607d8b;" onclick="undoLastRoll()" disabled>Undo</button>
                 <input type="number" id="jumpPromptNum" placeholder="#" style="width: 50px; padding: 4px; margin-left: 10px;">
                 <button class="btn-small" style="background: #ff5722;" onclick="jumpToPrompt()">Jump</button>
             </div>
             <div style="display: flex; gap: 10px;">
                 <button class="btn-small btn-strike" onclick="loseMemorySlot()">-1 Mem Slot</button>
-                <button class="btn-small" style="background: var(--boxed-color);" onclick="unlockSecondSeason()">2nd Season</button>
                 <button class="btn-small" style="background: #2196F3;" onclick="previewChronicle()">Read Journal</button>
                 <button class="btn-small" style="background: #4CAF50;" onclick="exportJournal()">Export (.txt)</button>
             </div>
         </div>
-        
+
         <button id="btnRoll" onclick="rollAndMove()" aria-label="Roll dice and advance to the next prompt" style="font-size: 1.2em; padding: 10px 20px;">Roll Dice & Advance</button>
-        
+
         <h3 id="promptResult" style="margin-top: 15px; color: #ff4d4d;">Awaiting First Roll...</h3>
+        <div id="tierBadge" aria-live="polite" style="font-size: 0.85em; color: #aaa; min-height: 1.2em;"></div>
         <p id="rollResultDetails" style="font-size: 0.9em; color: #aaa;"></p>
         <div id="promptTextDisplay" style="margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.1); border-left: 4px solid var(--accent-color); font-style: italic; text-align: left;">
             Your prompt narrative will appear here.
         </div>
-        
+
+        <div id="endNote" class="prompt-note">This Prompt lets you end the game now, if it feels right. <button class="btn-small btn-strike" onclick="declareGameOver('You chose to end the chronicle here.')">End the Game</button></div>
+        <div id="advanceNote" class="prompt-note">You've answered all entries (a, b, c) for this Prompt. <button class="btn-small" onclick="advanceToNextPrompt()">Move to next Prompt →</button></div>
+
+        <div class="prompt-actions" role="group" aria-label="Guided prompt actions">
+            <span style="font-size:0.8em; color:#aaa;">When a Prompt instructs you:</span>
+            <button class="btn-small" onclick="promptCheckSkill()">Check a Skill</button>
+            <button class="btn-small btn-strike" onclick="promptLoseResource()">Lose a Resource</button>
+        </div>
+
         <textarea id="promptJournal" placeholder="Write your detailed narrative response to this prompt here... (This automatically saves to your Chronicle when you roll the dice)" style="margin-top: 15px; min-height: 120px; font-size: 1.05em; border-color: var(--accent-color);"></textarea>
-        
+
         <div id="rollHistoryLog"><b>History:</b><br></div>
     </div>
 
@@ -202,14 +249,16 @@
             <div id="memoriesContainer"></div>
             <button class="btn-small" onclick="addMemoryBlock('memoriesContainer')" style="margin-bottom: 20px; width: 100%;">+ Add Memory</button>
 
-            <h2 style="margin-top: 30px;">Diary / Storage <span id="diaryCount">(0/4 Active)</span></h2>
-            <button class="btn-small" onclick="expandDiary()" style="margin-bottom: 10px;">Expand Limit</button>
-            
+            <h2 style="margin-top: 30px;">Diary / Storage <span id="diaryCount">(0/4 Slots)</span></h2>
+            <p style="font-size: 0.8em; color: #aaa; margin: 0 0 10px;">The Diary is a Resource that holds up to 4 Memories. Memories moved here are frozen — no new Experiences. If the Diary Resource is lost, its Memories are struck out.</p>
+
             <div id="diaryContainer"></div>
             <button class="btn-small" onclick="addMemoryBlock('diaryContainer')" style="width: 100%;">+ Add Storage Entry</button>
         </div>
 
     </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <script src="logic.js"></script>
     <script src="data.js"></script>
