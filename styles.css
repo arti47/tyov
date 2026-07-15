@@ -202,6 +202,34 @@ textarea:focus-visible {
     font-weight: bold;
 }
 
+/* Read-only "your traits so far" reference shown on the Memory setup steps. */
+.trait-recap {
+    background: rgba(0, 0, 0, 0.18);
+    border: 1px solid var(--border-color);
+    border-left: 3px solid var(--accent-color);
+    border-radius: 4px;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    font-size: 0.85em;
+    line-height: 1.5;
+}
+body.light-mode .trait-recap {
+    background: rgba(0, 0, 0, 0.05);
+}
+.trait-recap strong {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--accent-color);
+}
+.trait-recap em {
+    font-style: normal;
+    color: #aaa;
+}
+.trait-recap .recap-empty {
+    color: #888;
+    font-style: italic;
+}
+
 /* Dismissable Guided nudge banners (old-age, backup). */
 .nudge-bar {
     display: none;

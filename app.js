@@ -136,6 +136,25 @@ function nextStep(stepNum) {
     var steps = document.querySelectorAll('.wizard-step');
     for (var i = 0; i < steps.length; i++) steps[i].style.display = 'none';
     el('step' + stepNum).style.display = 'block';
+    fillTraitRecaps(); // keep the "traits so far" reference current on every step
+}
+
+// Populate the read-only "your traits so far" panels shown on the Memory steps,
+// so you can see the Skills/Resources/Characters you entered earlier while you
+// write Experiences that combine them.
+function recapLine(label, ids) {
+    var vals = ids.map(function (id) { return val(id).trim(); }).filter(Boolean);
+    return '<div><em>' + label + ':</em> ' +
+        (vals.length ? vals.map(escapeHtml).join(', ') : '<span class="recap-empty">— none yet —</span>') +
+        '</div>';
+}
+function fillTraitRecaps() {
+    var html = '<strong>Your traits so far</strong>' +
+        recapLine('Skills', ['setupSkill1', 'setupSkill2', 'setupSkill3']) +
+        recapLine('Resources', ['setupRes1', 'setupRes2', 'setupRes3']) +
+        recapLine('Characters', ['setupChar1', 'setupChar2', 'setupChar3']);
+    var nodes = document.querySelectorAll('.trait-recap');
+    for (var i = 0; i < nodes.length; i++) nodes[i].innerHTML = html;
 }
 
 function setStepError(fromStep, msg) {
