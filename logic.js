@@ -119,6 +119,23 @@
         return { roll: roll, word: word };
     }
 
+    // Pick `n` distinct random entries from a suggestion list (setup wizard
+    // "stuck for ideas" helper). `rng` is injectable for deterministic tests.
+    // Returns fewer than n only when the list itself is shorter.
+    function pickSuggestions(list, n, rng) {
+        rng = rng || Math.random;
+        if (!list || !list.length) return [];
+        var pool = list.slice();
+        var out = [];
+        var want = Math.min(n || 3, pool.length);
+        while (out.length < want) {
+            var i = Math.floor(rng() * pool.length);
+            if (i >= pool.length) i = pool.length - 1;
+            out.push(pool.splice(i, 1)[0]);
+        }
+        return out;
+    }
+
     // --- Save-state shape + validation (pure; shared with the app & tests) ----
 
     var SAVE_VERSION = 2;
@@ -217,6 +234,7 @@
         rollDice: rollDice,
         resolveTraitAction: resolveTraitAction,
         rollMeaning: rollMeaning,
+        pickSuggestions: pickSuggestions,
         genId: genId,
         defaultState: defaultState,
         normMem: normMem,

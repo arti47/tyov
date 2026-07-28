@@ -30,6 +30,8 @@
                 <h2>Step 1: Your Mortal Identity</h2>
                 <p>Before you became a monster, you were a person. What was your name?</p>
                 <input type="text" id="setupName" placeholder="Enter your mortal name..." style="margin-bottom: 5px;">
+                <button type="button" class="btn-small spark-btn" onclick="suggestInto('names','sugSetup1','setupName')">🎲 Suggest a name</button>
+                <div class="meaning-spark" id="sugSetup1"></div>
                 <div class="wizard-error" id="err1"></div>
                 <button onclick="gotoStep(2)" style="width: 100%; margin-top: 15px;">Next Step</button>
             </div>
@@ -40,6 +42,8 @@
                 <input type="text" id="setupSkill1" placeholder="Skill 1" style="margin-bottom: 5px;">
                 <input type="text" id="setupSkill2" placeholder="Skill 2" style="margin-bottom: 5px;">
                 <input type="text" id="setupSkill3" placeholder="Skill 3">
+                <button type="button" class="btn-small spark-btn" onclick="suggestInto('skills','sugSetup2','setupSkill1,setupSkill2,setupSkill3')">🎲 Suggest ideas</button>
+                <div class="meaning-spark" id="sugSetup2"></div>
                 <div class="wizard-error" id="err2"></div>
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
                     <button class="btn-strike" onclick="nextStep(1)" style="flex: 1;">Back</button>
@@ -53,6 +57,8 @@
                 <input type="text" id="setupRes1" placeholder="Resource 1" style="margin-bottom: 5px;">
                 <input type="text" id="setupRes2" placeholder="Resource 2" style="margin-bottom: 5px;">
                 <input type="text" id="setupRes3" placeholder="Resource 3">
+                <button type="button" class="btn-small spark-btn" onclick="suggestInto('resources','sugSetup3','setupRes1,setupRes2,setupRes3')">🎲 Suggest ideas</button>
+                <div class="meaning-spark" id="sugSetup3"></div>
                 <div class="wizard-error" id="err3"></div>
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
                     <button class="btn-strike" onclick="nextStep(2)" style="flex: 1;">Back</button>
@@ -66,6 +72,8 @@
                 <input type="text" id="setupChar1" placeholder="Character 1" style="margin-bottom: 5px;">
                 <input type="text" id="setupChar2" placeholder="Character 2" style="margin-bottom: 5px;">
                 <input type="text" id="setupChar3" placeholder="Character 3">
+                <button type="button" class="btn-small spark-btn" onclick="suggestInto('characters','sugSetup4','setupChar1,setupChar2,setupChar3')">🎲 Suggest ideas</button>
+                <div class="meaning-spark" id="sugSetup4"></div>
                 <div class="wizard-error" id="err4"></div>
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
                     <button class="btn-strike" onclick="nextStep(3)" style="flex: 1;">Back</button>
@@ -79,7 +87,7 @@
                 <div class="trait-recap"></div>
                 <input type="text" id="setupMemTheme1" placeholder="Memory 1 Theme (e.g. Mortal Life)" style="margin-bottom: 5px;">
                 <textarea id="setupMemExp1" placeholder="Your life-summary Experience..."></textarea>
-                <button type="button" class="btn-small spark-btn" onclick="sparkInto('sparkSetup1')">🎲 Spark idea</button>
+                <button type="button" class="btn-small spark-btn" onclick="sparkInto('sparkSetup1','setupMemTheme1,setupMemExp1')">🎲 Spark idea</button>
                 <div class="meaning-spark" id="sparkSetup1"></div>
                 <div class="wizard-error" id="err5"></div>
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
@@ -96,7 +104,7 @@
                 <textarea id="setupMemExp2" placeholder="Experience 2 (combine two traits)..." style="margin-bottom: 10px;"></textarea>
                 <input type="text" id="setupMemTheme3" placeholder="Memory 3 Theme" style="margin-bottom: 5px;">
                 <textarea id="setupMemExp3" placeholder="Experience 3 (combine two traits)..."></textarea>
-                <button type="button" class="btn-small spark-btn" onclick="sparkInto('sparkSetup6')">🎲 Spark idea</button>
+                <button type="button" class="btn-small spark-btn" onclick="sparkInto('sparkSetup6','setupMemTheme2,setupMemExp2,setupMemTheme3,setupMemExp3')">🎲 Spark idea</button>
                 <div class="meaning-spark" id="sparkSetup6"></div>
                 <div class="wizard-error" id="err6"></div>
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
@@ -111,7 +119,7 @@
                 <div class="trait-recap"></div>
                 <input type="text" id="setupMemTheme4" placeholder="Memory 4 Theme" style="margin-bottom: 5px;">
                 <textarea id="setupMemExp4" placeholder="Experience 4 (combine two traits)..."></textarea>
-                <button type="button" class="btn-small spark-btn" onclick="sparkInto('sparkSetup7')">🎲 Spark idea</button>
+                <button type="button" class="btn-small spark-btn" onclick="sparkInto('sparkSetup7','setupMemTheme4,setupMemExp4')">🎲 Spark idea</button>
                 <div class="meaning-spark" id="sparkSetup7"></div>
                 <div class="wizard-error" id="err7"></div>
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
@@ -128,7 +136,7 @@
                 <input type="text" id="setupMark" placeholder="The Mark your turning left..." style="margin-bottom: 5px;">
                 <input type="text" id="setupMemTheme5" placeholder="Memory 5 Theme (e.g. The Night I Died)" style="margin-bottom: 5px;">
                 <textarea id="setupMemExp5" placeholder="The Experience of your transformation..."></textarea>
-                <button type="button" class="btn-small spark-btn" onclick="sparkInto('sparkSetup8')">🎲 Spark idea</button>
+                <button type="button" class="btn-small spark-btn" onclick="sparkInto('sparkSetup8','setupSire,setupMark,setupMemTheme5,setupMemExp5')">🎲 Spark idea</button>
                 <div class="meaning-spark" id="sparkSetup8"></div>
                 <div class="wizard-error" id="err8"></div>
                 <div style="display: flex; gap: 10px; margin-top: 15px;">

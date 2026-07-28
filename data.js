@@ -401,3 +401,50 @@ const promptDB = {
         a: "You translate yourself into a higher plane. What does this mean? The game is over."
     }
 };
+// ==========================================
+// SETUP WIZARD SUGGESTION POOLS
+// ==========================================
+// Concrete, ready-to-use examples offered by the 🎲 buttons on setup steps 1–4
+// for players who are stuck for ideas. Not part of the rules — purely a
+// brainstorming aid (the Meaning Oracle covers the Memory steps 5–8). The name
+// pool is deliberately multicultural/multi-era, since a vampire's mortal life
+// could begin anywhere.
+const setupSuggestions = {
+    names: [
+        'Henri, son of Jon', 'Aldith of Wessex', 'Gundar Ironhand', 'Beatrix the Widow',
+        'Rowan Blackmoor', 'Alise of the Loire', 'Cedric Thatcher', 'Mathilde Vance',
+        'Yusuf ibn Karim', 'Layla al-Nasir', 'Farid the Cartographer', 'Zaynab bint Hasan',
+        'Wei Lin, the scholar', 'Chen Bao the ferryman', 'Mei-Hua of Suzhou', 'Sato Ren',
+        'Kwame of the Gold Coast', 'Amara Nwosu', 'Tafari the Herder', 'Nadia Oyelaran',
+        'Dmitri Volkov', 'Katarzyna Zielinska', 'Anaya Deshmukh', 'Ravi the Silk Trader',
+        'Itzel of the Highlands', 'Tupac Quispe', 'Sunniva Haraldsdottir', 'Bran the Drover',
+        'Esperanza Ruiz', 'Giovanni Maranzano'
+    ],
+    skills: [
+        'Blacksmithing', 'Herbalism', 'Spear Fighting', 'Charming', 'Horse Riding',
+        'Reading Latin', 'Sailing', 'Stone Masonry', 'Hunting and Tracking', 'Midwifery',
+        'Bookkeeping', 'Falconry', 'Brewing Ale', 'Fine Needlework', 'Wood Carving',
+        'Haggling', 'Swordplay', 'Reading the Weather', 'Butchery', 'Storytelling',
+        'Cartography', 'Lockpicking', 'Playing the Lute', 'Battlefield Surgery',
+        'Beekeeping', 'Dyeing Cloth', 'Wrestling', 'Calligraphy', 'Net Fishing', 'Praying Aloud'
+    ],
+    resources: [
+        'A fine horse', 'A hidden cave', 'Bag of gold coins', 'Family signet ring',
+        'A small farmstead', 'My father’s sword', 'A fishing boat', 'A wine cellar',
+        'A letter of credit', 'A pack of hounds', 'A crumbling watchtower', 'Chest of silks',
+        'A printing press', 'A vineyard on the hillside', 'My mother’s wedding necklace',
+        'A cart and mule', 'A well-stocked apothecary', 'Deed to a mill', 'A war banner',
+        'A locked reliquary', 'Barrels of salted fish', 'A tenement in the old quarter',
+        'A ledger of debts owed me', 'A hawk and its jesses', 'A forged patent of nobility'
+    ],
+    characters: [
+        'Eliza, my sister', 'Marcus, the local priest', 'Old Hallam, my master smith',
+        'Juno, my childhood friend', 'Sir Aldric, who I served', 'Mira, the healer',
+        'Tomas, my rival in trade', 'My mother, Anneke', 'Bertrand, the tax collector',
+        'Sofia, my betrothed', 'The miller’s boy, Pip', 'Dame Ysolde, my patron',
+        'Halvard, my brother in arms', 'Rosa, the innkeeper', 'Father Emil, my confessor',
+        'Nadia, who I wronged', 'The magistrate, Van Der Berg', 'Kito, my apprentice',
+        'Grandmother Ilse', 'Lucien, the moneylender', 'Anselm, the wandering scholar',
+        'Petra, my neighbour and gossip'
+    ]
+};

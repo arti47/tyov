@@ -153,6 +153,19 @@ body.light-mode .prompt-banner .pb-text { color: #555; }
 }
 body.light-mode .spark-word { background: rgba(0, 0, 0, 0.06); }
 .spark-roll { color: #888; font-size: 0.8em; margin-right: 4px; }
+/* Tappable suggestion chips (setup wizard "stuck for ideas" helpers). */
+button.spark-tap {
+    color: var(--text-color);
+    border: 1px dashed var(--border-color);
+    font-family: inherit;
+    font-size: 1em;
+    cursor: pointer;
+    text-align: left;
+}
+button.spark-tap:hover, button.spark-tap:focus-visible {
+    border-color: var(--accent-color);
+    border-style: solid;
+}
 
 /* ==========================================
    BUTTONS & INPUTS

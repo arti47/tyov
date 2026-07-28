@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const {
-    escapeHtml, getTier, getPromptText, parseMarkdown, rollDice, resolveTraitAction, rollMeaning,
+    escapeHtml, getTier, getPromptText, parseMarkdown, rollDice, resolveTraitAction, rollMeaning, pickSuggestions,
     genId, defaultState, normMem, normalizeState, SAVE_VERSION
 } = require('../logic.js');
 
@@ -170,4 +170,21 @@ test('normalizeState forces version and repairs entities', () => {
     assert.strictEqual(s.characters[0].type, 'Mortal');    // unknown type clamped
     assert.strictEqual(s.characters[1].type, 'Immortal');  // valid type kept
     assert.deepStrictEqual(s.memories[0].experiences, ['x']); // compacted
+});
+
+test('pickSuggestions returns n distinct entries from the pool', () => {
+    const pool = ['a', 'b', 'c', 'd', 'e'];
+    const picks = pickSuggestions(pool, 3, () => 0);   // always index 0 → splice walks the list
+    assert.deepStrictEqual(picks, ['a', 'b', 'c']);
+    const rnd = pickSuggestions(pool, 3);
+    assert.strictEqual(rnd.length, 3);
+    assert.strictEqual(new Set(rnd).size, 3);           // no repeats
+    rnd.forEach((x) => assert.ok(pool.includes(x)));
+});
+
+test('pickSuggestions clamps to the pool size and tolerates empty input', () => {
+    assert.strictEqual(pickSuggestions(['a', 'b'], 5).length, 2);
+    assert.deepStrictEqual(pickSuggestions([], 3), []);
+    assert.deepStrictEqual(pickSuggestions(undefined, 3), []);
+    assert.deepStrictEqual(pickSuggestions(['a'], 1, () => 0.999), ['a']); // rng edge clamp
 });

@@ -1465,8 +1465,10 @@ function memoryBlockHtml(m, name) {
         ? '<button class="btn-small exp-add" onclick="addExperience(\'' + name + '\',\'' + m.id + '\')">+ Experience</button>'
         : '';
     // Meaning-table inspiration (Character-tab Memories only; the Diary is frozen).
+    var expIds = m.experiences.map(function (x, i) { return 'exp-' + m.id + '-' + i; }).join(',');
     var sparkBtn = inDiary ? ''
-        : '<button type="button" class="btn-small spark-btn" onclick="sparkInto(\'spark-' + m.id + '\')">🎲 Spark</button>';
+        : '<button type="button" class="btn-small spark-btn" onclick="sparkInto(\'spark-' + m.id +
+          '\',\'' + expIds + '\')">🎲 Spark</button>';
     var sparkDiv = inDiary ? '' : '<div class="meaning-spark" id="spark-' + m.id + '"></div>';
     var states = [['normal', 'Normal'], ['starred', '⭐ Starred'], ['hazy', '🌫️ Hazy'],
                   ['vast', '🌌 Vast'], ['primal', '🐾 Primal']];
@@ -1703,13 +1705,54 @@ function insertOracle() {
 // Inline "spark" — roll the meaning table 3× and show the words as inspiration
 // (NOT inserted) beside a Memory/Experience field. Used in the setup wizard and
 // on Character-tab Memory blocks.
-function sparkInto(id) {
+// `fieldIds` (optional, comma-separated) makes each word tappable: tapping
+// inserts it into the first empty listed field (else the last-focused one).
+function sparkInto(id, fieldIds) {
     var target = el(id);
     if (!target) return;
     var words = [rollMeaning(meaningTable), rollMeaning(meaningTable), rollMeaning(meaningTable)];
     target.innerHTML = '<span class="spark-label">Spark:</span> ' + words.map(function (r) {
-        return '<span class="spark-word"><span class="spark-roll">' + r.roll + '</span>' + escapeHtml(r.word) + '</span>';
+        var body = '<span class="spark-roll">' + r.roll + '</span>' + escapeHtml(r.word);
+        if (!fieldIds) return '<span class="spark-word">' + body + '</span>';
+        return '<button type="button" class="spark-word spark-tap" onclick="applySuggestion(this, \'' +
+            escapeHtml(fieldIds) + '\')" data-text="' + escapeHtml(r.word) + '">' + body + '</button>';
     }).join(' ');
+}
+
+// Concrete ready-to-use examples for setup steps 1–4 (names / skills /
+// resources / characters). Tapping one drops it into the first empty field of
+// that step. Purely a "stuck for ideas" aid, like the Meaning Oracle.
+function suggestInto(kind, containerId, fieldIds) {
+    var target = el(containerId);
+    if (!target || typeof setupSuggestions === 'undefined') return;
+    var picks = TYOV.pickSuggestions(setupSuggestions[kind], 3);
+    target.innerHTML = '<span class="spark-label">Try:</span> ' + picks.map(function (s) {
+        return '<button type="button" class="spark-word spark-tap" onclick="applySuggestion(this, \'' +
+            escapeHtml(fieldIds) + '\')" data-text="' + escapeHtml(s) + '">' + escapeHtml(s) + '</button>';
+    }).join(' ');
+}
+
+// Insert a tapped suggestion into the first empty field of the step (falling
+// back to the last-focused one, then the last field), then fire `input` so the
+// wizard's autosave/validation see it.
+function applySuggestion(btn, fieldIds) {
+    var text = btn.getAttribute('data-text') || '';
+    var ids = fieldIds.split(',');
+    var fields = ids.map(function (i) { return el(i.trim()); }).filter(Boolean);
+    if (!fields.length) return;
+    var target = null;
+    for (var i = 0; i < fields.length; i++) {
+        if (!fields[i].value.trim()) { target = fields[i]; break; }
+    }
+    if (!target && lastActiveField && fields.indexOf(lastActiveField) !== -1) target = lastActiveField;
+    if (!target) target = fields[fields.length - 1];
+    if (target.tagName === 'TEXTAREA' && target.value.trim()) {
+        insertAtCaret(target, text);
+    } else {
+        target.value = text;
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+        target.focus();
+    }
 }
 
 // ==========================================
