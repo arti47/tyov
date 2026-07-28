@@ -448,3 +448,45 @@ const setupSuggestions = {
         'Petra, my neighbour and gossip'
     ]
 };
+
+// Sentence-starter templates for the Memory steps. Tokens {skill}/{resource}/
+// {character} are substituted with the player's own traits by
+// TYOV.fillTemplate, so a tapped suggestion is immediately usable prose that
+// they can edit. Grouped by the kind of Experience each step asks for:
+// `life` (step 5 summary), `combine` (steps 6–7, two traits), `turning` (step 8).
+const memoryTemplates = {
+    themes: [
+        'Mortal Life', 'The Old Country', 'Hearth and Kin', 'A Debt Unpaid',
+        'The Night I Died', 'Blood and Salt', 'What I Left Behind', 'The Long Road',
+        'Iron and Ash', 'Promises Broken', 'The House of My Father', 'First Hunger'
+    ],
+    life: [
+        'I am {character}’s kin, known for {skill}, and I keep {resource} close.',
+        'Before the change I lived by {skill}; {character} knew me best.',
+        'I was raised among people who valued {skill}. {resource} was all I truly owned.',
+        'My life turned on {resource} and on what {character} asked of me.'
+    ],
+    combine: [
+        '{character} teaches me {skill} in the long evenings; I am clumsy at first.',
+        'I use {skill} to protect {resource} when {character} cannot.',
+        '{character} and I quarrel bitterly over {resource}; I win, and regret it.',
+        'I trade {resource} away to save {character}, and my {skill} is all I have left.',
+        'When {character} falls ill, I turn to {skill}; {resource} pays for the rest.',
+        'I show {character} how {skill} really works, and they never look at me the same.'
+    ],
+    turning: [
+        'They find me while I am busy with {skill}; {character} hears me scream.',
+        'I bargain with them over {resource}, and lose far more than I offered.',
+        'My {skill} cannot save me. The last thing I see is {resource}, far out of reach.',
+        'They take me in the dark. I think only of {character} as I die.'
+    ]
+};
+
+// Marks left by the turning, offered by the setup wizard's "Surprise me".
+setupSuggestions.marks = [
+    'My neck is permanently broken', 'My eyes reflect light like a cat’s',
+    'I cast no reflection', 'My hands are cold as river stones',
+    'A brand of my sire’s sigil over my heart', 'My teeth never stop aching',
+    'I have no scent at all', 'Frost blooms where I sleep',
+    'My voice carries an echo that is not mine', 'The scar of the wound that killed me'
+];

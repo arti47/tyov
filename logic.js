@@ -136,6 +136,38 @@
         return out;
     }
 
+    // Substitute {skill}/{resource}/{character} tokens in a Memory sentence
+    // template with the player's own traits, so a tapped suggestion reads as
+    // usable prose. Each token kind draws one trait for the whole template (so a
+    // sentence naming {character} twice stays about one person). Empty trait
+    // lists fall back to a neutral placeholder rather than leaving the token.
+    var TEMPLATE_FALLBACKS = {
+        skill: 'my old trade',
+        resource: 'what little I owned',
+        character: 'someone I loved'
+    };
+
+    function fillTemplate(template, traits, rng) {
+        rng = rng || Math.random;
+        if (!template) return '';
+        traits = traits || {};
+        var lists = {
+            skill: traits.skills || [],
+            resource: traits.resources || [],
+            character: traits.characters || []
+        };
+        var chosen = {};
+        return template.replace(/\{(skill|resource|character)\}/g, function (_, kind) {
+            if (!(kind in chosen)) {
+                var pool = lists[kind].filter(function (t) { return t && t.trim(); });
+                chosen[kind] = pool.length
+                    ? pool[Math.min(Math.floor(rng() * pool.length), pool.length - 1)].trim()
+                    : TEMPLATE_FALLBACKS[kind];
+            }
+            return chosen[kind];
+        });
+    }
+
     // --- Save-state shape + validation (pure; shared with the app & tests) ----
 
     var SAVE_VERSION = 2;
@@ -235,6 +267,7 @@
         resolveTraitAction: resolveTraitAction,
         rollMeaning: rollMeaning,
         pickSuggestions: pickSuggestions,
+        fillTemplate: fillTemplate,
         genId: genId,
         defaultState: defaultState,
         normMem: normMem,

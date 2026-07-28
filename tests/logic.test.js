@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const {
-    escapeHtml, getTier, getPromptText, parseMarkdown, rollDice, resolveTraitAction, rollMeaning, pickSuggestions,
+    escapeHtml, getTier, getPromptText, parseMarkdown, rollDice, resolveTraitAction, rollMeaning, pickSuggestions, fillTemplate,
     genId, defaultState, normMem, normalizeState, SAVE_VERSION
 } = require('../logic.js');
 
@@ -187,4 +187,18 @@ test('pickSuggestions clamps to the pool size and tolerates empty input', () => 
     assert.deepStrictEqual(pickSuggestions([], 3), []);
     assert.deepStrictEqual(pickSuggestions(undefined, 3), []);
     assert.deepStrictEqual(pickSuggestions(['a'], 1, () => 0.999), ['a']); // rng edge clamp
+});
+
+test('fillTemplate substitutes traits and reuses one pick per token kind', () => {
+    const traits = { skills: ['Sailing'], resources: ['A boat'], characters: ['Mira'] };
+    assert.strictEqual(
+        fillTemplate('{character} teaches me {skill}; {character} keeps {resource}.', traits, () => 0),
+        'Mira teaches me Sailing; Mira keeps A boat.');
+});
+
+test('fillTemplate falls back when a trait list is empty or blank', () => {
+    const out = fillTemplate('{character} and my {skill}', { skills: ['   '], characters: [] });
+    assert.strictEqual(out, 'someone I loved and my my old trade');
+    assert.strictEqual(fillTemplate('', {}), '');
+    assert.strictEqual(fillTemplate('no tokens here', {}), 'no tokens here');
 });

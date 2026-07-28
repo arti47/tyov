@@ -61,17 +61,17 @@ npm run lint      # ESLint (needs `npm install` first; no network = skip)
 | File | Purpose |
 |------|---------|
 | `index.html` | The UI markup only. A global header (title, name, warnings/nudges, autosave indicator) + a sticky one-row **tab bar** (`▶ Play`, `📜 Character`, `📔 Diary`, `📖 Journal`, `⚙ Settings` — icon-only on mobile) over five `.tab-panel` sections, a sticky `#promptBanner` (current prompt, shown on non-Play tabs), the setup wizard, the confirm modal (`#appModal`), and the floating oracle. Loads `logic.js` → `data.js` → `app.js`. No inline CSS. |
-| `styles.css` | All styles (themes/variables, layout, components, `:focus-visible` a11y outlines). Ends with a `@media (max-width: 680px)` block for the responsive/mobile layout; form controls use `min-width: 0` and the body has `overflow-x: hidden` so nothing scrolls sideways on phones. The body padding adds `env(safe-area-inset-*)` (with `viewport-fit=cover` in the `<head>`) so header content clears the iOS notch/status bar. The guided prompt-action buttons stack as a centered caption over a two-equal-width-button row (`.prompt-actions` column + `.prompt-action-btns`). Tappable suggestion chips are `button.spark-tap`. |
-| `logic.js` | **Pure**, DOM-free helpers shared by the app and tests: `escapeHtml`, `getTier`, `getPromptText`, `parseMarkdown`, `rollDice` (RNG injectable), `resolveTraitAction` (Skill/Resource substitution ladder), `rollMeaning` (d100 → meaning-table word), `pickSuggestions` (n distinct setup-wizard example entries), and the save-state helpers `genId`/`defaultState`/`normMem`/`normalizeState` (+`SAVE_VERSION`). Exposed as `window.TYOV` in the browser and `module.exports` in Node. |
+| `styles.css` | All styles (themes/variables, layout, components, `:focus-visible` a11y outlines). Ends with a `@media (max-width: 680px)` block for the responsive/mobile layout; form controls use `min-width: 0` and the body has `overflow-x: hidden` so nothing scrolls sideways on phones. The body padding adds `env(safe-area-inset-*)` (with `viewport-fit=cover` in the `<head>`) so header content clears the iOS notch/status bar. The guided prompt-action buttons stack as a centered caption over a two-equal-width-button row (`.prompt-actions` column + `.prompt-action-btns`). Tappable suggestion chips are `button.spark-tap` (wrapping, since sentence starters hold a whole clause) with a `.spark-dismiss` ✕; `.surprise-btn` is the full-width Surprise me action. |
+| `logic.js` | **Pure**, DOM-free helpers shared by the app and tests: `escapeHtml`, `getTier`, `getPromptText`, `parseMarkdown`, `rollDice` (RNG injectable), `resolveTraitAction` (Skill/Resource substitution ladder), `rollMeaning` (d100 → meaning-table word), `pickSuggestions` (n distinct setup-wizard example entries), `fillTemplate` (substitutes `{skill}`/`{resource}`/`{character}` in a Memory sentence template, one pick per token kind, with fallbacks), and the save-state helpers `genId`/`defaultState`/`normMem`/`normalizeState` (+`SAVE_VERSION`). Exposed as `window.TYOV` in the browser and `module.exports` in Node. |
 | `app.js` | The game engine: the `state` object, render-from-state functions, save/load + v1→v2 migration, full-state undo stack, dice/prompts, traits/memories/diary, triggers, guided prompt actions, nudges, the Meaning Oracle, import/export. |
-| `data.js` | The prompt database: `const promptDB`, keyed `1..80`, each with tiers `a`/`b`/`c` (first/second/third visit). Also `const meaningTable` — the 100-word Meaning Oracle list (1-indexed by a d100 roll) — and `const setupSuggestions` (`names`/`skills`/`resources`/`characters`), the concrete example pools behind the setup wizard's 🎲 helpers. |
+| `data.js` | The prompt database: `const promptDB`, keyed `1..80`, each with tiers `a`/`b`/`c` (first/second/third visit). Also `const meaningTable` — the 100-word Meaning Oracle list (1-indexed by a d100 roll) — and `const setupSuggestions` (`names`/`skills`/`resources`/`characters`), the concrete example pools behind the setup wizard's 🎲 helpers (incl. `marks`) — and `const memoryTemplates` (`themes`/`life`/`combine`/`turning`), the sentence-starter templates behind 💡 Sentence starter and Surprise me. |
 | `assets/dice.wav`, `assets/page.wav` | Bundled, precached sound effects (dice roll, page turn) — local so audio works offline. Generated lightweight WAVs. |
 | `assets/icon-192.png`, `assets/icon-512.png`, `assets/icon-180.png` | PWA / home-screen icons (192 & 512 for the manifest incl. `maskable`; 180 for the iOS `apple-touch-icon`). Generated PNGs (blood-red field, dark moon, white fangs). |
 | `manifest.json` | PWA manifest: name/short_name/description, `start_url`/`scope`/`id` (all relative so it works under a Pages subpath), `standalone`, colors, and PNG icons (`any` + `maskable`). Drives "Add to Home Screen". |
-| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v18`. Precaches assets (incl. `assets/*.wav` and `assets/icon-*.png`), deletes old caches on activate, network-first for navigations + same-origin html/js/css/json (avoids version skew), stale-while-revalidate for other assets. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
+| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v19`. Precaches assets (incl. `assets/*.wav` and `assets/icon-*.png`), deletes old caches on activate, network-first for navigations + same-origin html/js/css/json (avoids version skew), stale-while-revalidate for other assets. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
 | `.github/workflows/pages.yml` | GitHub Actions workflow: on push to `main`, runs `npm test` then deploys the repo root to **GitHub Pages**. Requires Pages Source = "GitHub Actions" (one-time repo setting). |
 | `.github/workflows/ci.yml` | CI workflow: on push to `main` and on PRs, runs `npm ci` → `npm test` → `npm run lint`. |
-| `tests/logic.test.js` | Unit tests for `logic.js` (escaping, tiers, prompt text, markdown, dice, `resolveTraitAction`, `rollMeaning`, `pickSuggestions`, and state normalization: `normalizeState`/`normMem`/`defaultState`). |
+| `tests/logic.test.js` | Unit tests for `logic.js` (escaping, tiers, prompt text, markdown, dice, `resolveTraitAction`, `rollMeaning`, `pickSuggestions`, `fillTemplate`, and state normalization: `normalizeState`/`normMem`/`defaultState`). |
 | `package.json` / `package-lock.json` | Scripts: `test`, `serve`, `lint`. ESLint as the sole devDependency; the lockfile pins it for reproducible CI. |
 | `eslint.config.js` | Flat ESLint config with browser + test globals. |
 | `.gitignore` | Ignores `node_modules/`, editor cruft, and `_qa_*.html` scratch files. |
@@ -135,9 +135,16 @@ or no `version`.
 1. **Setup wizard** (`#setupWizard`, 8 steps) rebuilds the rules-faithful vampire
    creation. Every step has a 🎲 **"stuck for ideas" helper**: steps 1–4 offer
    concrete examples from `setupSuggestions` (`suggestInto`), steps 5–8 roll the
-   Meaning Oracle (`sparkInto`). Both render **tappable chips** (`applySuggestion`)
-   that drop the text into the first empty field of that step (falling back to the
-   last-focused field); textareas with existing text insert at the caret. `gotoStep`/`validateStep` require every field before advancing;
+   Meaning Oracle (`sparkInto`) **and** offer 💡 **Sentence starter**
+   (`templateInto` → `memoryTemplates` + `TYOV.fillTemplate`, which names the
+   player's own traits via `currentSetupTraits`). All render **tappable chips**
+   (`chipHtml`/`chipRowHtml` → `applySuggestion`) that drop the text into the
+   first empty field of that step (falling back to the last-focused field);
+   textareas with existing text insert at the caret. Each chip row carries a ✕
+   (`dismissChips`); tapping the 🎲/💡 button again re-rolls the row in place.
+   **✨ Surprise me** (`surpriseMe`) fills every blank field across all 8 steps
+   from the pools/templates and jumps to step 8 (`gotoStep(8, true)` — the
+   `skipValidate` arg) for review before Begin. `gotoStep`/`validateStep` require every field before advancing;
    `finishSetup` seeds name, 3 Skills, 3 Resources, 3 Mortal Characters, the
    **Immortal sire** (created as an Immortal), a Mark, and **five Memories each
    seeded with one Experience** (life summary, three trait-combining, the
@@ -201,7 +208,8 @@ or no `version`.
    **Meaning spark** (`sparkInto(id, fieldIds?)`): a 🎲 button on setup memory
    steps and each Character-tab Memory block rolls `rollMeaning` ×3 and shows the
    words beside the field; with `fieldIds` each word is a **tappable chip** that
-   inserts via `applySuggestion`. The floating oracle still inserts at the caret.
+   inserts via `applySuggestion`. The Play tab's prompt journal has the same
+   🎲 spark row (`#sparkJournal`). The floating oracle still inserts at the caret.
 8. **Nudges & feedback**: `toast()` shows non-blocking messages; `#saveStatus`
    shows autosave state; dismissable banners nudge old-age deaths (`#ageNudge`)
    and periodic backups (`#backupNudge`). Blocking decisions use the in-app modal
@@ -261,7 +269,7 @@ under that subpath. Every asset the SW precaches must stay same-origin/relative.
 ### Bumping the service worker cache
 If you change any cached asset (`index.html`, `styles.css`, `logic.js`,
 `app.js`, `data.js`, `manifest.json`, `assets/*.wav`, `assets/icon-*.png`), bump
-`CACHE_NAME` in `sw.js` (currently `-v18`). Bumping it is also what makes the
+`CACHE_NAME` in `sw.js` (currently `-v19`). Bumping it is also what makes the
 deployed `sw.js` byte-different, which is what triggers the tap-to-update toast
 for existing installs. The SW also network-first-loads navigations, so updates
 generally land on next load even without a bump — but bump for certainty, and

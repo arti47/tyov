@@ -243,9 +243,11 @@ function validateStep(stepNum) {
 }
 
 // Advance from `fromStep`, validating it first.
-function gotoStep(nextStepNum) {
+// `skipValidate` is used by "Surprise me", which fills every step at once and
+// therefore has nothing to validate on the way past.
+function gotoStep(nextStepNum, skipValidate) {
     var fromStep = nextStepNum - 1;
-    if (!validateStep(fromStep)) return;
+    if (!skipValidate && !validateStep(fromStep)) return;
     nextStep(nextStepNum);
 }
 
@@ -1711,12 +1713,12 @@ function sparkInto(id, fieldIds) {
     var target = el(id);
     if (!target) return;
     var words = [rollMeaning(meaningTable), rollMeaning(meaningTable), rollMeaning(meaningTable)];
-    target.innerHTML = '<span class="spark-label">Spark:</span> ' + words.map(function (r) {
+    var chips = words.map(function (r) {
         var body = '<span class="spark-roll">' + r.roll + '</span>' + escapeHtml(r.word);
         if (!fieldIds) return '<span class="spark-word">' + body + '</span>';
-        return '<button type="button" class="spark-word spark-tap" onclick="applySuggestion(this, \'' +
-            escapeHtml(fieldIds) + '\')" data-text="' + escapeHtml(r.word) + '">' + body + '</button>';
+        return chipHtml(r.word, fieldIds, body);
     }).join(' ');
+    target.innerHTML = chipRowHtml('Spark:', chips, id);
 }
 
 // Concrete ready-to-use examples for setup steps 1–4 (names / skills /
@@ -1726,10 +1728,102 @@ function suggestInto(kind, containerId, fieldIds) {
     var target = el(containerId);
     if (!target || typeof setupSuggestions === 'undefined') return;
     var picks = TYOV.pickSuggestions(setupSuggestions[kind], 3);
-    target.innerHTML = '<span class="spark-label">Try:</span> ' + picks.map(function (s) {
-        return '<button type="button" class="spark-word spark-tap" onclick="applySuggestion(this, \'' +
-            escapeHtml(fieldIds) + '\')" data-text="' + escapeHtml(s) + '">' + escapeHtml(s) + '</button>';
-    }).join(' ');
+    var chips = picks.map(function (s) { return chipHtml(s, fieldIds); }).join(' ');
+    target.innerHTML = chipRowHtml('Try:', chips, containerId);
+}
+
+// Sentence-starter suggestions for the Memory steps: a template from
+// `memoryTemplates[kind]` with the player's own traits substituted in
+// (TYOV.fillTemplate), so the chip inserts usable prose rather than one word.
+// `themeFieldId` (optional) additionally offers a Memory Theme chip.
+function templateInto(kind, containerId, fieldIds, themeFieldId) {
+    var target = el(containerId);
+    if (!target || typeof memoryTemplates === 'undefined') return;
+    var traits = currentSetupTraits();
+    var picks = TYOV.pickSuggestions(memoryTemplates[kind], 2).map(function (t) {
+        return TYOV.fillTemplate(t, traits);
+    });
+    var chips = picks.map(function (s) { return chipHtml(s, fieldIds); }).join(' ');
+    if (themeFieldId) {
+        var theme = TYOV.pickSuggestions(memoryTemplates.themes, 1)[0];
+        if (theme) chips += ' ' + chipHtml(theme, themeFieldId, 'Theme: ' + escapeHtml(theme));
+    }
+    target.innerHTML = chipRowHtml('Try:', chips, containerId);
+}
+
+// The traits the player has entered so far in the wizard, for template
+// substitution. Falls back to saved state once the game is under way.
+function currentSetupTraits() {
+    function vals(ids) {
+        return ids.map(function (i) { return val(i); }).filter(function (v) { return v.trim(); });
+    }
+    var t = {
+        skills: vals(['setupSkill1', 'setupSkill2', 'setupSkill3']),
+        resources: vals(['setupRes1', 'setupRes2', 'setupRes3']),
+        characters: vals(['setupChar1', 'setupChar2', 'setupChar3'])
+    };
+    var sire = val('setupSire');
+    if (sire.trim()) t.characters = t.characters.concat([sire]);
+    if (!t.skills.length && state.skills) {
+        t.skills = state.skills.map(function (s) { return s.text; });
+        t.resources = state.resources.map(function (r) { return r.text; });
+        t.characters = state.characters.map(function (c) { return c.text; });
+    }
+    return t;
+}
+
+function chipHtml(text, fieldIds, labelHtml) {
+    return '<button type="button" class="spark-word spark-tap" onclick="applySuggestion(this, \'' +
+        escapeHtml(fieldIds) + '\')" data-text="' + escapeHtml(text) + '">' +
+        (labelHtml || escapeHtml(text)) + '</button>';
+}
+
+// Chip rows carry a ✕ so a suggestion set can be dismissed once it's served its
+// purpose (tapping 🎲 again simply re-rolls the row in place).
+function chipRowHtml(label, chips, containerId) {
+    return '<span class="spark-label">' + label + '</span> ' + chips +
+        '<button type="button" class="spark-dismiss" aria-label="Dismiss suggestions" onclick="dismissChips(\'' +
+        containerId + '\')">×</button>';
+}
+
+function dismissChips(containerId) {
+    var c = el(containerId);
+    if (c) c.innerHTML = '';
+}
+
+// "Surprise me" — roll a whole vampire from the suggestion pools and templates,
+// then jump to the last step so the player reviews (and edits) before Begin.
+// Only fills blanks, so a partly-written wizard keeps what you already wrote.
+function surpriseMe() {
+    if (typeof setupSuggestions === 'undefined' || typeof memoryTemplates === 'undefined') return;
+    function fill(id, text) {
+        var f = el(id);
+        if (f && !f.value.trim()) { f.value = text; f.dispatchEvent(new Event('input', { bubbles: true })); }
+    }
+    function fillSet(ids, pool) {
+        var picks = TYOV.pickSuggestions(pool, ids.length);
+        ids.forEach(function (id, i) { fill(id, picks[i] || ''); });
+    }
+    fill('setupName', TYOV.pickSuggestions(setupSuggestions.names, 1)[0]);
+    fillSet(['setupSkill1', 'setupSkill2', 'setupSkill3'], setupSuggestions.skills);
+    fillSet(['setupRes1', 'setupRes2', 'setupRes3'], setupSuggestions.resources);
+    fillSet(['setupChar1', 'setupChar2', 'setupChar3'], setupSuggestions.characters);
+    fill('setupSire', TYOV.pickSuggestions(setupSuggestions.names, 1)[0] + ', an ancient immortal');
+    fill('setupMark', TYOV.pickSuggestions(setupSuggestions.marks, 1)[0]);
+
+    // Memories are written after the traits exist, so the templates can name them.
+    var traits = currentSetupTraits();
+    var themes = TYOV.pickSuggestions(memoryTemplates.themes, 5);
+    var combos = TYOV.pickSuggestions(memoryTemplates.combine, 3);
+    [1, 2, 3, 4, 5].forEach(function (n) { fill('setupMemTheme' + n, themes[n - 1] || 'A Memory'); });
+    fill('setupMemExp1', TYOV.fillTemplate(TYOV.pickSuggestions(memoryTemplates.life, 1)[0], traits));
+    fill('setupMemExp2', TYOV.fillTemplate(combos[0], traits));
+    fill('setupMemExp3', TYOV.fillTemplate(combos[1], traits));
+    fill('setupMemExp4', TYOV.fillTemplate(combos[2], traits));
+    fill('setupMemExp5', TYOV.fillTemplate(TYOV.pickSuggestions(memoryTemplates.turning, 1)[0], traits));
+
+    gotoStep(8, true);
+    toast('A vampire has been rolled for you — review and edit, then Begin.', 'info');
 }
 
 // Insert a tapped suggestion into the first empty field of the step (falling
