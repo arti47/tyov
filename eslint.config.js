@@ -24,7 +24,7 @@ const browserGlobals = {
     globalThis: 'readonly',
     promptDB: 'readonly',
     meaningTable: 'readonly',
-    setupSuggestions: 'readonly',
+    settingPacks: 'readonly',
     memoryTemplates: 'readonly',
     TYOV: 'readonly'
 };

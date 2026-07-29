@@ -297,6 +297,7 @@ function finishSetup() {
 }
 
 function showWizard() {
+    resetSettingPack(); // a fresh vampire gets a fresh setting
     el('setupWizard').style.display = 'flex';
     nextStep(1);
 }
@@ -1750,10 +1751,51 @@ function sparkInto(id, fieldIds) {
 // that step. Purely a "stuck for ideas" aid, like the Meaning Oracle.
 function suggestInto(kind, containerId, fieldIds) {
     var target = el(containerId);
-    if (!target || typeof setupSuggestions === 'undefined') return;
-    var picks = TYOV.pickSuggestions(setupSuggestions[kind], 3);
+    var pack = activeSettingPack();
+    if (!target || !pack) return;
+    var picks = TYOV.pickSuggestions(pack[kind], 3).map(traitText);
     var chips = picks.map(function (s) { return chipHtml(s, fieldIds); }).join(' ');
     target.innerHTML = chipRowHtml('Try:', chips, containerId);
+}
+
+// --- Setting packs -------------------------------------------------------
+// Suggestions are grouped into coherent settings (Medieval Europe, the Norse
+// Coast, …) so a rolled vampire doesn't mix a Yoruba sire with an English
+// thatcher. The first helper used in a wizard session LOCKS a pack, and every
+// later chip draws from it, so hand-built vampires stay coherent too.
+var activePack = null;
+
+function activeSettingPack() {
+    if (typeof settingPacks === 'undefined' || !settingPacks.length) return null;
+    if (!activePack) {
+        activePack = settingPacks[Math.floor(Math.random() * settingPacks.length)];
+    }
+    return activePack;
+}
+
+function resetSettingPack() { activePack = null; }
+
+// Pool entries are either tagged objects ({ text, short, name }) or plain
+// strings; the wizard fields always want the display text.
+function traitText(entry) {
+    if (!entry) return '';
+    return typeof entry === 'object' ? (entry.text || '') : String(entry);
+}
+
+// Wizard fields hold plain text, so a trait taken from a pool loses its grammar
+// metadata on the way back out. Look the text up in the active pack to recover
+// the tagged entry (and its hand-authored `short`/`name` forms); anything the
+// player typed themselves falls through as a plain string, which
+// TYOV.traitForms handles heuristically.
+function packEntryFor(text, kind) {
+    var pack = activePack;
+    if (!pack || !kind || !pack[kind]) return text;
+    var t = String(text).trim();
+    for (var i = 0; i < pack[kind].length; i++) {
+        var e = pack[kind][i];
+        if (traitText(e).trim() === t) return e;
+    }
+    return text;
 }
 
 // Sentence-starter suggestions for the Memory steps: a template from
@@ -1777,21 +1819,30 @@ function templateInto(kind, containerId, fieldIds, themeFieldId) {
 
 // The traits the player has entered so far in the wizard, for template
 // substitution. Falls back to saved state once the game is under way.
-function currentSetupTraits() {
-    function vals(ids) {
-        return ids.map(function (i) { return val(i); }).filter(function (v) { return v.trim(); });
+// The traits the player has entered so far, for template substitution. The
+// sire is kept OUT of `characters` — it belongs only to the turning Memory,
+// never to the mortal-life ones — and is exposed as its own `sire` list.
+function currentSetupTraits(includeSire) {
+    function vals(ids, kind) {
+        return ids.map(function (i) { return val(i); })
+            .filter(function (v) { return v.trim(); })
+            .map(function (v) { return packEntryFor(v, kind); });
     }
     var t = {
-        skills: vals(['setupSkill1', 'setupSkill2', 'setupSkill3']),
-        resources: vals(['setupRes1', 'setupRes2', 'setupRes3']),
-        characters: vals(['setupChar1', 'setupChar2', 'setupChar3'])
+        skills: vals(['setupSkill1', 'setupSkill2', 'setupSkill3'], 'skills'),
+        resources: vals(['setupRes1', 'setupRes2', 'setupRes3'], 'resources'),
+        characters: vals(['setupChar1', 'setupChar2', 'setupChar3'], 'characters'),
+        sire: includeSire ? vals(['setupSire'], 'characters') : []
     };
-    var sire = val('setupSire');
-    if (sire.trim()) t.characters = t.characters.concat([sire]);
     if (!t.skills.length && state.skills) {
         t.skills = state.skills.map(function (s) { return s.text; });
         t.resources = state.resources.map(function (r) { return r.text; });
-        t.characters = state.characters.map(function (c) { return c.text; });
+        t.characters = state.characters.filter(function (c) { return c.type !== 'Immortal'; })
+            .map(function (c) { return c.text; });
+        if (includeSire) {
+            t.sire = state.characters.filter(function (c) { return c.type === 'Immortal'; })
+                .map(function (c) { return c.text; });
+        }
     }
     return t;
 }
@@ -1815,39 +1866,92 @@ function dismissChips(containerId) {
     if (c) c.innerHTML = '';
 }
 
-// "Surprise me" — roll a whole vampire from the suggestion pools and templates,
-// then jump to the last step so the player reviews (and edits) before Begin.
-// Only fills blanks, so a partly-written wizard keeps what you already wrote.
+// "Surprise me" — roll a whole vampire from ONE setting pack, then jump to the
+// last step so the player reviews (and edits) before Begin. Only fills blanks,
+// so a partly-written wizard keeps what you already wrote.
+//
+// Coherence rules baked in here:
+//   - every trait comes from the same pack (no era/culture mixing)
+//   - the sire is drawn from the pack too, and never appears in the four
+//     mortal-life Memories — only in the turning Memory
+//   - the three combining Memories use DISTINCT templates and spread across
+//     the traits instead of naming the same resource three times
+//   - Memory themes are drawn from the theme group for that step
 function surpriseMe() {
-    if (typeof setupSuggestions === 'undefined' || typeof memoryTemplates === 'undefined') return;
+    var pack = activeSettingPack();
+    if (!pack || typeof memoryTemplates === 'undefined') return;
+
     function fill(id, text) {
         var f = el(id);
-        if (f && !f.value.trim()) { f.value = text; f.dispatchEvent(new Event('input', { bubbles: true })); }
+        if (f && !f.value.trim() && text) {
+            f.value = text;
+            f.dispatchEvent(new Event('input', { bubbles: true }));
+        }
     }
     function fillSet(ids, pool) {
         var picks = TYOV.pickSuggestions(pool, ids.length);
-        ids.forEach(function (id, i) { fill(id, picks[i] || ''); });
+        ids.forEach(function (id, i) { fill(id, traitText(picks[i])); });
     }
-    fill('setupName', TYOV.pickSuggestions(setupSuggestions.names, 1)[0]);
-    fillSet(['setupSkill1', 'setupSkill2', 'setupSkill3'], setupSuggestions.skills);
-    fillSet(['setupRes1', 'setupRes2', 'setupRes3'], setupSuggestions.resources);
-    fillSet(['setupChar1', 'setupChar2', 'setupChar3'], setupSuggestions.characters);
-    fill('setupSire', TYOV.pickSuggestions(setupSuggestions.names, 1)[0] + ', an ancient immortal');
-    fill('setupMark', TYOV.pickSuggestions(setupSuggestions.marks, 1)[0]);
 
-    // Memories are written after the traits exist, so the templates can name them.
-    var traits = currentSetupTraits();
-    var themes = TYOV.pickSuggestions(memoryTemplates.themes, 5);
+    fill('setupName', traitText(TYOV.pickSuggestions(pack.names, 1)[0]));
+    fillSet(['setupSkill1', 'setupSkill2', 'setupSkill3'], pack.skills);
+    fillSet(['setupRes1', 'setupRes2', 'setupRes3'], pack.resources);
+    fillSet(['setupChar1', 'setupChar2', 'setupChar3'], pack.characters);
+    // Draw the sire from the same pack, and make sure it isn't the player's
+    // own mortal name.
+    var sireName = TYOV.pickSuggestions(pack.names, 2)
+        .map(traitText)
+        .filter(function (n) { return n !== val('setupName'); })[0];
+    fill('setupSire', sireName + ', an ancient immortal');
+    fill('setupMark', traitText(TYOV.pickSuggestions(pack.marks, 1)[0]));
+
+    // Memories are written after the traits exist, so the templates name them.
+    var mortalTraits = currentSetupTraits(false);
+    var turningTraits = currentSetupTraits(true);
+    var lifeTheme = TYOV.pickSuggestions(memoryTemplates.themes.life, 1)[0];
+    var comboThemes = TYOV.pickSuggestions(memoryTemplates.themes.combine, 3);
+    var turnTheme = TYOV.pickSuggestions(memoryTemplates.themes.turning, 1)[0];
     var combos = TYOV.pickSuggestions(memoryTemplates.combine, 3);
-    [1, 2, 3, 4, 5].forEach(function (n) { fill('setupMemTheme' + n, themes[n - 1] || 'A Memory'); });
-    fill('setupMemExp1', TYOV.fillTemplate(TYOV.pickSuggestions(memoryTemplates.life, 1)[0], traits));
-    fill('setupMemExp2', TYOV.fillTemplate(combos[0], traits));
-    fill('setupMemExp3', TYOV.fillTemplate(combos[1], traits));
-    fill('setupMemExp4', TYOV.fillTemplate(combos[2], traits));
-    fill('setupMemExp5', TYOV.fillTemplate(TYOV.pickSuggestions(memoryTemplates.turning, 1)[0], traits));
+
+    fill('setupMemTheme1', lifeTheme);
+    fill('setupMemTheme2', comboThemes[0]);
+    fill('setupMemTheme3', comboThemes[1]);
+    fill('setupMemTheme4', comboThemes[2]);
+    fill('setupMemTheme5', turnTheme);
+
+    // `first` makes fillTemplate take the head of each list, so rotating the
+    // lists below is what actually spreads the Memories across the traits.
+    var first = function () { return 0; };
+    fill('setupMemExp1', TYOV.fillTemplate(
+        TYOV.pickSuggestions(memoryTemplates.life, 1)[0], mortalTraits, first));
+    // Rotate the trait lists between the combining Memories so each one leans
+    // on different Skills/Resources/Characters.
+    [combos[0], combos[1], combos[2]].forEach(function (tpl, i) {
+        fill('setupMemExp' + (i + 2),
+            TYOV.fillTemplate(tpl, rotateTraits(mortalTraits, i + 1), first));
+    });
+    fill('setupMemExp5', TYOV.fillTemplate(
+        TYOV.pickSuggestions(memoryTemplates.turning, 1)[0],
+        rotateTraits(turningTraits, 1), first));
 
     gotoStep(8, true);
-    toast('A vampire has been rolled for you — review and edit, then Begin.', 'info');
+    toast('Rolled a vampire from ' + pack.label + ' — review and edit, then Begin.', 'info');
+}
+
+// Rotate each trait list by `n` so successive Memories draw different traits
+// from the same small pools.
+function rotateTraits(traits, n) {
+    function rot(list) {
+        if (!list || list.length < 2) return list || [];
+        var k = n % list.length;
+        return list.slice(k).concat(list.slice(0, k));
+    }
+    return {
+        skills: rot(traits.skills),
+        resources: rot(traits.resources),
+        characters: rot(traits.characters),
+        sire: traits.sire
+    };
 }
 
 // Insert a tapped suggestion into the first empty field of the step (falling

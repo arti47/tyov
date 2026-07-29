@@ -409,84 +409,309 @@ const promptDB = {
 // brainstorming aid (the Meaning Oracle covers the Memory steps 5–8). The name
 // pool is deliberately multicultural/multi-era, since a vampire's mortal life
 // could begin anywhere.
-const setupSuggestions = {
-    names: [
-        'Henri, son of Jon', 'Aldith of Wessex', 'Gundar Ironhand', 'Beatrix the Widow',
-        'Rowan Blackmoor', 'Alise of the Loire', 'Cedric Thatcher', 'Mathilde Vance',
-        'Yusuf ibn Karim', 'Layla al-Nasir', 'Farid the Cartographer', 'Zaynab bint Hasan',
-        'Wei Lin, the scholar', 'Chen Bao the ferryman', 'Mei-Hua of Suzhou', 'Sato Ren',
-        'Kwame of the Gold Coast', 'Amara Nwosu', 'Tafari the Herder', 'Nadia Oyelaran',
-        'Dmitri Volkov', 'Katarzyna Zielinska', 'Anaya Deshmukh', 'Ravi the Silk Trader',
-        'Itzel of the Highlands', 'Tupac Quispe', 'Sunniva Haraldsdottir', 'Bran the Drover',
-        'Esperanza Ruiz', 'Giovanni Maranzano'
-    ],
+// ---------------------------------------------------------------------------
+// SETTING PACKS — the "stuck for ideas" pools behind the setup wizard.
+//
+// Entries are grouped into coherent settings so a rolled vampire doesn't mix a
+// Yoruba sire with an English thatcher and a printing press. Surprise me rolls
+// ONE pack and draws everything from it; the per-step 🎲 chips then lock to
+// that pack for the rest of setup (see `activePack` in app.js).
+//
+// Skills / resources / characters carry grammar metadata so templates can
+// substitute them mid-sentence without breaking:
+//   skills     { text, short }  short = lower-case form usable after "my"/"by"
+//   resources  { text, short }  short = definite short form ("the hawk")
+//   characters { text, name }   name  = bare name, no appositive clause
+// Plain strings still work (player-typed traits); TYOV.traitForms derives the
+// missing forms heuristically.
+const settingPacks = [
+{
+    id: 'medieval-europe',
+    label: 'Medieval Europe',
+    names: ['Henri, son of Jon', 'Aldith of Wessex', 'Beatrix the Widow', 'Rowan Blackmoor',
+            'Alise of the Loire', 'Cedric Thatcher', 'Mathilde Vance', 'Father Emil Vitrys'],
     skills: [
-        'Blacksmithing', 'Herbalism', 'Spear Fighting', 'Charming', 'Horse Riding',
-        'Reading Latin', 'Sailing', 'Stone Masonry', 'Hunting and Tracking', 'Midwifery',
-        'Bookkeeping', 'Falconry', 'Brewing Ale', 'Fine Needlework', 'Wood Carving',
-        'Haggling', 'Swordplay', 'Reading the Weather', 'Butchery', 'Storytelling',
-        'Cartography', 'Lockpicking', 'Playing the Lute', 'Battlefield Surgery',
-        'Beekeeping', 'Dyeing Cloth', 'Wrestling', 'Calligraphy', 'Net Fishing', 'Praying Aloud'
+        { text: 'Stone Masonry', short: 'stone masonry' },
+        { text: 'Reading Latin', short: 'reading Latin' },
+        { text: 'Falconry', short: 'falconry' },
+        { text: 'Beekeeping', short: 'beekeeping' },
+        { text: 'Swordplay', short: 'swordplay' },
+        { text: 'Brewing Ale', short: 'brewing ale' },
+        { text: 'Haggling', short: 'haggling' },
+        { text: 'Herb Lore', short: 'herb lore' }
     ],
     resources: [
-        'A fine horse', 'A hidden cave', 'Bag of gold coins', 'Family signet ring',
-        'A small farmstead', 'My father’s sword', 'A fishing boat', 'A wine cellar',
-        'A letter of credit', 'A pack of hounds', 'A crumbling watchtower', 'Chest of silks',
-        'A printing press', 'A vineyard on the hillside', 'My mother’s wedding necklace',
-        'A cart and mule', 'A well-stocked apothecary', 'Deed to a mill', 'A war banner',
-        'A locked reliquary', 'Barrels of salted fish', 'A tenement in the old quarter',
-        'A ledger of debts owed me', 'A hawk and its jesses', 'A forged patent of nobility'
+        { text: 'A hawk and its jesses', short: 'the hawk' },
+        { text: 'A vineyard on the hillside', short: 'the vineyard' },
+        { text: 'Deed to a mill', short: 'the mill' },
+        { text: 'My father’s sword', short: 'my father’s sword' },
+        { text: 'A hidden cellar beneath the abbey', short: 'the hidden cellar' },
+        { text: 'A purse of clipped silver', short: 'the silver' },
+        { text: 'A forged patent of nobility', short: 'the forged patent' },
+        { text: 'A mule and a cart', short: 'the cart' }
     ],
     characters: [
-        'Eliza, my sister', 'Marcus, the local priest', 'Old Hallam, my master smith',
-        'Juno, my childhood friend', 'Sir Aldric, who I served', 'Mira, the healer',
-        'Tomas, my rival in trade', 'My mother, Anneke', 'Bertrand, the tax collector',
-        'Sofia, my betrothed', 'The miller’s boy, Pip', 'Dame Ysolde, my patron',
-        'Halvard, my brother in arms', 'Rosa, the innkeeper', 'Father Emil, my confessor',
-        'Nadia, who I wronged', 'The magistrate, Van Der Berg', 'Kito, my apprentice',
-        'Grandmother Ilse', 'Lucien, the moneylender', 'Anselm, the wandering scholar',
-        'Petra, my neighbour and gossip'
-    ]
-};
-
-// Sentence-starter templates for the Memory steps. Tokens {skill}/{resource}/
-// {character} are substituted with the player's own traits by
-// TYOV.fillTemplate, so a tapped suggestion is immediately usable prose that
-// they can edit. Grouped by the kind of Experience each step asks for:
-// `life` (step 5 summary), `combine` (steps 6–7, two traits), `turning` (step 8).
-const memoryTemplates = {
-    themes: [
-        'Mortal Life', 'The Old Country', 'Hearth and Kin', 'A Debt Unpaid',
-        'The Night I Died', 'Blood and Salt', 'What I Left Behind', 'The Long Road',
-        'Iron and Ash', 'Promises Broken', 'The House of My Father', 'First Hunger'
+        { text: 'Old Hallam, my master smith', name: 'Old Hallam' },
+        { text: 'Eliza, my sister', name: 'Eliza' },
+        { text: 'Father Emil, my confessor', name: 'Father Emil' },
+        { text: 'Bertrand, the tax collector', name: 'Bertrand' },
+        { text: 'Rosa, the innkeeper', name: 'Rosa' },
+        { text: 'Sofia, my betrothed', name: 'Sofia' },
+        { text: 'The miller’s boy, Pip', name: 'Pip' },
+        { text: 'Dame Ysolt, who I wronged', name: 'Dame Ysolt' }
     ],
+    marks: ['My neck is permanently broken', 'I cast no reflection',
+            'My hands are cold as river stones', 'A brand of my sire’s sigil over my heart',
+            'My eyes catch light like a cat’s', 'Frost blooms where I sleep',
+            'The wound that killed me never closed', 'Church bells set my teeth aching']
+},
+{
+    id: 'norse-coast',
+    label: 'The Norse Coast',
+    names: ['Gundar Ironhand', 'Sigrid Thorsdottir', 'Halvard the Quiet', 'Ase of Bjornfjord',
+            'Ketil Longshanks', 'Ingrith Salt-Hair', 'Ragnvald Crow', 'Thora Netmender'],
+    skills: [
+        { text: 'Sailing', short: 'sailing' },
+        { text: 'Net Fishing', short: 'net fishing' },
+        { text: 'Reading the Weather', short: 'reading the weather' },
+        { text: 'Shipbuilding', short: 'shipbuilding' },
+        { text: 'Axe Fighting', short: 'axe fighting' },
+        { text: 'Rune Carving', short: 'rune carving' },
+        { text: 'Whale Hunting', short: 'whale hunting' },
+        { text: 'Saga Telling', short: 'saga telling' }
+    ],
+    resources: [
+        { text: 'A fishing boat', short: 'the boat' },
+        { text: 'Barrels of salted fish', short: 'the salted fish' },
+        { text: 'A longhouse above the fjord', short: 'the longhouse' },
+        { text: 'An arm-ring of twisted silver', short: 'the arm-ring' },
+        { text: 'A whetstone from my grandfather', short: 'the whetstone' },
+        { text: 'A sea-chest of foreign coins', short: 'the sea-chest' },
+        { text: 'A goat herd on the headland', short: 'the goats' },
+        { text: 'A carved prow, unfinished', short: 'the carved prow' }
+    ],
+    characters: [
+        { text: 'Bjarke, my oar-mate', name: 'Bjarke' },
+        { text: 'Grandmother Ilse', name: 'Grandmother Ilse' },
+        { text: 'Astrid, my half-sister', name: 'Astrid' },
+        { text: 'Old Sten, who taught me the tides', name: 'Old Sten' },
+        { text: 'Yrsa, the völva', name: 'Yrsa' },
+        { text: 'Leif, who I left behind', name: 'Leif' },
+        { text: 'Torgny, my debtor', name: 'Torgny' },
+        { text: 'Hilde, the smith’s widow', name: 'Hilde' }
+    ],
+    marks: ['Salt water weeps from my eyes', 'My skin is grey as driftwood',
+            'I cast no shadow at noon', 'A rope-burn ring around my throat',
+            'Gulls fall silent when I pass', 'My breath frosts even in summer',
+            'Barnacle scars along my ribs', 'I cannot cross running water unaided']
+},
+{
+    id: 'silk-road',
+    label: 'The Silk Road',
+    names: ['Farid al-Naddaf', 'Zarrin of Merv', 'Yusuf ibn Sahl', 'Golnar the Cartographer',
+            'Timur Bekh', 'Roshanak of Balkh', 'Anwar Dast', 'Parisa Khatun'],
+    skills: [
+        { text: 'Cartography', short: 'cartography' },
+        { text: 'Camel Driving', short: 'camel driving' },
+        { text: 'Haggling in Six Tongues', short: 'haggling in six tongues' },
+        { text: 'Astronomy', short: 'astronomy' },
+        { text: 'Dyeing Cloth', short: 'dyeing cloth' },
+        { text: 'Poisons and Antidotes', short: 'poisons and antidotes' },
+        { text: 'Calligraphy', short: 'calligraphy' },
+        { text: 'Desert Navigation', short: 'desert navigation' }
+    ],
+    resources: [
+        { text: 'A caravan of twelve camels', short: 'the caravan' },
+        { text: 'A bolt of imperial silk', short: 'the bolt of silk' },
+        { text: 'A brass astrolabe', short: 'the astrolabe' },
+        { text: 'A letter of credit from Samarkand', short: 'the letter of credit' },
+        { text: 'A caravanserai at the oasis', short: 'the caravanserai' },
+        { text: 'A locked chest of spices', short: 'the spice chest' },
+        { text: 'Maps no one else possesses', short: 'the maps' },
+        { text: 'A debt owed by a prince', short: 'the prince’s debt' }
+    ],
+    characters: [
+        { text: 'Lucien, the moneylender', name: 'Lucien' },
+        { text: 'Sahar, my caravan guide', name: 'Sahar' },
+        { text: 'Master Idris, my calligraphy tutor', name: 'Master Idris' },
+        { text: 'Nadia, who I wronged', name: 'Nadia' },
+        { text: 'Bahram, the garrison captain', name: 'Bahram' },
+        { text: 'Shirin, my wife', name: 'Shirin' },
+        { text: 'The boy Kito, my apprentice', name: 'Kito' },
+        { text: 'Ustad Rahim, who bought my silence', name: 'Ustad Rahim' }
+    ],
+    marks: ['Sand pours from my mouth when I speak too long', 'My shadow points the wrong way',
+            'No mirror will hold my face', 'The sun blisters me in moments',
+            'My fingertips are ink-black and will not wash', 'I leave no footprints in dust',
+            'A scar shaped like a caravan route', 'Camels scream when I approach']
+},
+{
+    id: 'sahel',
+    label: 'The West African Sahel',
+    names: ['Amara Nwosu', 'Kofi Adjei', 'Nadia Oyelaran', 'Salif Traoré',
+            'Aminata Diallo', 'Bakary Cissé', 'Yaa Boateng', 'Ibrahim Sankara'],
+    skills: [
+        { text: 'Gold Assaying', short: 'gold assaying' },
+        { text: 'Griot Storytelling', short: 'griot storytelling' },
+        { text: 'Horsemanship', short: 'horsemanship' },
+        { text: 'Salt Trading', short: 'salt trading' },
+        { text: 'Ironworking', short: 'ironworking' },
+        { text: 'Reading the Stars', short: 'reading the stars' },
+        { text: 'Weaving Kente', short: 'weaving kente' },
+        { text: 'Bow Hunting', short: 'bow hunting' }
+    ],
+    resources: [
+        { text: 'A satchel of gold dust', short: 'the gold dust' },
+        { text: 'Blocks of rock salt', short: 'the rock salt' },
+        { text: 'A stable of desert horses', short: 'the horses' },
+        { text: 'A compound behind the mosque', short: 'the compound' },
+        { text: 'A library of borrowed manuscripts', short: 'the manuscripts' },
+        { text: 'My mother’s brass anklets', short: 'my mother’s anklets' },
+        { text: 'A well on the caravan road', short: 'the well' },
+        { text: 'A drum that summons the village', short: 'the drum' }
+    ],
+    characters: [
+        { text: 'Fatou, my elder sister', name: 'Fatou' },
+        { text: 'Old Mansa, the griot', name: 'Old Mansa' },
+        { text: 'Chike, my rival trader', name: 'Chike' },
+        { text: 'Ndeye, my betrothed', name: 'Ndeye' },
+        { text: 'The imam Sulayman', name: 'Sulayman' },
+        { text: 'Kwame, who I wronged', name: 'Kwame' },
+        { text: 'Binta, the herbalist', name: 'Binta' },
+        { text: 'My uncle Modibo, the caravan master', name: 'Modibo' }
+    ],
+    marks: ['My voice carries an echo that is not mine', 'I have no scent at all',
+            'My palms are cold and dry as clay', 'Drums fall out of rhythm near me',
+            'The scar of the wound that killed me', 'Dogs will not stay in my presence',
+            'My reflection lags behind me', 'Fires gutter low when I enter']
+},
+{
+    id: 'imperial-china',
+    label: 'Imperial China',
+    names: ['Li Wenshu', 'Xu Baozhen', 'Chen Ruilin', 'Wang Jiao',
+            'Song Yilan', 'Zhao Mingde', 'Gu Peiyu', 'Han Zhiyuan'],
+    skills: [
+        { text: 'Calligraphy', short: 'calligraphy' },
+        { text: 'Silk Farming', short: 'silk farming' },
+        { text: 'The Imperial Examinations', short: 'examination study' },
+        { text: 'Acupuncture', short: 'acupuncture' },
+        { text: 'Porcelain Firing', short: 'porcelain firing' },
+        { text: 'Spear Drill', short: 'spear drill' },
+        { text: 'Bookkeeping', short: 'bookkeeping' },
+        { text: 'Reading Omens', short: 'reading omens' }
+    ],
+    resources: [
+        { text: 'A mulberry orchard', short: 'the orchard' },
+        { text: 'A kiln outside the city wall', short: 'the kiln' },
+        { text: 'A minor magistrate’s seal', short: 'the seal' },
+        { text: 'A courtyard house in the capital', short: 'the courtyard house' },
+        { text: 'A crate of green-glazed porcelain', short: 'the porcelain' },
+        { text: 'My grandfather’s medical texts', short: 'the medical texts' },
+        { text: 'A moneylender’s ledger', short: 'the ledger' },
+        { text: 'A jade seal of office', short: 'the jade seal' }
+    ],
+    characters: [
+        { text: 'Auntie Mei, who raised me', name: 'Auntie Mei' },
+        { text: 'Magistrate Cao, my patron', name: 'Magistrate Cao' },
+        { text: 'Xiaolan, my younger brother', name: 'Xiaolan' },
+        { text: 'Master Deng, my calligraphy tutor', name: 'Master Deng' },
+        { text: 'Widow Shen, the silk broker', name: 'Widow Shen' },
+        { text: 'Jun, who I wronged', name: 'Jun' },
+        { text: 'The soldier Tie, my friend', name: 'Tie' },
+        { text: 'Yueying, my betrothed', name: 'Yueying' }
+    ],
+    marks: ['My reflection shows me as I died', 'Ink runs whenever I write',
+            'I cast no shadow by lamplight', 'My fingernails grow back black',
+            'Incense will not burn in my hands', 'A cold wind follows me indoors',
+            'The bruise at my throat never fades', 'Cats flee the room I enter']
+},
+{
+    id: 'mesoamerica',
+    label: 'Mesoamerica',
+    names: ['Itzel Ka’an', 'Balam Tun', 'Xochitl Nahui', 'Cuauhtli Ozomatli',
+            'Yaxche Ek', 'Citlali Tezca', 'Ahau Kan', 'Malinalli Quiauh'],
+    skills: [
+        { text: 'Reading the Codices', short: 'reading the codices' },
+        { text: 'Featherwork', short: 'featherwork' },
+        { text: 'Maize Farming', short: 'maize farming' },
+        { text: 'Obsidian Knapping', short: 'obsidian knapping' },
+        { text: 'Ball Court Play', short: 'ball court play' },
+        { text: 'Star Reckoning', short: 'star reckoning' },
+        { text: 'Cacao Trading', short: 'cacao trading' },
+        { text: 'Temple Masonry', short: 'temple masonry' }
+    ],
+    resources: [
+        { text: 'A sack of cacao beans', short: 'the cacao' },
+        { text: 'A quetzal-feather headdress', short: 'the headdress' },
+        { text: 'A terraced milpa above the town', short: 'the milpa' },
+        { text: 'A cache of obsidian blades', short: 'the obsidian blades' },
+        { text: 'A painted codex of my lineage', short: 'the codex' },
+        { text: 'A cenote no one else knows', short: 'the cenote' },
+        { text: 'A jade ear-flare from my mother', short: 'the jade ear-flare' },
+        { text: 'A canoe and its trade route', short: 'the canoe' }
+    ],
+    characters: [
+        { text: 'Ixchel, my mother', name: 'Ixchel' },
+        { text: 'The priest Kanek', name: 'Kanek' },
+        { text: 'Tlaloc, my ball-court rival', name: 'Tlaloc' },
+        { text: 'Nicte, my betrothed', name: 'Nicte' },
+        { text: 'Old Chan, the featherworker', name: 'Old Chan' },
+        { text: 'Zuma, who I wronged', name: 'Zuma' },
+        { text: 'My uncle Pakal, the trader', name: 'Pakal' },
+        { text: 'Ek Balam, the war captain', name: 'Ek Balam' }
+    ],
+    marks: ['My blood will not clot', 'Obsidian dulls at my touch',
+            'I cast no reflection in still water', 'The gash across my chest never heals',
+            'Copal smoke bends away from me', 'My teeth are too many and too sharp',
+            'Birds go silent overhead', 'My skin is cold as cave stone']
+}
+];
+
+// Sentence-starter templates for the Memory steps, grouped by the kind of
+// Experience each step asks for: `life` (step 5 summary), `combine` (steps 6–7,
+// two traits), `turning` (step 8, names the sire). Themes are grouped the same
+// way so "The Night I Died" can't land on a beekeeping memory.
+//
+// Tokens are resolved by TYOV.fillTemplate:
+//   {skill} {resource} {character}   short mid-sentence forms
+//   {Skill} {Resource} {Character}   capitalised (sentence-initial)
+//   {character2}                     a SECOND, distinct character
+//   {sire}                           the immortal who turned you (turning only)
+// Templates are written so no token ever needs verb agreement.
+const memoryTemplates = {
+    themes: {
+        life: ['Mortal Life', 'The House of My Father', 'Hearth and Kin', 'The Old Country',
+               'Before the Cold', 'What I Was'],
+        combine: ['A Debt Unpaid', 'Iron and Ash', 'Promises Broken', 'The Long Road',
+                  'What I Left Behind', 'Small Cruelties', 'Ties That Held', 'The Quarrel'],
+        turning: ['The Night I Died', 'First Hunger', 'Blood and Salt', 'The Cold Gift',
+                  'How I Ended', 'The Last Warm Night']
+    },
     life: [
-        'I am {character}’s kin, known for {skill}, and I keep {resource} close.',
-        'Before the change I lived by {skill}; {character} knew me best.',
-        'I was raised among people who valued {skill}. {resource} was all I truly owned.',
-        'My life turned on {resource} and on what {character} asked of me.'
+        'I am {character}’s kin. I live by {skill}, and I keep {resource} close.',
+        'Before the change I lived by {skill}. {Character} knew me best of anyone.',
+        'I was raised among people who valued {skill}. {Resource} was all I truly owned.',
+        'My whole life turned on {resource}, and on what {character} asked of me.',
+        'I am known in my town for {skill}. {Character} is the one who taught me.',
+        'I keep {resource} hidden, practise {skill} in secret, and tell {character} nothing.'
     ],
     combine: [
-        '{character} teaches me {skill} in the long evenings; I am clumsy at first.',
-        'I use {skill} to protect {resource} when {character} cannot.',
-        '{character} and I quarrel bitterly over {resource}; I win, and regret it.',
-        'I trade {resource} away to save {character}, and my {skill} is all I have left.',
-        'When {character} falls ill, I turn to {skill}; {resource} pays for the rest.',
-        'I show {character} how {skill} really works, and they never look at me the same.'
+        '{Character} teaches me {skill} through the long evenings. I am clumsy at first.',
+        'I use {skill} to guard {resource} on the night {character} cannot.',
+        '{Character} and I quarrel bitterly over {resource}. I win, and I regret it.',
+        'I trade {resource} away to save {character}, and afterwards only {skill} is left to me.',
+        'When {character} falls ill, I sell {resource} and turn to {skill} to pay for the rest.',
+        'I show {character} how {skill} truly works, and afterwards they never look at me the same.',
+        '{Character} asks me to use {skill} against {character2}. I agree, for the price of {resource}.',
+        'I lose {resource} in a wager with {character}, and win it back by {skill}.',
+        'The winter {character2} dies, {character} and I keep the household alive by {skill}.'
     ],
     turning: [
-        'They find me while I am busy with {skill}; {character} hears me scream.',
-        'I bargain with them over {resource}, and lose far more than I offered.',
-        'My {skill} cannot save me. The last thing I see is {resource}, far out of reach.',
-        'They take me in the dark. I think only of {character} as I die.'
+        '{Sire} finds me while I am busy with {skill}. {Character} hears me scream and comes too late.',
+        'I bargain with {sire} over {resource}, and lose far more than I ever offered.',
+        'My skill at {skill} cannot save me from {sire}. The last thing I see is {resource}, far out of reach.',
+        '{Sire} takes me in the dark, at the turning of the year. I think only of {character} as I die.',
+        'I let {sire} into the house myself, because of {resource}. {Character} never learns why.',
+        '{Sire} has watched me since the day I first showed my talent for {skill} in public.'
     ]
 };
-
-// Marks left by the turning, offered by the setup wizard's "Surprise me".
-setupSuggestions.marks = [
-    'My neck is permanently broken', 'My eyes reflect light like a cat’s',
-    'I cast no reflection', 'My hands are cold as river stones',
-    'A brand of my sire’s sigil over my heart', 'My teeth never stop aching',
-    'I have no scent at all', 'Frost blooms where I sleep',
-    'My voice carries an echo that is not mine', 'The scar of the wound that killed me'
-];

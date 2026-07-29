@@ -136,36 +136,119 @@
         return out;
     }
 
-    // Substitute {skill}/{resource}/{character} tokens in a Memory sentence
-    // template with the player's own traits, so a tapped suggestion reads as
-    // usable prose. Each token kind draws one trait for the whole template (so a
-    // sentence naming {character} twice stays about one person). Empty trait
-    // lists fall back to a neutral placeholder rather than leaving the token.
+    // Normalise a trait entry (tagged pool object OR a plain player-typed
+    // string) to the forms templates need:
+    //   full  — as shown in the trait lists ("Old Hallam, my master smith")
+    //   short — mid-sentence form ("old Hallam" / "the hawk" / "beekeeping")
+    //   name  — bare name for Characters ("Old Hallam")
+    // Tagged entries supply `short`/`name`; plain strings fall back to
+    // heuristics: drop an appositive after the first comma, and lower-case a
+    // leading article so it reads inside a sentence.
+    var LEADING_ARTICLE = /^(a|an|the|my|his|her|their|our)\s+/i;
+
+    function traitForms(entry, kind) {
+        if (entry === null || entry === undefined) return null;
+        if (typeof entry === 'object') {
+            var full = (entry.text || '').trim();
+            if (!full) return null;
+            return {
+                full: full,
+                short: (entry.short || deriveShort(full, kind)).trim(),
+                name: (entry.name || deriveName(full)).trim()
+            };
+        }
+        var t = String(entry).trim();
+        if (!t) return null;
+        return { full: t, short: deriveShort(t, kind), name: deriveName(t) };
+    }
+
+    // "Old Hallam, my master smith" -> "Old Hallam"
+    function deriveName(text) {
+        var cut = text.split(',')[0].trim();
+        return cut || text;
+    }
+
+    // Make a trait readable mid-sentence. Characters keep their name; other
+    // traits keep a leading article but lower-cased ("A hawk" -> "a hawk"),
+    // and an un-articled trait is lower-cased unless it looks like a proper
+    // noun (already capitalised beyond the first word, e.g. "Reading Latin").
+    function deriveShort(text, kind) {
+        if (kind === 'character') return deriveName(text);
+        var t = text.trim();
+        if (LEADING_ARTICLE.test(t)) {
+            return t.charAt(0).toLowerCase() + t.slice(1);
+        }
+        var words = t.split(/\s+/);
+        var hasInnerCaps = words.slice(1).some(function (w) { return /^[A-Z]/.test(w); });
+        if (hasInnerCaps) return t.charAt(0).toLowerCase() + t.slice(1);
+        return t.toLowerCase();
+    }
+
+    function capitalise(s) {
+        return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+    }
+
+    // Substitute {skill}/{resource}/{character}/{sire} tokens in a Memory
+    // sentence template with the player's own traits, so a tapped suggestion
+    // reads as usable prose. Capitalised tokens ({Skill}) yield a
+    // sentence-initial form; {character2} draws a SECOND, distinct Character.
+    // Each token kind draws one trait for the whole template (so a sentence
+    // naming {character} twice stays about one person). Empty trait lists fall
+    // back to a neutral placeholder rather than leaving the token visible.
     var TEMPLATE_FALLBACKS = {
         skill: 'my old trade',
         resource: 'what little I owned',
-        character: 'someone I loved'
+        character: 'someone I loved',
+        character2: 'another I knew',
+        sire: 'the one who turned me'
+    };
+
+    var TOKEN_KIND = {
+        skill: 'skills', resource: 'resources',
+        character: 'characters', character2: 'characters', sire: 'sire'
     };
 
     function fillTemplate(template, traits, rng) {
         rng = rng || Math.random;
         if (!template) return '';
         traits = traits || {};
-        var lists = {
-            skill: traits.skills || [],
-            resource: traits.resources || [],
-            character: traits.characters || []
-        };
+
+        function pool(kind) {
+            var list = traits[TOKEN_KIND[kind]] || [];
+            if (!Array.isArray(list)) list = [list];
+            return list.map(function (e) {
+                return traitForms(e, kind === 'character2' ? 'character' : kind);
+            }).filter(Boolean);
+        }
+
         var chosen = {};
-        return template.replace(/\{(skill|resource|character)\}/g, function (_, kind) {
-            if (!(kind in chosen)) {
-                var pool = lists[kind].filter(function (t) { return t && t.trim(); });
-                chosen[kind] = pool.length
-                    ? pool[Math.min(Math.floor(rng() * pool.length), pool.length - 1)].trim()
-                    : TEMPLATE_FALLBACKS[kind];
+        function pick(kind) {
+            if (kind in chosen) return chosen[kind];
+            var p = pool(kind);
+            // {character} and {character2} must name different people. Guard
+            // both ways: either token may appear first in the template.
+            var other = kind === 'character2' ? chosen.character
+                : (kind === 'character' ? chosen.character2 : null);
+            if (other) {
+                var distinct = p.filter(function (f) { return f.full !== other.full; });
+                if (distinct.length) p = distinct;
             }
+            chosen[kind] = p.length
+                ? p[Math.min(Math.floor(rng() * p.length), p.length - 1)]
+                : null;
             return chosen[kind];
-        });
+        }
+
+        return template.replace(/\{(skill|resource|character2|character|sire)\}/gi,
+            function (match, raw) {
+                var kind = raw.toLowerCase();
+                var forms = pick(kind);
+                var text = forms
+                    ? (kind === 'character' || kind === 'character2' || kind === 'sire'
+                        ? forms.name : forms.short)
+                    : TEMPLATE_FALLBACKS[kind];
+                return /^[A-Z]/.test(raw) ? capitalise(text) : text;
+            });
     }
 
     // --- Save-state shape + validation (pure; shared with the app & tests) ----
@@ -268,6 +351,7 @@
         rollMeaning: rollMeaning,
         pickSuggestions: pickSuggestions,
         fillTemplate: fillTemplate,
+        traitForms: traitForms,
         genId: genId,
         defaultState: defaultState,
         normMem: normMem,

@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const {
-    escapeHtml, getTier, getPromptText, parseMarkdown, rollDice, resolveTraitAction, rollMeaning, pickSuggestions, fillTemplate,
+    escapeHtml, getTier, getPromptText, parseMarkdown, rollDice, resolveTraitAction, rollMeaning, pickSuggestions, fillTemplate, traitForms,
     genId, defaultState, normMem, normalizeState, SAVE_VERSION
 } = require('../logic.js');
 
@@ -189,11 +189,40 @@ test('pickSuggestions clamps to the pool size and tolerates empty input', () => 
     assert.deepStrictEqual(pickSuggestions(['a'], 1, () => 0.999), ['a']); // rng edge clamp
 });
 
-test('fillTemplate substitutes traits and reuses one pick per token kind', () => {
-    const traits = { skills: ['Sailing'], resources: ['A boat'], characters: ['Mira'] };
+test('fillTemplate uses short/name forms and reuses one pick per token kind', () => {
+    const traits = {
+        skills: [{ text: 'Reading Latin', short: 'reading Latin' }],
+        resources: [{ text: 'A hawk and its jesses', short: 'the hawk' }],
+        characters: [{ text: 'Old Hallam, my master smith', name: 'Old Hallam' }]
+    };
     assert.strictEqual(
-        fillTemplate('{character} teaches me {skill}; {character} keeps {resource}.', traits, () => 0),
-        'Mira teaches me Sailing; Mira keeps A boat.');
+        fillTemplate('{Character} teaches me {skill}; {character} keeps {resource}.', traits, () => 0),
+        'Old Hallam teaches me reading Latin; Old Hallam keeps the hawk.');
+});
+
+test('fillTemplate derives forms for plain player-typed strings', () => {
+    const traits = {
+        skills: ['Beekeeping'],
+        resources: ['A vineyard on the hillside'],
+        characters: ['Rosa, the innkeeper']
+    };
+    // appositive dropped, leading article lower-cased, plain skill lower-cased
+    assert.strictEqual(
+        fillTemplate('{Character} guards {resource} while I practise {skill}.', traits, () => 0),
+        'Rosa guards a vineyard on the hillside while I practise beekeeping.');
+});
+
+test('fillTemplate keeps the sire separate and picks a distinct second character', () => {
+    const traits = {
+        characters: ['Eliza, my sister', 'Bertrand, the tax collector'],
+        sire: ['Alise of the Loire, an ancient immortal']
+    };
+    assert.strictEqual(
+        fillTemplate('{Sire} takes me; {character} and {character2} mourn.', traits, () => 0),
+        'Alise of the Loire takes me; Eliza and Bertrand mourn.');
+    // sire is NOT drawn from the character list
+    assert.strictEqual(fillTemplate('{sire}', { characters: ['Eliza'] }, () => 0),
+        'the one who turned me');
 });
 
 test('fillTemplate falls back when a trait list is empty or blank', () => {
@@ -201,4 +230,15 @@ test('fillTemplate falls back when a trait list is empty or blank', () => {
     assert.strictEqual(out, 'someone I loved and my my old trade');
     assert.strictEqual(fillTemplate('', {}), '');
     assert.strictEqual(fillTemplate('no tokens here', {}), 'no tokens here');
+});
+
+test('traitForms normalises tagged entries and plain strings', () => {
+    assert.deepStrictEqual(
+        traitForms({ text: 'A hawk and its jesses', short: 'the hawk' }, 'resource'),
+        { full: 'A hawk and its jesses', short: 'the hawk', name: 'A hawk and its jesses' });
+    const plain = traitForms('Old Hallam, my master smith', 'character');
+    assert.strictEqual(plain.name, 'Old Hallam');
+    assert.strictEqual(plain.short, 'Old Hallam');
+    assert.strictEqual(traitForms('', 'skill'), null);
+    assert.strictEqual(traitForms(null, 'skill'), null);
 });
