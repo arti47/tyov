@@ -119,6 +119,8 @@ function showTab(name) {
         }
     });
     if (name === 'journal') renderJournalTab();
+    // Textareas measure 0 while hidden, so re-fit them when their tab appears.
+    if (name === 'character' || name === 'diary') autoGrowAll(el('panel-' + name));
     updatePromptBanner();
     window.scrollTo(0, 0);
     persist();
@@ -1447,6 +1449,20 @@ function deleteMemory(name, id) {
     persist();
 }
 
+// Grow a textarea to fit its content so a whole Experience paragraph is visible
+// without inner scrolling. Called on input and after every Memory re-render.
+function autoGrow(ta) {
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = ta.scrollHeight + 'px';
+}
+
+function autoGrowAll(container) {
+    var root = container || document;
+    var list = root.querySelectorAll('textarea.experience-input');
+    for (var i = 0; i < list.length; i++) autoGrow(list[i]);
+}
+
 function memoryBlockHtml(m, name) {
     var inDiary = name === 'diary';
     var cap = memExpCap(m);
@@ -1457,10 +1473,13 @@ function memoryBlockHtml(m, name) {
             ? '<button class="btn-small btn-strike exp-del" aria-label="Remove experience ' + (i + 1) +
               '" onclick="removeExperience(\'' + name + '\',\'' + m.id + '\',' + i + ')">×</button>'
             : '';
+        // A textarea (not a single-line input): an Experience is a whole
+        // sentence or short paragraph, and autoGrow keeps the full text visible.
         exps += '<div class="exp-row">' +
-            '<input type="text" id="exp-' + m.id + '-' + i + '" class="experience-input" aria-label="Experience ' + (i + 1) +
-            '" placeholder="- Experience ' + (i + 1) + '" value="' + escapeHtml(m.experiences[i] || '') +
-            '"' + (inDiary ? ' readonly' : ' oninput="setExperience(\'' + name + '\',\'' + m.id + '\',' + i + ', this.value)"') + '>' +
+            '<textarea id="exp-' + m.id + '-' + i + '" class="experience-input" rows="2" aria-label="Experience ' + (i + 1) +
+            '" placeholder="- Experience ' + (i + 1) + '"' +
+            (inDiary ? ' readonly' : ' oninput="setExperience(\'' + name + '\',\'' + m.id + '\',' + i + ', this.value); autoGrow(this)"') +
+            '>' + escapeHtml(m.experiences[i] || '') + '</textarea>' +
             delBtn + '</div>';
     }
     var addExpBtn = (!inDiary && m.experiences.length < cap)
@@ -1503,6 +1522,7 @@ function memoryBlockHtml(m, name) {
 function renderMemoryList(name) {
     var containerId = name === 'diary' ? 'diaryContainer' : 'memoriesContainer';
     el(containerId).innerHTML = memList(name).map(function (m) { return memoryBlockHtml(m, name); }).join('');
+    autoGrowAll(el(containerId)); // size each Experience box to its text
 }
 
 function updateMemoryCount() {
