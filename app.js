@@ -120,7 +120,7 @@ function showTab(name) {
     });
     if (name === 'journal') renderJournalTab();
     // Textareas measure 0 while hidden, so re-fit them when their tab appears.
-    if (name === 'character' || name === 'diary') autoGrowAll(el('panel-' + name));
+    autoGrowAll(el('panel-' + name));
     updatePromptBanner();
     window.scrollTo(0, 0);
     persist();
@@ -190,6 +190,7 @@ function nextStep(stepNum) {
     var step = el('step' + stepNum);
     step.style.display = 'block';
     fillTraitRecaps(); // keep the "traits so far" reference current on every step
+    autoGrowAll(step);  // textareas measure 0 while hidden
     var first = step.querySelector('input, textarea'); // move focus into the step (B10)
     if (first) first.focus();
 }
@@ -529,6 +530,7 @@ function undoLastRoll() {
     state = normalizeState(snap.state);
     applyState();
     setVal('promptJournal', snap.journal || '');
+    autoGrow(el('promptJournal'));
     var b = el('btnUndo');
     if (b) b.disabled = undoStack.length === 0;
     persist();
@@ -666,6 +668,7 @@ function archiveJournal() {
         var visits = state.promptVisits[state.currentPrompt] || 1;
         state.journalHistory.push({ prompt: state.currentPrompt + getTier(visits), text: jText });
         ta.value = '';
+        autoGrow(ta); // shrink back after the entry is archived
         state.currentJournal = '';
     }
 }
@@ -1459,7 +1462,7 @@ function autoGrow(ta) {
 
 function autoGrowAll(container) {
     var root = container || document;
-    var list = root.querySelectorAll('textarea.experience-input');
+    var list = root.querySelectorAll('textarea.autogrow');
     for (var i = 0; i < list.length; i++) autoGrow(list[i]);
 }
 
@@ -1476,7 +1479,7 @@ function memoryBlockHtml(m, name) {
         // A textarea (not a single-line input): an Experience is a whole
         // sentence or short paragraph, and autoGrow keeps the full text visible.
         exps += '<div class="exp-row">' +
-            '<textarea id="exp-' + m.id + '-' + i + '" class="experience-input" rows="2" aria-label="Experience ' + (i + 1) +
+            '<textarea id="exp-' + m.id + '-' + i + '" class="experience-input autogrow" rows="2" aria-label="Experience ' + (i + 1) +
             '" placeholder="- Experience ' + (i + 1) + '"' +
             (inDiary ? ' readonly' : ' oninput="setExperience(\'' + name + '\',\'' + m.id + '\',' + i + ', this.value); autoGrow(this)"') +
             '>' + escapeHtml(m.experiences[i] || '') + '</textarea>' +
@@ -1593,6 +1596,7 @@ function applyState() {
     setVal('currentName', state.currentName);
     setVal('boxedExpText', state.boxedExp);
     setVal('promptJournal', state.currentJournal);
+    autoGrowAll(); // fit the free-form boxes to whatever was just loaded in
 
     var st = state.settings || {};
     if (st.isLightMode) {

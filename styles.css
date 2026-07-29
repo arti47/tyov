@@ -275,6 +275,14 @@ textarea:focus-visible {
     justify-content: space-between;
 }
 
+/* Chronicle text stays at a readable measure on wide screens. */
+#journalTabContent {
+    max-width: 70ch;
+    margin: 0 auto;
+    line-height: 1.65;
+}
+#journalTabContent p { margin: 0 0 1em; }
+
 /* ==========================================
    WARNINGS & MODALS
    ========================================== */
@@ -769,9 +777,9 @@ body.light-mode .oracle-word { background: rgba(0, 0, 0, 0.05); }
     border-left: 2px solid var(--border-color);
     padding-left: 5px;
 }
-/* Experiences are textareas that grow to fit (autoGrow), so the whole
-   paragraph stays visible: no inner scrollbar, no fixed 60px floor. */
-textarea.experience-input {
+/* Auto-growing textareas (autoGrow) size themselves to their content, so the
+   whole paragraph stays visible: no inner scrollbar, no fixed 60px floor. */
+textarea.autogrow {
     min-height: 0;
     overflow-y: hidden;
     resize: vertical;

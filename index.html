@@ -87,7 +87,7 @@
                 <p>Start your first Memory with one broad Experience summarizing who you were before unlife. (e.g. Theme: 'Mortal Life', Experience: 'I am Henri, son of Jon, a poor knight swindled out of my inheritance near the Loire.')</p>
                 <div class="trait-recap"></div>
                 <input type="text" id="setupMemTheme1" placeholder="Memory 1 Theme (e.g. Mortal Life)" style="margin-bottom: 5px;">
-                <textarea id="setupMemExp1" placeholder="Your life-summary Experience..."></textarea>
+                <textarea id="setupMemExp1" class="autogrow" rows="3" oninput="autoGrow(this)" placeholder="Your life-summary Experience..."></textarea>
                 <button type="button" class="btn-small spark-btn" onclick="sparkInto('sparkSetup1','setupMemTheme1,setupMemExp1')">🎲 Spark idea</button>
                 <button type="button" class="btn-small spark-btn" onclick="templateInto('life','tplSetup1','setupMemExp1','setupMemTheme1')">💡 Sentence starter</button>
                 <div class="meaning-spark" id="tplSetup1"></div>
@@ -104,9 +104,9 @@
                 <p>Create two more Experiences, each in its own Memory, each combining <b>two</b> of your traits. (e.g. "Gundar takes me on my first voyage aboard the Longship Bøkesuden; his touch calms me when we first leave sight of land.")</p>
                 <div class="trait-recap"></div>
                 <input type="text" id="setupMemTheme2" placeholder="Memory 2 Theme" style="margin-bottom: 5px;">
-                <textarea id="setupMemExp2" placeholder="Experience 2 (combine two traits)..." style="margin-bottom: 10px;"></textarea>
+                <textarea id="setupMemExp2" class="autogrow" rows="3" oninput="autoGrow(this)" placeholder="Experience 2 (combine two traits)..." style="margin-bottom: 10px;"></textarea>
                 <input type="text" id="setupMemTheme3" placeholder="Memory 3 Theme" style="margin-bottom: 5px;">
-                <textarea id="setupMemExp3" placeholder="Experience 3 (combine two traits)..."></textarea>
+                <textarea id="setupMemExp3" class="autogrow" rows="3" oninput="autoGrow(this)" placeholder="Experience 3 (combine two traits)..."></textarea>
                 <button type="button" class="btn-small spark-btn" onclick="sparkInto('sparkSetup6','setupMemTheme2,setupMemExp2,setupMemTheme3,setupMemExp3')">🎲 Spark idea</button>
                 <button type="button" class="btn-small spark-btn" onclick="templateInto('combine','tplSetup6','setupMemExp2,setupMemExp3','setupMemTheme2,setupMemTheme3')">💡 Sentence starter</button>
                 <div class="meaning-spark" id="tplSetup6"></div>
@@ -123,7 +123,7 @@
                 <p>One more Experience in its own Memory, again combining two of your traits.</p>
                 <div class="trait-recap"></div>
                 <input type="text" id="setupMemTheme4" placeholder="Memory 4 Theme" style="margin-bottom: 5px;">
-                <textarea id="setupMemExp4" placeholder="Experience 4 (combine two traits)..."></textarea>
+                <textarea id="setupMemExp4" class="autogrow" rows="3" oninput="autoGrow(this)" placeholder="Experience 4 (combine two traits)..."></textarea>
                 <button type="button" class="btn-small spark-btn" onclick="sparkInto('sparkSetup7','setupMemTheme4,setupMemExp4')">🎲 Spark idea</button>
                 <button type="button" class="btn-small spark-btn" onclick="templateInto('combine','tplSetup7','setupMemExp4','setupMemTheme4')">💡 Sentence starter</button>
                 <div class="meaning-spark" id="tplSetup7"></div>
@@ -142,7 +142,7 @@
                 <input type="text" id="setupSire" placeholder="The immortal who turned you..." style="margin-bottom: 5px;">
                 <input type="text" id="setupMark" placeholder="The Mark your turning left..." style="margin-bottom: 5px;">
                 <input type="text" id="setupMemTheme5" placeholder="Memory 5 Theme (e.g. The Night I Died)" style="margin-bottom: 5px;">
-                <textarea id="setupMemExp5" placeholder="The Experience of your transformation..."></textarea>
+                <textarea id="setupMemExp5" class="autogrow" rows="3" oninput="autoGrow(this)" placeholder="The Experience of your transformation..."></textarea>
                 <button type="button" class="btn-small spark-btn" onclick="sparkInto('sparkSetup8','setupSire,setupMark,setupMemTheme5,setupMemExp5')">🎲 Spark idea</button>
                 <button type="button" class="btn-small spark-btn" onclick="templateInto('turning','tplSetup8','setupMemExp5','setupMemTheme5')">💡 Sentence starter</button>
                 <div class="meaning-spark" id="tplSetup8"></div>
@@ -235,7 +235,7 @@
             </div>
         </div>
 
-        <textarea id="promptJournal" placeholder="Write your detailed narrative response to this prompt here... (This automatically saves to your Chronicle when you roll the dice)" style="margin-top: 15px; min-height: 120px; font-size: 1.05em; border-color: var(--accent-color);"></textarea>
+        <textarea id="promptJournal" class="autogrow" rows="3" oninput="autoGrow(this)" placeholder="Write your detailed narrative response to this prompt here... (This automatically saves to your Chronicle when you roll the dice)" style="margin-top: 15px; min-height: 120px; font-size: 1.05em; border-color: var(--accent-color);"></textarea>
         <div class="journal-spark-row">
             <button type="button" class="btn-small spark-btn" onclick="sparkInto('sparkJournal','promptJournal')">🎲 Spark idea</button>
             <div class="meaning-spark" id="sparkJournal"></div>
@@ -298,7 +298,7 @@
             <div class="boxed-experience">
                 <h4 style="margin: 0; color: var(--boxed-color); border-bottom: none;">The Boxed Experience</h4>
                 <p style="font-size: 0.8em; margin: 5px 0;">This serendipitous moment never fades and does not count towards your limit.</p>
-                <textarea id="boxedExpText" placeholder="A moment that never fades... (*italics* / **bold**)"></textarea>
+                <textarea id="boxedExpText" class="autogrow" rows="3" oninput="autoGrow(this)" placeholder="A moment that never fades... (*italics* / **bold**)"></textarea>
             </div>
             
             <div id="memoriesContainer"></div>
