@@ -61,14 +61,14 @@ npm run lint      # ESLint (needs `npm install` first; no network = skip)
 | File | Purpose |
 |------|---------|
 | `index.html` | The UI markup only. A global header (title, name, warnings/nudges, autosave indicator) + a sticky one-row **tab bar** (`▶ Play`, `📜 Character`, `📔 Diary`, `📖 Journal`, `⚙ Settings` — icon-only on mobile) over five `.tab-panel` sections, a sticky `#promptBanner` (current prompt, shown on non-Play tabs), the setup wizard, the confirm modal (`#appModal`), and the floating oracle. Loads `logic.js` → `data.js` → `app.js`. No inline CSS. |
-| `styles.css` | All styles (themes/variables, layout, components, `:focus-visible` a11y outlines). Ends with a `@media (max-width: 680px)` block for the responsive/mobile layout; form controls use `min-width: 0` and the body has `overflow-x: hidden` so nothing scrolls sideways on phones. The body padding adds `env(safe-area-inset-*)` (with `viewport-fit=cover` in the `<head>`) so header content clears the iOS notch/status bar. The guided prompt-action buttons stack as a centered caption over two equal-width-button rows (`.prompt-actions` column + `.prompt-action-btns`; the second row is the green `.btn-add` quick-creates). `.play-recap`/`.recap-input` style the collapsible Play-tab trait recap, `.entry-actions` the File/Save entry buttons. Free-form textareas marked `.autogrow` (Experiences, the setup Memory steps, the prompt journal, the Boxed Experience) size themselves to their content via `autoGrow`/`autoGrowAll`; `#journalTabContent` is capped to a 70ch measure. Tappable suggestion chips are `button.spark-tap` (wrapping, since sentence starters hold a whole clause) with a `.spark-dismiss` ✕; `.surprise-btn` is the full-width Surprise me action. |
+| `styles.css` | All styles (themes/variables, layout, components, `:focus-visible` a11y outlines). Ends with a `@media (max-width: 680px)` block for the responsive/mobile layout; form controls use `min-width: 0` and the body has `overflow-x: hidden` so nothing scrolls sideways on phones. The body padding adds `env(safe-area-inset-*)` (with `viewport-fit=cover` in the `<head>`) so header content clears the iOS notch/status bar. The guided prompt-action buttons stack as a centered caption over two equal-width-button rows (`.prompt-actions` column + `.prompt-action-btns`; the second row is the green `.btn-add` quick-creates). `.play-recap`/`.recap-input` style the collapsible Play-tab trait recap, `.entry-actions` the File/Save entry buttons, `.slot-list`/`.slot-row` the Settings chronicle chooser. A trailing `@media print` block hides all chrome and prints only `#journalTabContent` (B9). Free-form textareas marked `.autogrow` (Experiences, the setup Memory steps, the prompt journal, the Boxed Experience) size themselves to their content via `autoGrow`/`autoGrowAll`; `#journalTabContent` is capped to a 70ch measure. Tappable suggestion chips are `button.spark-tap` (wrapping, since sentence starters hold a whole clause) with a `.spark-dismiss` ✕; `.surprise-btn` is the full-width Surprise me action. |
 | `logic.js` | **Pure**, DOM-free helpers shared by the app and tests: `escapeHtml`, `getTier`, `getPromptText`, `parseMarkdown`, `rollDice` (RNG injectable), `resolveTraitAction` (Skill/Resource substitution ladder), `rollMeaning` (d100 → meaning-table word), `pickSuggestions` (n distinct setup-wizard example entries), `fillTemplate` (substitutes `{skill}`/`{resource}`/`{character}`/`{character2}`/`{sire}` in a Memory sentence template — capitalised tokens give a sentence-initial form, `{character2}` is always a different person, one pick per token kind, with fallbacks) and `traitForms` (normalises a tagged pool entry **or** a plain player-typed string to `full`/`short`/`name`), and the save-state helpers `genId`/`defaultState`/`normMem`/`normalizeState` (+`SAVE_VERSION`). Exposed as `window.TYOV` in the browser and `module.exports` in Node. |
 | `app.js` | The game engine: the `state` object, render-from-state functions, save/load + v1→v2 migration, full-state undo stack, dice/prompts, traits/memories/diary, triggers, guided prompt actions, nudges, the Meaning Oracle, import/export. |
 | `data.js` | The prompt database: `const promptDB`, keyed `1..80`, each with tiers `a`/`b`/`c` (first/second/third visit). Also `const meaningTable` — the 100-word Meaning Oracle list (1-indexed by a d100 roll) — `const settingPacks`, **six coherent setting packs** (Medieval Europe, Norse Coast, Silk Road, West African Sahel, Imperial China, Mesoamerica), each with 8 `names`/`skills`/`resources`/`characters`/`marks`; skills/resources/characters are **tagged** (`{ text, short }` / `{ text, name }`) so templates can substitute them mid-sentence without breaking grammar. And `const memoryTemplates` (`themes.{life,combine,turning}`/`life`/`combine`/`turning`), the sentence-starter templates behind 💡 Sentence starter and Surprise me. |
 | `assets/dice.wav`, `assets/page.wav` | Bundled, precached sound effects (dice roll, page turn) — local so audio works offline. Generated lightweight WAVs. |
 | `assets/icon-192.png`, `assets/icon-512.png`, `assets/icon-180.png` | PWA / home-screen icons (192 & 512 for the manifest incl. `maskable`; 180 for the iOS `apple-touch-icon`). Generated PNGs (blood-red field, dark moon, white fangs). |
 | `manifest.json` | PWA manifest: name/short_name/description, `start_url`/`scope`/`id` (all relative so it works under a Pages subpath), `standalone`, colors, and PNG icons (`any` + `maskable`). Drives "Add to Home Screen". |
-| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v23`. Precaches assets (incl. `assets/*.wav` and `assets/icon-*.png`), deletes old caches on activate, network-first for navigations + same-origin html/js/css/json (avoids version skew), stale-while-revalidate for other assets. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
+| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v24`. Precaches assets (incl. `assets/*.wav` and `assets/icon-*.png`), deletes old caches on activate, network-first for navigations + same-origin html/js/css/json (avoids version skew), stale-while-revalidate for other assets. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
 | `.github/workflows/pages.yml` | GitHub Actions workflow: on push to `main`, runs `npm test` then deploys the repo root to **GitHub Pages**. Requires Pages Source = "GitHub Actions" (one-time repo setting). |
 | `.github/workflows/ci.yml` | CI workflow: on push to `main` and on PRs, runs `npm ci` → `npm test` → `npm run lint`. |
 | `tests/logic.test.js` | Unit tests for `logic.js` (escaping, tiers, prompt text, markdown, dice, `resolveTraitAction`, `rollMeaning`, `pickSuggestions`, `fillTemplate`, and state normalization: `normalizeState`/`normMem`/`defaultState`). |
@@ -80,7 +80,7 @@ npm run lint      # ESLint (needs `npm install` first; no network = skip)
 ## How it works
 
 ### State (the `state` object in `app.js`)
-A single source of truth, serialized to `localStorage` under key **`tyov_save`**:
+A single source of truth, serialized to `localStorage` under the **active save slot's** key — `tyov_save` for the first slot (unchanged, so old chronicles keep loading) and `tyov_save_<id>` for the rest (B8):
 - `version` (currently **2**), `maxMemories` (5), `maxDiary` (4).
 - `currentPrompt` (0 before first roll), `promptVisits` (`{ num: count }`).
 - `futureTriggers` (`[{ prompt, text }]`), `namesHistory`, `turnCount`,
@@ -296,7 +296,7 @@ under that subpath. Every asset the SW precaches must stay same-origin/relative.
 ### Bumping the service worker cache
 If you change any cached asset (`index.html`, `styles.css`, `logic.js`,
 `app.js`, `data.js`, `manifest.json`, `assets/*.wav`, `assets/icon-*.png`), bump
-`CACHE_NAME` in `sw.js` (currently `-v23`). Bumping it is also what makes the
+`CACHE_NAME` in `sw.js` (currently `-v24`). Bumping it is also what makes the
 deployed `sw.js` byte-different, which is what triggers the tap-to-update toast
 for existing installs. The SW also network-first-loads navigations, so updates
 generally land on next load even without a bump — but bump for certainty, and
@@ -316,9 +316,7 @@ only save-slots/export (B8/B9) remain.
 
 ### Planned / open
 
-**Phase 3 — Saves / export (remaining)**
-- **B8** Multiple save slots / vampires (keyed save collection + chooser).
-- **B9** Markdown export and a print-friendly chronicle stylesheet.
+*(nothing outstanding — see Done.)*
 
 ### Scoping decisions (not bugs)
 
@@ -328,6 +326,24 @@ only save-slots/export (B8/B9) remain.
   `checkGameOver()` disabling the roll across that range is **faithful**.
 
 ### Done
+
+**Phase 3 — saves / export**
+- **B8** Multiple save slots: `tyov_slots` index + `tyov_active_slot`, with
+  `saveKeyFor`/`historyKeyFor` repointing `SAVE_KEY`/`HISTORY_KEY` per slot
+  (`ensureSlotIndex` bootstraps a pre-slots save as slot one, keeping the
+  original `tyov_save` key). Chooser in Settings (`renderSlots`,
+  `switchSlot`/`newSlot`/`renameSlot`/`deleteSlot`); slot labels track the
+  vampire's name via `touchActiveSlot`.
+- **B9** `exportJournalMarkdown` (headings, boxed-experience blockquote,
+  per-Prompt sections, Memories, and a Traits appendix with `[x]` checked
+  Skills and `~~struck~~` lost traits) plus `printChronicle` and a
+  print-friendly `@media print` stylesheet.
+
+**Solo-flow audit fixes**
+- Guided **Memory operations** (`promptMemoryOps` → `memoryOpsHTML`/
+  `pickMemoryOp`): strike out / restore any Memory (Diary included), make a
+  Skill from a Memory, and lose a Memory slot — covering the 28 Prompt entries
+  that manipulate Memories.
 
 **Phase 3 — accessibility + CI**
 - **B10** Screen-reader live region (`#srAnnounce`/`announce()`) for roll/jump/

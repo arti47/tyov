@@ -239,6 +239,7 @@
                 <button class="btn-small btn-add" onclick="quickCreate('resources')">+ Resource</button>
                 <button class="btn-small btn-add" onclick="quickCreate('characters')">+ Character</button>
                 <button class="btn-small btn-add" onclick="quickCreate('marks')">+ Mark</button>
+                <button class="btn-small btn-strike" id="btnMemoryOps" onclick="promptMemoryOps()">Memory…</button>
             </div>
         </div>
 
@@ -339,6 +340,8 @@
         <div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:10px;">
             <h2 style="border:none;">The Chronicle</h2>
             <button class="btn-small" style="background:#4CAF50;" onclick="exportJournal()">Export (.txt)</button>
+            <button class="btn-small" style="background:#4CAF50;" onclick="exportJournalMarkdown()">Export (.md)</button>
+            <button class="btn-small" style="background:#607d8b;" onclick="printChronicle()">Print / PDF</button>
         </div>
         <div id="journalTabContent"><p style="color:#888; font-style:italic;">Your chronicle will appear here as you answer prompts.</p></div>
     </div>
@@ -347,6 +350,12 @@
     <section id="panel-settings" class="tab-panel" role="tabpanel" aria-labelledby="tab-settings" hidden>
     <div class="panel full-width">
         <h2 style="border:none;">Settings</h2>
+        <h3>Your chronicles</h3>
+        <ul id="slotList" class="slot-list"></ul>
+        <button class="btn-small" onclick="newSlot()">+ New chronicle</button>
+        <p style="font-size:0.8em; color:#aaa; margin-top:4px;">Each slot holds its own vampire, saved separately in this browser.</p>
+
+        <h3>Display</h3>
         <div class="settings-group">
             <button class="btn-small" onclick="toggleTheme()" id="btnTheme">Toggle Light Mode</button>
             <span>Font size:

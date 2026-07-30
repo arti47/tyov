@@ -19,6 +19,58 @@ var defaultState = TYOV.defaultState;
 var normMem = TYOV.normMem;
 var normalizeState = TYOV.normalizeState;
 
+// --- Save slots (B8) ------------------------------------------------------
+// Several vampires can be kept side by side. The FIRST slot keeps the original
+// 'tyov_save' key so existing chronicles load untouched; later slots are
+// 'tyov_save_<id>'. `tyov_slots` is the index, `tyov_active_slot` the current
+// one. SAVE_KEY/HISTORY_KEY are repointed whenever the active slot changes.
+var SLOT_INDEX_KEY = 'tyov_slots';
+var ACTIVE_SLOT_KEY = 'tyov_active_slot';
+var DEFAULT_SLOT = 'default';
+var activeSlotId = DEFAULT_SLOT;
+
+function saveKeyFor(id) { return id === DEFAULT_SLOT ? 'tyov_save' : 'tyov_save_' + id; }
+function historyKeyFor(id) {
+    return id === DEFAULT_SLOT ? 'tyov_save_history' : 'tyov_save_history_' + id;
+}
+
+function readSlots() {
+    try {
+        var raw = JSON.parse(localStorage.getItem(SLOT_INDEX_KEY) || 'null');
+        if (Array.isArray(raw) && raw.length) return raw;
+    } catch (e) { /* fall through to bootstrap */ }
+    return null;
+}
+
+function writeSlots(slots) {
+    try { localStorage.setItem(SLOT_INDEX_KEY, JSON.stringify(slots)); } catch (e) { /* ignore */ }
+}
+
+// Build the index on first run (or for a pre-slots save) so upgrading players
+// keep their chronicle as slot one.
+function ensureSlotIndex() {
+    var slots = readSlots();
+    if (!slots) {
+        slots = [{ id: DEFAULT_SLOT, name: slotNameFromSave(saveKeyFor(DEFAULT_SLOT)) }];
+        writeSlots(slots);
+    }
+    var active = null;
+    try { active = localStorage.getItem(ACTIVE_SLOT_KEY); } catch (e) { active = null; }
+    var known = slots.some(function (sl) { return sl.id === active; });
+    activeSlotId = known ? active : slots[0].id;
+    SAVE_KEY = saveKeyFor(activeSlotId);
+    HISTORY_KEY = historyKeyFor(activeSlotId);
+    return slots;
+}
+
+function slotNameFromSave(key) {
+    try {
+        var d = JSON.parse(localStorage.getItem(key) || 'null');
+        if (d && d.currentName) return d.currentName;
+    } catch (e) { /* ignore */ }
+    return 'Chronicle 1';
+}
+
 var SAVE_KEY = 'tyov_save';
 var SAVE_VERSION = TYOV.SAVE_VERSION;
 
@@ -119,6 +171,7 @@ function showTab(name) {
         }
     });
     if (name === 'journal') renderJournalTab();
+    if (name === 'settings') renderSlots();
     // Textareas measure 0 while hidden, so re-fit them when their tab appears.
     autoGrowAll(el('panel-' + name));
     updatePromptBanner();
@@ -323,6 +376,7 @@ function persist() {
     try {
         var json = JSON.stringify(state);
         localStorage.setItem(SAVE_KEY, json);
+        touchActiveSlot();
         pushSaveHistory(json);
         setSaveStatus('Saved ✓ ' + nowHM());
     } catch (e) {
@@ -332,7 +386,7 @@ function persist() {
 }
 
 // Rolling backup: keep the last few good saves so a corrupt write is recoverable.
-var HISTORY_KEY = 'tyov_save_history';
+var HISTORY_KEY = 'tyov_save_history';  // repointed per slot by ensureSlotIndex()
 var HISTORY_MAX = 10;
 function pushSaveHistory(json) {
     try {
@@ -457,6 +511,7 @@ function migrateV1(d) {
 }
 
 function loadGame() {
+    ensureSlotIndex(); // repoints SAVE_KEY/HISTORY_KEY at the active slot
     var saved;
     try {
         saved = localStorage.getItem(SAVE_KEY);
@@ -496,6 +551,105 @@ function loadGame() {
     applyState();
     isGameLoaded = true;
     persist(); // Re-save in current format (completes the migration).
+}
+
+// Record the current vampire's name and save time against the active slot so
+// the chooser can label it without parsing every save.
+function touchActiveSlot() {
+    var slots = readSlots();
+    if (!slots) return;
+    var changed = false;
+    slots.forEach(function (sl) {
+        if (sl.id !== activeSlotId) return;
+        var nm = state.currentName || sl.name || 'Unnamed';
+        if (sl.name !== nm) { sl.name = nm; changed = true; }
+        var stamp = Date.now();
+        if (!sl.updated || stamp - sl.updated > 30000) { sl.updated = stamp; changed = true; }
+    });
+    if (changed) writeSlots(slots);
+}
+
+function renderSlots() {
+    var box = el('slotList');
+    if (!box) return;
+    var slots = ensureSlotIndex();
+    box.innerHTML = slots.map(function (sl) {
+        var active = sl.id === activeSlotId;
+        var when = sl.updated ? new Date(sl.updated).toLocaleDateString() : '—';
+        return '<li class="slot-row' + (active ? ' slot-active' : '') + '">' +
+            '<span class="slot-name">' + escapeHtml(sl.name || 'Unnamed') +
+                (active ? ' <span class="slot-badge">current</span>' : '') + '</span>' +
+            '<span class="slot-when">' + escapeHtml(when) + '</span>' +
+            (active
+                ? '<button class="btn-small" onclick="renameSlot()">Rename</button>'
+                : '<button class="btn-small" onclick="switchSlot(\'' + sl.id + '\')">Play</button>') +
+            (slots.length > 1
+                ? '<button class="btn-small btn-strike" onclick="deleteSlot(\'' + sl.id + '\')">Delete</button>'
+                : '') +
+            '</li>';
+    }).join('');
+}
+
+// Switching persists the current vampire first, then reloads onto the other
+// slot — a reload is the simplest way to guarantee no state leaks across.
+function switchSlot(id) {
+    persist();
+    try { localStorage.setItem(ACTIVE_SLOT_KEY, id); } catch (e) { /* ignore */ }
+    location.reload();
+}
+
+function newSlot() {
+    showConfirm({
+        title: 'Begin another vampire?',
+        message: 'Your current chronicle is saved and stays available in the slot list. ' +
+                 'A new slot starts at vampire creation.',
+        confirmLabel: 'New Chronicle',
+        onConfirm: function () {
+            persist();
+            var slots = ensureSlotIndex();
+            var id = 's' + Date.now().toString(36);
+            slots.push({ id: id, name: 'New Chronicle', updated: Date.now() });
+            writeSlots(slots);
+            try { localStorage.setItem(ACTIVE_SLOT_KEY, id); } catch (e) { /* ignore */ }
+            location.reload();
+        }
+    });
+}
+
+function renameSlot() {
+    // The slot label tracks the vampire's current name, so renaming means
+    // editing that name — send the player there rather than keeping two names.
+    var field = el('currentName');
+    if (field) { field.focus(); field.select(); }
+    showTab('play');
+    toast('Rename your vampire in the name field — the slot follows it.', 'info');
+}
+
+function deleteSlot(id) {
+    var slots = ensureSlotIndex();
+    var slot = slots.filter(function (sl) { return sl.id === id; })[0];
+    if (!slot || slots.length < 2) return;
+    showConfirm({
+        title: 'Delete “' + (slot.name || 'Unnamed') + '”?',
+        message: 'That chronicle is permanently deleted. This cannot be undone.',
+        confirmLabel: 'Delete',
+        danger: true,
+        onConfirm: function () {
+            try {
+                localStorage.removeItem(saveKeyFor(id));
+                localStorage.removeItem(historyKeyFor(id));
+            } catch (e) { /* ignore */ }
+            var rest = slots.filter(function (sl) { return sl.id !== id; });
+            writeSlots(rest);
+            if (id === activeSlotId) {
+                try { localStorage.setItem(ACTIVE_SLOT_KEY, rest[0].id); } catch (e2) { /* ignore */ }
+                location.reload();
+                return;
+            }
+            renderSlots();
+            toast('Chronicle deleted.', 'info');
+        }
+    });
 }
 
 function resetGame() {
@@ -638,11 +792,84 @@ function exportJournal() {
     txt += '--- ACTIVE MEMORIES ---\n' + journalMemoriesText(state.memories);
     txt += '--- DIARY / STORAGE ---\n' + journalMemoriesText(state.diary);
 
-    var blob = new Blob([txt], { type: 'text/plain' });
+    downloadFile(txt, 'Chronicle.txt', 'text/plain');
+}
+
+// B9: the same chronicle as Markdown, for pasting into a notes app or repo.
+function exportJournalMarkdown() {
+    var name = state.currentName || 'Unnamed Vampire';
+    var md = '# Chronicle of ' + name + '\n\n';
+
+    var boxed = val('boxedExpText');
+    if (boxed.trim()) {
+        md += '> **The Boxed Experience**\n>\n' +
+              boxed.split('\n').map(function (l) { return '> ' + l; }).join('\n') + '\n\n';
+    }
+
+    if (state.journalHistory.length) {
+        md += '## Narrative Journal\n\n';
+        state.journalHistory.forEach(function (e) {
+            md += '### Prompt ' + e.prompt + '\n\n' + e.text + '\n\n';
+        });
+    }
+
+    md += memoriesMarkdown('Active Memories', state.memories);
+    md += memoriesMarkdown('Diary', state.diary);
+    md += traitsMarkdown();
+
+    downloadFile(md, 'Chronicle.md', 'text/markdown');
+    toast('Markdown chronicle exported.', 'info');
+}
+
+function memoriesMarkdown(heading, list) {
+    var kept = list.filter(function (m) { return !m.lost; });
+    if (!kept.length) return '';
+    var out = '## ' + heading + '\n\n';
+    kept.forEach(function (m) {
+        out += '### ' + (m.theme || 'Untitled Memory') +
+            (m.memState !== 'normal' ? ' *(' + m.memState + ')*' : '') + '\n\n';
+        m.experiences.forEach(function (x) {
+            if (x.trim()) out += '- ' + x.trim() + '\n';
+        });
+        out += '\n';
+    });
+    return out;
+}
+
+function traitsMarkdown() {
+    function group(label, list, fmt) {
+        if (!list.length) return '';
+        return '### ' + label + '\n\n' + list.map(function (e) {
+            return '- ' + (e.lost ? '~~' + (fmt ? fmt(e) : e.text) + '~~' : (fmt ? fmt(e) : e.text));
+        }).join('\n') + '\n\n';
+    }
+    var out = '## Traits\n\n';
+    out += group('Skills', state.skills, function (s2) {
+        return (s2.checked ? '[x] ' : '[ ] ') + s2.text;
+    });
+    out += group('Resources', state.resources);
+    out += group('Characters', state.characters, function (c) {
+        return c.text + ' — ' + c.type + (c.doom ? ' (' + new Array(c.doom + 1).join('•') + ')' : '');
+    });
+    out += group('Marks', state.marks);
+    return out;
+}
+
+function downloadFile(text, filename, mime) {
+    var blob = new Blob([text], { type: mime });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'Chronicle.txt';
+    a.download = filename;
     a.click();
+    URL.revokeObjectURL(a.href);
+}
+
+// B9: print / save-as-PDF the rendered chronicle. The print stylesheet hides
+// every control and shows only #journalTabContent.
+function printChronicle() {
+    showTab('journal');
+    renderJournalTab();
+    setTimeout(function () { window.print(); }, 60);
 }
 
 function journalMemoriesText(list) {
@@ -972,8 +1199,11 @@ function showTraitPicker(kind, anchorBtn) {
     pop.setAttribute('role', 'dialog');
     pop.setAttribute('aria-label', kind === 'skills' ? 'Check a Skill'
         : kind === 'characters' ? 'Kill a Character'
-        : kind === 'memories' ? 'File as an Experience' : 'Lose a Resource');
-    pop.innerHTML = kind === 'memories' ? memoryPickerHTML() : traitPickerHTML(kind);
+        : kind === 'memories' ? 'File as an Experience'
+        : kind === 'memoryops' ? 'Memory actions' : 'Lose a Resource');
+    pop.innerHTML = kind === 'memories' ? memoryPickerHTML()
+        : kind === 'memoryops' ? memoryOpsHTML()
+        : traitPickerHTML(kind);
     container.appendChild(pop);
     positionTraitPicker(pop, anchorBtn);
     openTraitPicker = pop;
@@ -1801,6 +2031,105 @@ function suggestInto(kind, containerId, fieldIds) {
     target.innerHTML = chipRowHtml('Try:', chips, containerId);
 }
 
+// --- Memory operations (Play tab) ----------------------------------------
+// 28 Prompt entries manipulate Memories: "strike out a Memory" / "lose a
+// Memory" (15), "lose a Memory slot permanently" (4), and "create a Skill
+// based on a Memory" / "convert a Memory to a Skill" (9). One picker serves
+// all three, switching between two modes.
+var memoryOpsMode = 'forget'; // 'forget' | 'skill'
+
+function promptMemoryOps() {
+    memoryOpsMode = 'forget';
+    showTraitPicker('memoryops', el('btnMemoryOps'));
+}
+
+function setMemoryOpsMode(mode) {
+    memoryOpsMode = mode;
+    if (!openTraitPicker) return;
+    openTraitPicker.innerHTML = memoryOpsHTML();
+    var f = openTraitPicker.querySelector('.tp-row');
+    if (f) f.focus();
+}
+
+// Every Memory the player holds, Diary included — "lose a Memory" doesn't
+// exempt stored ones.
+function allMemoryRefs() {
+    return state.memories.map(function (m) { return { m: m, list: 'memories' }; })
+        .concat(state.diary.map(function (m) { return { m: m, list: 'diary' }; }));
+}
+
+function memoryOpsHTML() {
+    var skillMode = memoryOpsMode === 'skill';
+    var refs = allMemoryRefs();
+    var rows = refs.map(function (r) {
+        var label = r.m.theme || firstExperienceOf(r.m) || 'Untitled Memory';
+        var on = !skillMode && r.m.lost;
+        var tag = r.list === 'diary' ? 'diary' : (r.m.memState !== 'normal' ? r.m.memState : '');
+        return '<button type="button" class="tp-row' + (on ? ' tp-on' : '') + '" data-id="' + r.m.id + '"' +
+            ' role="menuitemcheckbox" aria-checked="' + (on ? 'true' : 'false') + '"' +
+            ' onclick="pickMemoryOp(\'' + r.list + '\',\'' + r.m.id + '\')">' +
+            '<span class="tp-box">' + (skillMode ? '+' : (on ? '\u2717' : '')) + '</span>' +
+            '<span class="tp-name' + (on ? ' strikethrough' : '') + '">' + escapeHtml(label) + '</span>' +
+            (tag ? '<span class="tp-tag">' + escapeHtml(tag) + '</span>' : '') + '</button>';
+    }).join('');
+    var body = rows || '<p class="tp-empty">No Memories yet.</p>';
+    var footer = skillMode
+        ? '<button type="button" class="tp-row tp-create" onclick="setMemoryOpsMode(\'forget\')">' +
+          '<span class="tp-box">\u2190</span><span class="tp-name">Back to forgetting</span></button>'
+        : '<button type="button" class="tp-row tp-create" onclick="setMemoryOpsMode(\'skill\')">' +
+          '<span class="tp-box">+</span><span class="tp-name">Make a Skill from a Memory…</span></button>' +
+          '<button type="button" class="tp-row tp-create" onclick="loseMemorySlotFromPicker()">' +
+          '<span class="tp-box">\u2212</span><span class="tp-name">Lose a Memory slot permanently</span></button>';
+    return '<div class="tp-head"><strong>' + (skillMode ? 'Skill from a Memory' : 'Forget a Memory') + '</strong>' +
+        '<button type="button" class="tp-close" aria-label="Close" onclick="closeTraitPicker()">\u00d7</button></div>' +
+        '<div class="tp-rows" role="menu">' + body + footer + '</div>' +
+        '<p class="tp-hint">' + (skillMode
+            ? 'Tap a Memory to base a new Skill on it.'
+            : 'Tap to strike out — or restore — a Memory.') + '</p>';
+}
+
+function firstExperienceOf(m) {
+    var e = (m.experiences || []).filter(function (x) { return x.trim(); })[0] || '';
+    return e.length > 40 ? e.slice(0, 40) + '…' : e;
+}
+
+function pickMemoryOp(list, id) {
+    var m = findEntity(list, id);
+    if (!m) return;
+    if (memoryOpsMode === 'skill') {
+        pushUndo();
+        var base = m.theme || firstExperienceOf(m) || '';
+        addSkill(base);
+        closeTraitPicker();
+        showTab('play');
+        toast('Skill created from “' + (base || 'a Memory') + '” — reword it below.', 'info');
+        announce('Skill created from a Memory.');
+        focusNewTrait('skills', state.skills[state.skills.length - 1]);
+        return;
+    }
+    pushUndo();
+    m.lost = !m.lost;
+    renderMemoryList(list);
+    updateMemoryCount();
+    updateDiaryCount();
+    persist();
+    announce((m.lost ? 'Struck out' : 'Restored') + ' Memory.');
+    var row = openTraitPicker && openTraitPicker.querySelector('.tp-row[data-id="' + id + '"]');
+    if (row) {
+        row.classList.toggle('tp-on', m.lost);
+        row.setAttribute('aria-checked', m.lost ? 'true' : 'false');
+        var box = row.querySelector('.tp-box');
+        if (box) box.textContent = m.lost ? '\u2717' : '';
+        var nm = row.querySelector('.tp-name');
+        if (nm) nm.classList.toggle('strikethrough', m.lost);
+    }
+}
+
+function loseMemorySlotFromPicker() {
+    closeTraitPicker();
+    loseMemorySlot();
+}
+
 // --- Entry actions (Play tab) --------------------------------------------
 // The prompt journal normally archives itself on the next roll. These give the
 // player explicit control, which also covers the two cases a roll never
@@ -2264,8 +2593,11 @@ document.addEventListener('focusin', function (e) {
 document.addEventListener('click', function (e) {
     if (!openTraitPicker) return;
     var t = e.target;
+    // A row that re-rendered the popover (e.g. switching Memory-ops modes) is
+    // already detached by the time this runs — that is not an outside click.
+    if (!t.isConnected) return;
     if (openTraitPicker.contains(t)) return;
-    if (t.closest && t.closest('#btnCheckSkill, #btnLoseResource, #btnKillCharacter, #btnFileExperience')) return;
+    if (t.closest && t.closest('#btnCheckSkill, #btnLoseResource, #btnKillCharacter, #btnFileExperience, #btnMemoryOps')) return;
     closeTraitPicker();
 });
 

@@ -957,3 +957,57 @@ textarea.autogrow {
     .oracle-fab { right: 14px; bottom: 14px; }
     .oracle-panel { right: 14px; bottom: 74px; }
 }
+
+/* ==========================================
+   PRINT / SAVE-AS-PDF (B9)
+   ========================================== */
+@media print {
+    /* Only the rendered chronicle prints: hide chrome, controls and overlays. */
+    body {
+        background: #fff;
+        color: #000;
+        max-width: none;
+        padding: 0;
+        font-size: 11pt;
+    }
+    h1 { color: #000; border: none; }
+    .tabs, .options-bar, .prompt-banner, .oracle-fab, .oracle-panel,
+    .modal-overlay, .toast, .toast-container, #saveStatus, #updateToast,
+    #ageNudge, #backupNudge, #gameWarning, .prompt-note, .trait-picker,
+    button, .name-row button, .entry-actions, .play-recap { display: none !important; }
+    /* Every tab panel except the Journal is irrelevant on paper. */
+    .tab-panel { display: none !important; }
+    #panel-journal { display: block !important; }
+    #panel-journal .panel { border: none; background: none; padding: 0; }
+    #journalTabContent {
+        max-width: none;
+        color: #000;
+        line-height: 1.5;
+    }
+    #journalTabContent h3, #journalTabContent h4 { color: #000; page-break-after: avoid; }
+    #journalTabContent p, #journalTabContent div { page-break-inside: avoid; }
+    a[href]::after { content: ""; }
+}
+
+/* Save slots (B8) — the chronicle chooser in Settings. */
+.slot-list { list-style: none; padding: 0; margin: 8px 0; }
+.slot-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+}
+.slot-row.slot-active { border-color: var(--accent-color); }
+.slot-name { flex: 1 1 140px; }
+.slot-badge {
+    font-size: 0.7em;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--accent-color);
+}
+.slot-when { font-size: 0.78em; color: #aaa; flex: 0 0 auto; }
+.slot-row .btn-small { margin-left: 0; }
