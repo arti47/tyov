@@ -275,6 +275,46 @@ textarea:focus-visible {
     justify-content: space-between;
 }
 
+/* Play-tab quick-create + entry actions. */
+.btn-add { background: #3f6b4a; }
+.entry-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+.entry-actions .btn-small { margin-left: 0; }
+
+/* Collapsible "traits at a glance" on the Play tab. */
+.play-recap {
+    text-align: left;
+    margin: 10px auto 0;
+    max-width: 460px;
+    border: 1px dashed var(--border-color);
+    border-radius: 5px;
+    padding: 6px 10px;
+    font-size: 0.9em;
+}
+.play-recap > summary {
+    cursor: pointer;
+    color: var(--accent-color);
+    font-size: 0.85em;
+}
+.play-recap .trait-recap { border: none; padding: 6px 0 0; margin: 0; background: none; }
+.recap-row { margin: 4px 0; display: flex; gap: 6px; align-items: flex-start; flex-wrap: wrap; }
+.recap-row > b { color: #aaa; font-weight: normal; font-size: 0.85em; flex: 0 0 auto; padding-top: 5px; }
+.recap-items { display: flex; flex-wrap: wrap; gap: 4px; flex: 1 1 140px; }
+.recap-input {
+    width: auto;
+    flex: 1 1 120px;
+    min-width: 90px;
+    padding: 3px 6px;
+    font-size: 0.88em;
+}
+.recap-input.checked-skill { text-decoration: line-through; opacity: 0.7; }
+.tp-row.tp-disabled { opacity: 0.45; cursor: not-allowed; }
+
 /* Chronicle text stays at a readable measure on wide screens. */
 #journalTabContent {
     max-width: 70ch;

@@ -61,14 +61,14 @@ npm run lint      # ESLint (needs `npm install` first; no network = skip)
 | File | Purpose |
 |------|---------|
 | `index.html` | The UI markup only. A global header (title, name, warnings/nudges, autosave indicator) + a sticky one-row **tab bar** (`▶ Play`, `📜 Character`, `📔 Diary`, `📖 Journal`, `⚙ Settings` — icon-only on mobile) over five `.tab-panel` sections, a sticky `#promptBanner` (current prompt, shown on non-Play tabs), the setup wizard, the confirm modal (`#appModal`), and the floating oracle. Loads `logic.js` → `data.js` → `app.js`. No inline CSS. |
-| `styles.css` | All styles (themes/variables, layout, components, `:focus-visible` a11y outlines). Ends with a `@media (max-width: 680px)` block for the responsive/mobile layout; form controls use `min-width: 0` and the body has `overflow-x: hidden` so nothing scrolls sideways on phones. The body padding adds `env(safe-area-inset-*)` (with `viewport-fit=cover` in the `<head>`) so header content clears the iOS notch/status bar. The guided prompt-action buttons stack as a centered caption over a two-equal-width-button row (`.prompt-actions` column + `.prompt-action-btns`). Free-form textareas marked `.autogrow` (Experiences, the setup Memory steps, the prompt journal, the Boxed Experience) size themselves to their content via `autoGrow`/`autoGrowAll`; `#journalTabContent` is capped to a 70ch measure. Tappable suggestion chips are `button.spark-tap` (wrapping, since sentence starters hold a whole clause) with a `.spark-dismiss` ✕; `.surprise-btn` is the full-width Surprise me action. |
+| `styles.css` | All styles (themes/variables, layout, components, `:focus-visible` a11y outlines). Ends with a `@media (max-width: 680px)` block for the responsive/mobile layout; form controls use `min-width: 0` and the body has `overflow-x: hidden` so nothing scrolls sideways on phones. The body padding adds `env(safe-area-inset-*)` (with `viewport-fit=cover` in the `<head>`) so header content clears the iOS notch/status bar. The guided prompt-action buttons stack as a centered caption over two equal-width-button rows (`.prompt-actions` column + `.prompt-action-btns`; the second row is the green `.btn-add` quick-creates). `.play-recap`/`.recap-input` style the collapsible Play-tab trait recap, `.entry-actions` the File/Save entry buttons. Free-form textareas marked `.autogrow` (Experiences, the setup Memory steps, the prompt journal, the Boxed Experience) size themselves to their content via `autoGrow`/`autoGrowAll`; `#journalTabContent` is capped to a 70ch measure. Tappable suggestion chips are `button.spark-tap` (wrapping, since sentence starters hold a whole clause) with a `.spark-dismiss` ✕; `.surprise-btn` is the full-width Surprise me action. |
 | `logic.js` | **Pure**, DOM-free helpers shared by the app and tests: `escapeHtml`, `getTier`, `getPromptText`, `parseMarkdown`, `rollDice` (RNG injectable), `resolveTraitAction` (Skill/Resource substitution ladder), `rollMeaning` (d100 → meaning-table word), `pickSuggestions` (n distinct setup-wizard example entries), `fillTemplate` (substitutes `{skill}`/`{resource}`/`{character}`/`{character2}`/`{sire}` in a Memory sentence template — capitalised tokens give a sentence-initial form, `{character2}` is always a different person, one pick per token kind, with fallbacks) and `traitForms` (normalises a tagged pool entry **or** a plain player-typed string to `full`/`short`/`name`), and the save-state helpers `genId`/`defaultState`/`normMem`/`normalizeState` (+`SAVE_VERSION`). Exposed as `window.TYOV` in the browser and `module.exports` in Node. |
 | `app.js` | The game engine: the `state` object, render-from-state functions, save/load + v1→v2 migration, full-state undo stack, dice/prompts, traits/memories/diary, triggers, guided prompt actions, nudges, the Meaning Oracle, import/export. |
 | `data.js` | The prompt database: `const promptDB`, keyed `1..80`, each with tiers `a`/`b`/`c` (first/second/third visit). Also `const meaningTable` — the 100-word Meaning Oracle list (1-indexed by a d100 roll) — `const settingPacks`, **six coherent setting packs** (Medieval Europe, Norse Coast, Silk Road, West African Sahel, Imperial China, Mesoamerica), each with 8 `names`/`skills`/`resources`/`characters`/`marks`; skills/resources/characters are **tagged** (`{ text, short }` / `{ text, name }`) so templates can substitute them mid-sentence without breaking grammar. And `const memoryTemplates` (`themes.{life,combine,turning}`/`life`/`combine`/`turning`), the sentence-starter templates behind 💡 Sentence starter and Surprise me. |
 | `assets/dice.wav`, `assets/page.wav` | Bundled, precached sound effects (dice roll, page turn) — local so audio works offline. Generated lightweight WAVs. |
 | `assets/icon-192.png`, `assets/icon-512.png`, `assets/icon-180.png` | PWA / home-screen icons (192 & 512 for the manifest incl. `maskable`; 180 for the iOS `apple-touch-icon`). Generated PNGs (blood-red field, dark moon, white fangs). |
 | `manifest.json` | PWA manifest: name/short_name/description, `start_url`/`scope`/`id` (all relative so it works under a Pages subpath), `standalone`, colors, and PNG icons (`any` + `maskable`). Drives "Add to Home Screen". |
-| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v22`. Precaches assets (incl. `assets/*.wav` and `assets/icon-*.png`), deletes old caches on activate, network-first for navigations + same-origin html/js/css/json (avoids version skew), stale-while-revalidate for other assets. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
+| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v23`. Precaches assets (incl. `assets/*.wav` and `assets/icon-*.png`), deletes old caches on activate, network-first for navigations + same-origin html/js/css/json (avoids version skew), stale-while-revalidate for other assets. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
 | `.github/workflows/pages.yml` | GitHub Actions workflow: on push to `main`, runs `npm test` then deploys the repo root to **GitHub Pages**. Requires Pages Source = "GitHub Actions" (one-time repo setting). |
 | `.github/workflows/ci.yml` | CI workflow: on push to `main` and on PRs, runs `npm ci` → `npm test` → `npm run lint`. |
 | `tests/logic.test.js` | Unit tests for `logic.js` (escaping, tiers, prompt text, markdown, dice, `resolveTraitAction`, `rollMeaning`, `pickSuggestions`, `fillTemplate`, and state normalization: `normalizeState`/`normMem`/`defaultState`). |
@@ -186,9 +186,12 @@ or no `version`.
    available". Check/Lose follow the rules substitution ladder via
    `TYOV.resolveTraitAction` — check↔lose, and when neither is possible
    `offerGameOver`→`declareGameOver` (Kill-a-Character is outside that ladder).
-   The three buttons are equal-width on one row
-   (`.prompt-action-btns`). The picker closes on outside-click, Esc, or tab-switch
-   (`closeTraitPicker`; the open popover is tracked in `openTraitPicker`).
+   The buttons are equal-width across two rows (`.prompt-action-btns`); the
+   second row is **quick-create** (`quickCreate`) for `+ Skill`/`+ Resource`/
+   `+ Character`/`+ Mark`, which adds the trait in place and focuses it in the
+   Play recap (120 of the 222 prompt entries say "create/gain" one). The picker
+   closes on outside-click, Esc, or tab-switch (`closeTraitPicker`; the open
+   popover is tracked in `openTraitPicker`).
    `checkSurvivalState()`
    warns at zero active skills+resources; `checkGameOver()` sets `gameOver` on
    prompts 72–80 (each a "the game is over" prompt) and disables the roll button.
@@ -205,8 +208,21 @@ or no `version`.
    (`ensureDiaryResource`, `isDiary` flag): holds ≤4 Memories, its Memories are
    **frozen** (read-only Experiences, no add/remove), and losing the Diary
    Resource strikes out (`lost`) its Memories. No Diary-expand or "2nd Season".
-7. **Journal**: per-prompt text is archived into `journalHistory` (tagged
-   `<prompt><tier>`). The **Journal tab** (`renderJournalTab` → `#journalTabContent`)
+7. **Journal & the core loop**: per-prompt text is archived into
+   `journalHistory` (tagged `<prompt><tier>`) on the next roll/jump — and, since
+   the roll button is disabled once the game ends, also by `declareGameOver` and
+   `checkGameOver` so the final entry can never be lost. **Save entry to
+   Chronicle** (`saveEntryNow`) archives on demand. **📓 File as an Experience**
+   (`fileExperience` → `memoryPickerHTML`/`pickMemoryForExperience`) files the
+   answer into one of your Memories — the rules' actual loop — via the same
+   popover, listing each Memory with its used/cap count (full ones disabled) plus
+   `createMemoryWithExperience` for a new one. At the cap,
+   `offerMemorySlotRelief` names the Diary-or-forget choice and routes there
+   instead of dead-ending on a toast; `activeMemoryCount` ignores starred/lost
+   Memories. A `#startNote` first-turn hint shows until the first roll, and a
+   collapsible **`#playRecap`** (`renderPlayRecap`/`recapGroup`/`syncTraitLists`)
+   keeps editable Skills/Resources/Characters/Marks beside the Prompt so
+   answering needs no tab switch. The **Journal tab** (`renderJournalTab` → `#journalTabContent`)
    renders the chronicle inline; `exportJournal` downloads `.txt` (both skip
    struck-out Memories). `parseMarkdown` supports `*italics*`/`**bold**` and
    **escapes first**.
@@ -280,7 +296,7 @@ under that subpath. Every asset the SW precaches must stay same-origin/relative.
 ### Bumping the service worker cache
 If you change any cached asset (`index.html`, `styles.css`, `logic.js`,
 `app.js`, `data.js`, `manifest.json`, `assets/*.wav`, `assets/icon-*.png`), bump
-`CACHE_NAME` in `sw.js` (currently `-v22`). Bumping it is also what makes the
+`CACHE_NAME` in `sw.js` (currently `-v23`). Bumping it is also what makes the
 deployed `sw.js` byte-different, which is what triggers the tap-to-update toast
 for existing installs. The SW also network-first-loads navigations, so updates
 generally land on next load even without a bump — but bump for certainty, and

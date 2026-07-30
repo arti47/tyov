@@ -746,11 +746,20 @@ function updatePromptMeta() {
     }
     toggleNote('advanceNote', p >= 1 && visits > 3 && !state.gameOver);
     toggleNote('endNote', p === 69 && visits === 3 && !state.gameOver);
+    // First-turn hint: after setup there is no Prompt yet, so say what to do.
+    toggleNote('startNote', p === 0 && !state.gameOver);
+    var ea = el('entryActions');
+    if (ea) ea.style.display = p === 0 ? 'none' : '';
     updatePromptBanner();
 }
 
 function checkGameOver() {
-    if (state.currentPrompt >= 72 && state.currentPrompt <= 80) state.gameOver = true;
+    var ending = state.currentPrompt >= 72 && state.currentPrompt <= 80;
+    if (ending && !state.gameOver) {
+        // Same reason as declareGameOver: nothing will archive it later.
+        archiveJournal();
+    }
+    if (ending) state.gameOver = true;
     var roll = el('btnRoll');
     if (roll) roll.disabled = !!state.gameOver;
     if (state.gameOver && state.display.promptResult.indexOf('[GAME OVER]') === -1) {
@@ -961,8 +970,10 @@ function showTraitPicker(kind, anchorBtn) {
     pop.className = 'trait-picker';
     pop.setAttribute('data-kind', kind);
     pop.setAttribute('role', 'dialog');
-    pop.setAttribute('aria-label', kind === 'skills' ? 'Check a Skill' : 'Lose a Resource');
-    pop.innerHTML = traitPickerHTML(kind);
+    pop.setAttribute('aria-label', kind === 'skills' ? 'Check a Skill'
+        : kind === 'characters' ? 'Kill a Character'
+        : kind === 'memories' ? 'File as an Experience' : 'Lose a Resource');
+    pop.innerHTML = kind === 'memories' ? memoryPickerHTML() : traitPickerHTML(kind);
     container.appendChild(pop);
     positionTraitPicker(pop, anchorBtn);
     openTraitPicker = pop;
@@ -1120,6 +1131,10 @@ function offerGameOver(msg) {
 
 function declareGameOver(reason) {
     pushUndo();
+    // The roll button is disabled once the game is over, and archiveJournal()
+    // normally runs on the next roll — so archive the pending entry NOW or the
+    // final, most important entry of the chronicle would be lost.
+    archiveJournal();
     state.gameOver = true;
     addToHistoryLog('GAME OVER — ' + reason);
     applyDisplay();
@@ -1184,6 +1199,7 @@ function renderList(list) {
     else if (list === 'resources') renderResources();
     else if (list === 'characters') renderCharacters();
     else if (list === 'marks') renderMarks();
+    renderPlayRecap();
 }
 
 // Text edits update state only — no re-render, so input focus is preserved.
@@ -1367,8 +1383,11 @@ function ensureDiaryResource() {
 
 function addMemoryBlock(containerId) {
     var name = containerId === 'diaryContainer' ? 'diary' : 'memories';
-    if (name === 'memories' && state.memories.length >= state.maxMemories) {
-        toast('Memory limit reached (' + state.maxMemories + '). Move a Memory to the Diary or delete one.', 'warn');
+    // Forced forgetting is the heart of the game, so don't dead-end on a toast:
+    // offer the two legal ways out (Diary or forget) right here. Starred
+    // Memories don't occupy a slot, so count actives, not the raw array.
+    if (name === 'memories' && activeMemoryCount() >= state.maxMemories) {
+        offerMemorySlotRelief();
         return;
     }
     if (name === 'diary' && state.diary.length >= state.maxDiary) {
@@ -1542,6 +1561,29 @@ function updateDiaryCount() {
     setText('diaryCount', '(' + count + '/' + state.maxDiary + ' Slots)');
 }
 
+// At the Memory cap: name the choice and take the player straight to it.
+function offerMemorySlotRelief() {
+    var canDiary = state.diary.length < state.maxDiary;
+    showConfirm({
+        title: 'Your Memories are full',
+        message: 'You hold ' + activeMemoryCount() + ' of ' + state.maxMemories +
+            ' Memories. To take on a new one you must first let an old one go — ' +
+            (canDiary
+                ? 'move a Memory to your Diary to keep it safely out of mind, or strike one out to forget it forever.'
+                : 'your Diary is full too, so a Memory must be struck out and forgotten.'),
+        confirmLabel: canDiary ? 'Open my Memories' : 'Open my Memories',
+        cancelLabel: 'Not yet',
+        onConfirm: function () {
+            showTab('character');
+            var first = el('memoriesContainer');
+            if (first) first.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            toast(canDiary
+                ? 'Use “Move to Diary” to store a Memory, or Delete to forget it.'
+                : 'Delete a Memory to forget it and free a slot.', 'info');
+        }
+    });
+}
+
 function loseMemorySlot() {
     showConfirm({
         title: 'Lose a memory slot?',
@@ -1588,6 +1630,7 @@ function renderAll() {
     renderMemoryList('diary');
     renderTriggers();
     renderRollLog();
+    renderPlayRecap();
     renderNameHistory();
     updateMemoryCount();
     updateDiaryCount();
@@ -1756,6 +1799,177 @@ function suggestInto(kind, containerId, fieldIds) {
     var picks = TYOV.pickSuggestions(pack[kind], 3).map(traitText);
     var chips = picks.map(function (s) { return chipHtml(s, fieldIds); }).join(' ');
     target.innerHTML = chipRowHtml('Try:', chips, containerId);
+}
+
+// --- Entry actions (Play tab) --------------------------------------------
+// The prompt journal normally archives itself on the next roll. These give the
+// player explicit control, which also covers the two cases a roll never
+// reaches: the end of the game, and filing an answer as a real Memory.
+
+function saveEntryNow() {
+    var ta = el('promptJournal');
+    if (!ta || !ta.value.trim()) { toast('Nothing written yet.', 'warn'); return; }
+    if (state.currentPrompt === 0) { toast('Roll the dice first.', 'warn'); return; }
+    pushUndo();
+    archiveJournal();
+    renderJournalTab();
+    persist();
+    toast('Entry saved to your Chronicle.', 'info');
+    announce('Entry saved to the chronicle.');
+}
+
+// "File as an Experience" — the core TYOV loop the app was missing: the answer
+// you just wrote becomes an Experience inside one of your Memories. Opens the
+// same popover the guided actions use, listing Memories with a free slot plus
+// a "new Memory" row (offered only when you are under the Memory cap).
+function fileExperience() {
+    var ta = el('promptJournal');
+    if (!ta || !ta.value.trim()) { toast('Write your answer first.', 'warn'); return; }
+    showTraitPicker('memories', el('btnFileExperience'));
+}
+
+function memoryPickerHTML() {
+    var rows = state.memories.map(function (m) {
+        var cap = memExpCap(m);
+        var full = m.experiences.filter(function (x) { return x.trim(); }).length >= cap;
+        var label = (m.theme || 'Untitled Memory');
+        var tag = full ? 'full' : (m.experiences.filter(function (x) { return x.trim(); }).length + '/' + cap);
+        return '<button type="button" class="tp-row' + (full ? ' tp-disabled' : '') +
+            '" data-id="' + m.id + '"' + (full ? ' disabled' : '') +
+            ' onclick="pickMemoryForExperience(\'' + m.id + '\')">' +
+            '<span class="tp-box">' + (full ? '' : '+') + '</span>' +
+            '<span class="tp-name">' + escapeHtml(label) + '</span>' +
+            '<span class="tp-tag">' + tag + '</span></button>';
+    }).join('');
+    var atCap = activeMemoryCount() >= state.maxMemories;
+    var create = atCap
+        ? '<p class="tp-empty">Memory limit reached (' + state.maxMemories + '). ' +
+          'Free a slot to start a new Memory:</p>' +
+          '<button type="button" class="tp-row tp-create" onclick="closeTraitPicker(); showTab(\'character\');">' +
+          '<span class="tp-box">→</span><span class="tp-name">Open Memories to move or forget one</span></button>'
+        : '<button type="button" class="tp-row tp-create" onclick="createMemoryWithExperience()">' +
+          '<span class="tp-box">+</span><span class="tp-name">New Memory from this entry…</span></button>';
+    return '<div class="tp-head"><strong>File as an Experience</strong>' +
+        '<button type="button" class="tp-close" aria-label="Close" onclick="closeTraitPicker()">×</button></div>' +
+        '<div class="tp-rows" role="menu">' + (rows || '') + create + '</div>' +
+        '<p class="tp-hint">The text stays in your Chronicle entry too.</p>';
+}
+
+function pickMemoryForExperience(id) {
+    var ta = el('promptJournal');
+    var text = ta ? ta.value.trim() : '';
+    var m = findEntity('memories', id);
+    if (!m || !text) return;
+    pushUndo();
+    // Reuse a trailing blank row if there is one, else append.
+    var idx = -1;
+    for (var i = 0; i < m.experiences.length; i++) {
+        if (!m.experiences[i].trim()) { idx = i; break; }
+    }
+    if (idx === -1) m.experiences.push(text); else m.experiences[idx] = text;
+    closeTraitPicker();
+    renderMemoryList('memories');
+    updateMemoryCount();
+    persist();
+    toast('Filed into “' + (m.theme || 'Untitled Memory') + '”.', 'info');
+    announce('Experience filed into ' + (m.theme || 'a Memory') + '.');
+}
+
+function createMemoryWithExperience() {
+    var ta = el('promptJournal');
+    var text = ta ? ta.value.trim() : '';
+    if (!text) return;
+    pushUndo();
+    state.memories.push(newMemory('', text));
+    closeTraitPicker();
+    renderMemoryList('memories');
+    updateMemoryCount();
+    persist();
+    toast('New Memory created — give it a Theme in the Character tab.', 'info');
+    announce('New Memory created from this entry.');
+}
+
+// Memories that occupy a slot (starred ones are free, struck-out ones are gone).
+function activeMemoryCount() {
+    return state.memories.filter(function (m) {
+        return m.memState !== 'starred' && !m.lost;
+    }).length;
+}
+
+// --- Quick-create traits from the Play tab -------------------------------
+// 120 of the 222 prompt entries say "create/gain a Skill / Resource /
+// Character / Mark". Doing that used to mean leaving the Prompt for the
+// Character tab; these add the trait in place and focus it for naming.
+function quickCreate(list) {
+    pushUndo();
+    if (list === 'skills') addSkill('');
+    else if (list === 'resources') addResource('');
+    else if (list === 'characters') addCharacter('', 'Mortal');
+    else if (list === 'marks') addMark('');
+    else return;
+    var added = state[list][state[list].length - 1];
+    var labels = { skills: 'Skill', resources: 'Resource', characters: 'mortal Character', marks: 'Mark' };
+    renderPlayRecap();
+    toast('New ' + labels[list] + ' added — name it below.', 'info');
+    announce('New ' + labels[list] + ' created.');
+    focusNewTrait(list, added);
+}
+
+// Reveal the Play-tab recap and focus the new (blank) trait so it can be named
+// without leaving the Prompt.
+function focusNewTrait(list, entity) {
+    if (!entity) return;
+    var rec = el('playRecap');
+    if (rec) rec.open = true;
+    var field = el('recap-' + entity.id);
+    if (field) { field.focus(); field.scrollIntoView({ block: 'nearest' }); }
+}
+
+// --- Play-tab trait recap -------------------------------------------------
+// Editable one-line list of the traits you need while answering a Prompt, so
+// the Character tab is only needed for bigger surgery.
+function renderPlayRecap() {
+    var box = el('playTraitRecap');
+    if (!box) return;
+    // Never rebuild while one of its own inputs has focus — that would drop the
+    // caret mid-word (same rule as the trait lists: text edits don't re-render).
+    var a = document.activeElement;
+    if (a && a.classList && a.classList.contains('recap-input') && box.contains(a)) return;
+    box.innerHTML =
+        recapGroup('Skills', 'skills') +
+        recapGroup('Resources', 'resources') +
+        recapGroup('Characters', 'characters') +
+        recapGroup('Marks', 'marks');
+}
+
+function recapGroup(label, list) {
+    var items = state[list].filter(function (e) { return !e.lost; });
+    if (!items.length) return '<div class="recap-row"><b>' + label + ':</b> <i>none</i></div>';
+    var cells = items.map(function (e) {
+        var checkedCls = (list === 'skills' && e.checked) ? ' checked-skill' : '';
+        return '<input type="text" id="recap-' + e.id + '" class="recap-input' + checkedCls +
+            '" aria-label="' + label + '" value="' + escapeHtml(e.text) +
+            '" oninput="setEntityText(\'' + list + '\',\'' + e.id + '\', this.value); syncTraitLists(\'' + list + '\')">';
+    }).join('');
+    return '<div class="recap-row"><b>' + label + ':</b> <span class="recap-items">' + cells + '</span></div>';
+}
+
+// The Character tab shows the same traits. Mirror the edit into its matching
+// input directly rather than re-rendering, so neither field loses focus.
+function syncTraitLists(list) {
+    var ids = { skills: 'skillsList', resources: 'resourcesList',
+                characters: 'charactersList', marks: 'marksList' };
+    var host = el(ids[list]);
+    var src = document.activeElement;
+    if (!host || !src || !src.id) return;
+    var id = src.id.replace(/^recap-/, '');
+    var inputs = host.querySelectorAll('input[type="text"]');
+    for (var i = 0; i < inputs.length && i < state[list].length; i++) {
+        if (state[list][i].id === id && inputs[i].value !== src.value) {
+            inputs[i].value = src.value;
+            return;
+        }
+    }
 }
 
 // --- Setting packs -------------------------------------------------------
@@ -2051,7 +2265,7 @@ document.addEventListener('click', function (e) {
     if (!openTraitPicker) return;
     var t = e.target;
     if (openTraitPicker.contains(t)) return;
-    if (t.closest && t.closest('#btnCheckSkill, #btnLoseResource, #btnKillCharacter')) return;
+    if (t.closest && t.closest('#btnCheckSkill, #btnLoseResource, #btnKillCharacter, #btnFileExperience')) return;
     closeTraitPicker();
 });
 
