@@ -386,6 +386,10 @@ textarea:focus-visible {
     text-align: left;
     margin: 20px auto;
     color: var(--text-color);
+    /* Long explainers must scroll inside the dialog, not push their own title
+       off the top of a phone screen. */
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
 }
 
 /* Footer button row for the in-app confirm/alert modal. */
@@ -1011,3 +1015,92 @@ textarea.autogrow {
 }
 .slot-when { font-size: 0.78em; color: #aaa; flex: 0 0 auto; }
 .slot-row .btn-small { margin-left: 0; }
+
+/* ==========================================
+   ONBOARDING, GLOSSARY & PLAIN-LANGUAGE HELP
+   ========================================== */
+.title-row { display: flex; align-items: center; gap: 10px; }
+.help-btn {
+    flex: 0 0 auto;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    padding: 0;
+    font-size: 1em;
+    font-weight: bold;
+    background: transparent;
+    color: var(--accent-color);
+    border: 2px solid var(--accent-color);
+    line-height: 1;
+}
+.help-btn:hover { background: var(--accent-color); color: #fff; filter: none; }
+
+.welcome-content, .glossary-content { max-width: 620px; }
+.welcome-lead { font-size: 1.05em; }
+.welcome-steps { padding-left: 1.2em; margin: 14px 0; }
+.welcome-steps li { margin-bottom: 10px; }
+.welcome-note {
+    border-left: 3px solid var(--accent-color);
+    padding-left: 12px;
+    font-style: italic;
+    color: #bbb;
+}
+body.light-mode .welcome-note { color: #555; }
+
+.glossary { margin: 0; }
+.glossary dt {
+    font-weight: bold;
+    color: var(--accent-color);
+    margin-top: 12px;
+}
+.glossary dd { margin: 2px 0 0; padding-left: 0; }
+
+/* Short explainers under section headings and wizard steps. */
+.section-help, .step-help {
+    font-size: 0.85em;
+    color: #aaa;
+    margin: 0 0 10px;
+    line-height: 1.45;
+}
+.step-help {
+    border-left: 3px solid var(--border-color);
+    padding-left: 10px;
+}
+body.light-mode .section-help, body.light-mode .step-help { color: #555; }
+
+/* "What do I do now?" line under the Roll button. */
+.coach-line {
+    font-size: 0.9em;
+    color: var(--warning-color);
+    margin: 8px auto 0;
+    max-width: 460px;
+}
+.tier-explain { font-size: 0.8em; color: #888; margin-bottom: 4px; }
+body.light-mode .tier-explain { color: #666; }
+
+/* Keep the acknowledge buttons reachable at the end of a long explainer. */
+.welcome-content .modal-actions, .glossary-content .modal-actions {
+    position: sticky;
+    bottom: -30px;
+    background: var(--panel-bg);
+    padding: 10px 0 0;
+    margin-top: 10px;
+}
+
+/* Advanced controls are folded away so beginners meet Roll first. */
+.advanced-bar { display: block; text-align: left; }
+.advanced-bar > summary {
+    cursor: pointer;
+    font-size: 0.85em;
+    color: #aaa;
+    list-style-position: inside;
+}
+.advanced-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-top: 10px;
+}
+.advanced-grid label { font-size: 0.9em; }
+.jump-group { display: inline-flex; align-items: center; gap: 6px; font-size: 0.9em; }

@@ -108,6 +108,8 @@ function toast(msg, kind) {
 // In-app modal replacing blocking alert()/confirm(). Callback-based since a
 // modal is async. `showConfirm` has Cancel + Confirm; `showAlert` is OK-only.
 var _modalOnConfirm = null;
+var _modalOnCancel = null;
+var _modalOnCancel = null;
 var _modalLastFocus = null;
 function showConfirm(o) {
     o = o || {};
@@ -120,6 +122,7 @@ function showConfirm(o) {
     cancel.textContent = o.cancelLabel || 'Cancel';
     cancel.style.display = o.alert ? 'none' : '';
     _modalOnConfirm = o.onConfirm || null;
+    _modalOnCancel = o.onCancel || null;
     el('appModal').classList.add('show');
     ok.focus();
 }
@@ -130,9 +133,14 @@ function showAlert(o) {
         confirmLabel: o.okLabel || 'OK', onConfirm: o.onClose
     });
 }
+// Plain close = Cancel. `onCancel` lets a prompt offer two real choices
+// rather than an action and a dead end (used by the ? help menu).
 function closeAppModal() {
     el('appModal').classList.remove('show');
+    var onCancel = _modalOnCancel;
     _modalOnConfirm = null;
+    _modalOnCancel = null;
+    if (onCancel) onCancel();
     if (_modalLastFocus && _modalLastFocus.focus) { try { _modalLastFocus.focus(); } catch (e) { /* ignore */ } }
 }
 function appModalConfirm() {
@@ -351,6 +359,7 @@ function finishSetup() {
 
 function showWizard() {
     resetSettingPack(); // a fresh vampire gets a fresh setting
+    closeOverlay('welcomeOverlay');
     el('setupWizard').style.display = 'flex';
     nextStep(1);
 }
@@ -518,7 +527,12 @@ function loadGame() {
     } catch (e) {
         saved = null;
     }
-    if (!saved) { showWizard(); return; }
+    if (!saved) {
+        // First ever run: explain the game before demanding a vampire.
+        if (showWelcomeIfFirstRun()) return;
+        showWizard();
+        return;
+    }
 
     var data;
     try {
@@ -975,6 +989,8 @@ function updatePromptMeta() {
     toggleNote('endNote', p === 69 && visits === 3 && !state.gameOver);
     // First-turn hint: after setup there is no Prompt yet, so say what to do.
     toggleNote('startNote', p === 0 && !state.gameOver);
+    updateTierExplain();
+    updateCoachLine();
     var ea = el('entryActions');
     if (ea) ea.style.display = p === 0 ? 'none' : '';
     updatePromptBanner();
@@ -1531,11 +1547,15 @@ function checkSurvivalState() {
 function renderSkills() {
     el('skillsList').innerHTML = state.skills.map(function (s) {
         return '<li class="' + (s.lost ? 'strikethrough' : '') + '">' +
-            '<input type="checkbox" aria-label="Mark skill as used" ' + (s.checked ? 'checked' : '') +
+            '<input type="checkbox" aria-label="Tick when this Skill has been checked (used up)" ' +
+                'title="Tick when a Prompt says to check a Skill. A checked Skill has been spent and cannot be checked again." ' +
+                (s.checked ? 'checked' : '') +
                 ' onchange="setSkillChecked(\'' + s.id + '\', this.checked)">' +
             '<input type="text" aria-label="Skill name" class="' + (s.checked ? 'checked-skill' : '') +
                 '" value="' + escapeHtml(s.text) + '" oninput="setEntityText(\'skills\',\'' + s.id + '\', this.value)">' +
-            '<button class="btn-small btn-strike" onclick="toggleLoseEntity(\'skills\',\'' + s.id + '\')">' +
+            '<button class="btn-small btn-strike" title="' +
+                (s.lost ? 'Bring this Skill back.' : 'Cross this Skill out for good. It stays listed, struck through.') +
+                '" onclick="toggleLoseEntity(\'skills\',\'' + s.id + '\')">' +
                 (s.lost ? 'Restore' : 'Lose') + '</button></li>';
     }).join('');
 }
@@ -1545,7 +1565,9 @@ function renderResources() {
         return '<li class="' + (r.lost ? 'strikethrough' : '') + '">' +
             '<input type="text" aria-label="Resource name" value="' + escapeHtml(r.text) +
                 '" oninput="setEntityText(\'resources\',\'' + r.id + '\', this.value)">' +
-            '<button class="btn-small btn-strike" onclick="toggleLoseEntity(\'resources\',\'' + r.id + '\')">' +
+            '<button class="btn-small btn-strike" title="' +
+                (r.lost ? 'Bring this Resource back.' : 'Cross this Resource out. It stays listed, struck through, as part of the record.') +
+                '" onclick="toggleLoseEntity(\'resources\',\'' + r.id + '\')">' +
                 (r.lost ? 'Restore' : 'Lose') + '</button></li>';
     }).join('');
 }
@@ -1555,7 +1577,9 @@ function renderMarks() {
         return '<li class="' + (m.lost ? 'strikethrough' : '') + '">' +
             '<input type="text" aria-label="Mark description" value="' + escapeHtml(m.text) +
                 '" oninput="setEntityText(\'marks\',\'' + m.id + '\', this.value)">' +
-            '<button class="btn-small btn-strike" onclick="toggleLoseEntity(\'marks\',\'' + m.id + '\')">' +
+            '<button class="btn-small btn-strike" title="' +
+                (m.lost ? 'Bring this Mark back.' : 'Cross this Mark out. It stays listed, struck through, as part of the record.') +
+                '" onclick="toggleLoseEntity(\'marks\',\'' + m.id + '\')">' +
                 (m.lost ? 'Restore' : 'Lose') + '</button></li>';
     }).join('');
 }
@@ -1574,7 +1598,9 @@ function renderCharacters() {
             '<span class="doom-dots" title="' + doomTip + '">' + dots + '</span>' +
             '<button class="btn-small doom-btn" aria-label="Add doom dot" title="' + doomTip + '" style="display:' +
                 (c.type === 'Mortal' ? 'inline-block' : 'none') + '" onclick="addDoom(\'' + c.id + '\')">+•</button>' +
-            '<button class="btn-small btn-strike" onclick="toggleLoseEntity(\'characters\',\'' + c.id + '\')">' +
+            '<button class="btn-small btn-strike" title="' +
+                (c.lost ? 'Bring this Character back.' : 'Cross this Character out. It stays listed, struck through, as part of the record.') +
+                '" onclick="toggleLoseEntity(\'characters\',\'' + c.id + '\')">' +
                 (c.lost ? 'Restore' : 'Lose') + '</button></li>';
     }).join('');
 }
@@ -2029,6 +2055,105 @@ function suggestInto(kind, containerId, fieldIds) {
     var picks = TYOV.pickSuggestions(pack[kind], 3).map(traitText);
     var chips = picks.map(function (s) { return chipHtml(s, fieldIds); }).join(' ');
     target.innerHTML = chipRowHtml('Try:', chips, containerId);
+}
+
+// --- Onboarding & help ---------------------------------------------------
+// Most players arrive without ever having read the rulebook, so the app has to
+// teach the game itself: a first-run explainer, a permanent glossary, and a
+// coach line that says what to do next at every point in the loop.
+var WELCOME_SEEN_KEY = 'tyov_welcome_seen';
+
+function openOverlay(id) {
+    var o = el(id);
+    if (!o) return;
+    o.classList.add('show');
+    var panel = o.querySelector('.modal-content');
+    if (panel) panel.scrollTop = 0; // always start at the title, not mid-text
+    var f = focusablesIn(o);
+    if (f.length) f[f.length - 1].focus();
+}
+function closeOverlay(id) {
+    var o = el(id);
+    if (o) o.classList.remove('show');
+}
+function isOverlayOpen(id) {
+    var o = el(id);
+    return !!(o && o.classList.contains('show'));
+}
+
+function welcomeAlreadySeen() {
+    try { return localStorage.getItem(WELCOME_SEEN_KEY) === '1'; } catch (e) { return false; }
+}
+
+function showWelcomeIfFirstRun() {
+    if (welcomeAlreadySeen()) return false;
+    openOverlay('welcomeOverlay');
+    return true;
+}
+
+function dismissWelcome() {
+    try { localStorage.setItem(WELCOME_SEEN_KEY, '1'); } catch (e) { /* ignore */ }
+    closeOverlay('welcomeOverlay');
+    // First run goes straight on to vampire creation.
+    if (!isGameLoaded || !state.currentName) showWizard();
+}
+
+function openWelcome() { openOverlay('welcomeOverlay'); }
+
+function openGlossary() {
+    closeOverlay('welcomeOverlay');
+    openOverlay('glossaryOverlay');
+}
+// Coming back from the glossary before the game has started returns you to the
+// explainer, so a first-timer is never dropped into an empty screen.
+function closeGlossary() {
+    closeOverlay('glossaryOverlay');
+    if (!welcomeAlreadySeen()) openOverlay('welcomeOverlay');
+}
+
+// The ? button: pick between the two, rather than guessing which is wanted.
+function openHelpMenu() {
+    showConfirm({
+        title: 'Need a hand?',
+        message: 'Read how the game works from the start, or look up what a ' +
+                 'particular word means.',
+        confirmLabel: 'How to play',
+        cancelLabel: 'What the words mean',
+        onConfirm: openWelcome,
+        onCancel: function () { openOverlay('glossaryOverlay'); }
+    });
+}
+
+// A single line under the Roll button telling the player what to do NOW.
+// It is the main defence against "I rolled — and then what?".
+function updateCoachLine() {
+    var box = el('coachLine');
+    if (!box) return;
+    var msg;
+    if (state.gameOver) {
+        msg = 'Your vampire\u2019s story is over. Read it in 📖, then export or print it.';
+    } else if (state.currentPrompt === 0) {
+        msg = 'Press the button above. The dice choose which Prompt you answer.';
+    } else if (!val('promptJournal').trim()) {
+        msg = 'Read the Prompt above, then answer it in the box below — a sentence is enough.';
+    } else {
+        msg = 'Done writing? Keep it as a Memory, then roll again for the next Prompt.';
+    }
+    box.textContent = msg;
+}
+
+// Plain-English gloss of the a/b/c tier badge.
+function updateTierExplain() {
+    var box = el('tierExplain');
+    if (!box) return;
+    var p = state.currentPrompt;
+    var visits = state.promptVisits[p] || 0;
+    if (p < 1 || visits < 1) { box.textContent = ''; return; }
+    box.textContent = visits === 1
+        ? 'Your first time at this Prompt — you get its first question.'
+        : visits === 2 ? 'You have been here before, so this is a new question on the same Prompt.'
+        : visits === 3 ? 'Your third and last question for this Prompt.'
+        : 'You have used up all three questions here. Roll again, or move on.';
 }
 
 // --- Memory operations (Play tab) ----------------------------------------
@@ -2611,6 +2736,8 @@ function focusablesIn(container) {
 // The currently-open overlay whose focus should be trapped, or null.
 function openModalEl() {
     var am = el('appModal'); if (am && am.classList.contains('show')) return am;
+    if (isOverlayOpen('glossaryOverlay')) return el('glossaryOverlay');
+    if (isOverlayOpen('welcomeOverlay')) return el('welcomeOverlay');
     var sw = el('setupWizard'); if (sw && sw.style.display === 'flex') return sw;
     return null;
 }
@@ -2620,6 +2747,12 @@ document.addEventListener('keydown', function (e) {
         // Esc dismisses dismissable overlays (not the required setup wizard).
         if (openTraitPicker) { closeTraitPicker(); return; }
         if (isAppModalOpen()) { closeAppModal(); return; }
+        if (isOverlayOpen('glossaryOverlay')) { closeGlossary(); return; }
+        // The welcome explainer is only Esc-dismissable once the game exists;
+        // on first run it must be acknowledged so the wizard opens after it.
+        if (isOverlayOpen('welcomeOverlay') && welcomeAlreadySeen()) {
+            closeOverlay('welcomeOverlay'); return;
+        }
         var op = el('oraclePanel');
         if (op && op.classList.contains('show')) toggleOracle();
         return;

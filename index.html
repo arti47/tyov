@@ -23,6 +23,72 @@
     <audio id="sfxDice" src="assets/dice.wav" preload="auto"></audio>
     <audio id="sfxPage" src="assets/page.wav" preload="auto"></audio>
 
+    <!-- First-run onboarding. Explains what this game IS before asking for
+         anything, because most players arrive without the rulebook. -->
+    <div id="welcomeOverlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle">
+        <div class="modal-content welcome-content">
+            <h2 id="welcomeTitle">Welcome — here's how this works</h2>
+
+            <p class="welcome-lead">This is a <b>solo storytelling game</b>. There is no opponent and
+            no way to play badly. You invent a vampire, then write their life story
+            across a thousand years, a few sentences at a time.</p>
+
+            <ol class="welcome-steps">
+                <li><b>Make your vampire.</b> Answer eight short questions — who you
+                    were as a mortal, what you owned, who you loved, how you died.
+                    Stuck? Every question has a 🎲 button that suggests answers, and
+                    <b>✨ Surprise me</b> fills in an entire vampire for you.</li>
+                <li><b>Roll the dice.</b> The dice move you through a book of 80
+                    numbered <b>Prompts</b>. You don't choose where you land.</li>
+                <li><b>Read the Prompt and write.</b> Each one asks a question about
+                    your vampire's life — "who betrays you?", "what do you lose?".
+                    Answer it in a sentence or a paragraph, in your own words.</li>
+                <li><b>Record what changed.</b> A Prompt may tell you to gain a skill,
+                    lose something, or let someone die. Buttons on screen do that
+                    bookkeeping for you.</li>
+                <li><b>Repeat until the story ends.</b> A game runs anywhere from
+                    twenty minutes to many sittings. Everything saves automatically.</li>
+            </ol>
+
+            <p class="welcome-note">Centuries pass. Your vampire outlives everyone they
+            knew, and can only hold <b>five memories</b> at a time — so as new ones
+            arrive, old ones must be given up. That loss is the point of the game.</p>
+
+            <div class="modal-actions">
+                <button class="btn-strike" onclick="openGlossary()">What do the words mean?</button>
+                <button onclick="dismissWelcome()">Make my vampire →</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Glossary: every term the app uses, in plain language. Reachable any
+         time from the ? button in the header. -->
+    <div id="glossaryOverlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="glossaryTitle">
+        <div class="modal-content glossary-content">
+            <h2 id="glossaryTitle">What the words mean</h2>
+            <dl class="glossary">
+                <dt>Prompt</dt><dd>One of the 80 numbered questions in the book. The dice decide which one you get. Each Prompt has three versions — <b>a</b>, <b>b</b> and <b>c</b> — so landing on the same number again gives you a new question rather than a repeat.</dd>
+                <dt>Experience</dt><dd>One sentence (or a short paragraph) about something that happened to your vampire. This is the thing you actually write.</dd>
+                <dt>Memory</dt><dd>A container holding up to three related Experiences, with a short <b>Theme</b> naming it — like "The Siege of Antioch". You can only keep <b>five</b> Memories. To take a new one you must forget an old one.</dd>
+                <dt>Theme</dt><dd>The title you give a Memory. A few words, nothing more.</dd>
+                <dt>Skill</dt><dd>Something your vampire is good at: "Swordplay", "Reading Latin". When a Prompt says <b>check a Skill</b>, tick one off — it's been used up or has failed you, and can't be checked again.</dd>
+                <dt>Resource</dt><dd>Something your vampire owns or controls: a house, a horse, a debt owed. Prompts will take these away.</dd>
+                <dt>Character</dt><dd>A person in your vampire's life. <b>Mortals</b> die of old age within a generation; <b>Immortals</b> (like the vampire who made you) do not.</dd>
+                <dt>Mark</dt><dd>A visible sign of what you are — no reflection, cold hands, a wound that never healed.</dd>
+                <dt>Lose / strike out</dt><dd>Crossing something off. It stays on the page with a line through it, as a record of what you used to have.</dd>
+                <dt>Diary</dt><dd>A safe place to store up to four Memories you don't want to forget forever. It's itself a Resource — if you lose the Diary, everything in it is lost too.</dd>
+                <dt>The Boxed Experience</dt><dd>One perfect moment you write once, at any time. It never fades and never takes up a Memory slot.</dd>
+                <dt>Checked Skill</dt><dd>A Skill with its box ticked: already spent. Unticked Skills are still available to you.</dd>
+                <dt>Memory states</dt><dd>Prompts can change how a Memory works — <b>⭐ Starred</b> (safe forever, doesn't use a slot), <b>🌫️ Hazy</b> (only fragments remain), <b>🌌 Vast</b> (holds five Experiences), <b>🐾 Primal</b> (only a feeling is left).</dd>
+                <dt>Doom dots</dt><dd>A countdown on an Immortal Character. One Prompt late in the book halves their remaining lifespan for each dot.</dd>
+                <dt>The Chronicle</dt><dd>Everything you've written, gathered in one place. Export or print it when you're done.</dd>
+            </dl>
+            <div class="modal-actions">
+                <button onclick="closeGlossary()">Got it</button>
+            </div>
+        </div>
+    </div>
+
     <div id="setupWizard" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Vampire creation">
         <div class="modal-content">
             
@@ -39,6 +105,7 @@
 
             <div id="step2" class="wizard-step" style="display: none;">
                 <h2>Step 2: Mortal Skills</h2>
+                <p class="step-help">A <b>Skill</b> is anything your vampire is good at. It doesn't have to be heroic — a trade, a knack, a way with people all count.</p>
                 <p>What were you exceptionally good at in your human life? List three. (e.g., "Blacksmithing", "Charming", "Spear Fighting", "Herbalism")</p>
                 <input type="text" id="setupSkill1" placeholder="Skill 1" style="margin-bottom: 5px;">
                 <input type="text" id="setupSkill2" placeholder="Skill 2" style="margin-bottom: 5px;">
@@ -54,6 +121,7 @@
 
             <div id="step3" class="wizard-step" style="display: none;">
                 <h2>Step 3: Resources</h2>
+                <p class="step-help">A <b>Resource</b> is something you own or control. Later Prompts will take these away from you, one by one.</p>
                 <p>What valuable physical items or properties do you possess from your human years? List three. (e.g., "A fine horse", "A hidden cave", "Bag of gold coins", "Family signet ring")</p>
                 <input type="text" id="setupRes1" placeholder="Resource 1" style="margin-bottom: 5px;">
                 <input type="text" id="setupRes2" placeholder="Resource 2" style="margin-bottom: 5px;">
@@ -69,6 +137,7 @@
 
             <div id="step4" class="wizard-step" style="display: none;">
                 <h2>Step 4: Mortal Characters</h2>
+                <p class="step-help">A <b>Character</b> is a person who matters to your vampire. They can be loved or hated — either works, and both hurt to lose.</p>
                 <p>Name three mortals intimately tied to your life — relatives, friends, lovers, enemies, mentors. (e.g., "Eliza, my sister", "Marcus, the local priest"). The immortal who turns you comes later, in Step 8.</p>
                 <input type="text" id="setupChar1" placeholder="Character 1" style="margin-bottom: 5px;">
                 <input type="text" id="setupChar2" placeholder="Character 2" style="margin-bottom: 5px;">
@@ -84,6 +153,7 @@
 
             <div id="step5" class="wizard-step" style="display: none;">
                 <h2>Step 5: Memory 1 — Your Mortal Life</h2>
+                <p class="step-help">The next four steps are the writing part. A <b>Memory</b> is just a titled box holding a sentence or two — its title is the <b>Theme</b>, and each sentence inside is an <b>Experience</b>. Write plainly; nobody else has to read this.</p>
                 <p>Start your first Memory with one broad Experience summarizing who you were before unlife. (e.g. Theme: 'Mortal Life', Experience: 'I am Henri, son of Jon, a poor knight swindled out of my inheritance near the Loire.')</p>
                 <div class="trait-recap"></div>
                 <input type="text" id="setupMemTheme1" placeholder="Memory 1 Theme (e.g. Mortal Life)" style="margin-bottom: 5px;">
@@ -101,6 +171,7 @@
 
             <div id="step6" class="wizard-step" style="display: none;">
                 <h2>Step 6: Memories 2 &amp; 3</h2>
+                <p class="step-help">Now tie your vampire's life together: each of these should mention <b>two</b> of the things you listed in steps 2–4 (a Skill, a Resource or a person). The panel below reminds you what you wrote.</p>
                 <p>Create two more Experiences, each in its own Memory, each combining <b>two</b> of your traits. (e.g. "Gundar takes me on my first voyage aboard the Longship Bøkesuden; his touch calms me when we first leave sight of land.")</p>
                 <div class="trait-recap"></div>
                 <input type="text" id="setupMemTheme2" placeholder="Memory 2 Theme" style="margin-bottom: 5px;">
@@ -137,6 +208,7 @@
 
             <div id="step8" class="wizard-step" style="display: none;">
                 <h2>Step 8: The Turning</h2>
+                <p class="step-help">The last step: how you stopped being human. The vampire who did it to you is called your <b>sire</b>, and a <b>Mark</b> is the physical trace it left on you.</p>
                 <p>Lastly, create the <b>Immortal</b> who gifted (or cursed) you with unlife, the <b>Mark</b> it left, and the Memory of your transformation (Memory 5). (e.g. Sire: 'Baron Hollmueller, an Austrian vampire'; Mark: 'My neck is permanently broken'; Experience: 'I duel the eerie Baron across the abbey roof; he nearly takes my head, but I do not die.')</p>
                 <div class="trait-recap"></div>
                 <input type="text" id="setupSire" placeholder="The immortal who turned you..." style="margin-bottom: 5px;">
@@ -168,7 +240,10 @@
         </div>
     </div>
 
-    <h1 style="border: none; margin: 0; padding: 0;">Vampire Chronicle</h1>
+    <div class="title-row">
+        <h1 style="border: none; margin: 0; padding: 0;">Vampire Chronicle</h1>
+        <button id="btnHelp" class="help-btn" onclick="openHelpMenu()" aria-label="How to play and glossary" title="How to play / what the words mean">?</button>
+    </div>
 
     <div class="name-row" style="display: flex; gap: 10px; margin-top: 10px; margin-bottom: 5px;">
         <input type="text" id="currentName" placeholder="Enter your current alias/name..." style="font-size: 1.2em; font-weight: bold;">
@@ -201,23 +276,30 @@
     <section id="panel-play" class="tab-panel" role="tabpanel" aria-labelledby="tab-play">
 
     <div class="panel full-width" style="text-align: center; margin-bottom: 20px;">
-        <div class="options-bar">
-            <div style="display: flex; gap: 10px; align-items: center;">
-                <label title="Reverse the dice (d6 − d10) for your next roll only, then it clears."><input type="checkbox" id="optReverseTime"> Rev. Time <span style="font-size:0.8em; color:#aaa;">(next roll)</span></label>
-                <label title="Group play: roll two d10s minus a d6."><input type="checkbox" id="optMultiplayer"> Multi</label>
-                <button class="btn-small btn-strike" title="Move back one Prompt (manual navigation)" onclick="stepBackOnePrompt()">Step Back</button>
-                <button id="btnUndo" class="btn-small" style="background: #607d8b;" onclick="undoLastRoll()" disabled>Undo</button>
-                <input type="number" id="jumpPromptNum" placeholder="#" style="width: 50px; padding: 4px; margin-left: 10px;">
-                <button class="btn-small" style="background: #ff5722;" onclick="jumpToPrompt()">Jump</button>
+        <!-- Beginners meet the Roll button first; the fiddly navigation tools
+             are folded away so they can't be mistaken for normal play. -->
+        <details class="options-bar advanced-bar">
+            <summary>Extra controls (you won't need these to play)</summary>
+            <div class="advanced-grid">
+                <label title="Some Prompts tell you to reverse time. Tick this and your next roll moves you BACKWARDS through the book. It clears itself afterwards."><input type="checkbox" id="optReverseTime"> Move backwards on the next roll</label>
+                <label title="Only for playing with other people at the same table: rolls two ten-sided dice instead of one, so the story moves faster."><input type="checkbox" id="optMultiplayer"> Group play (two d10s)</label>
+                <button class="btn-small btn-strike" title="Go back one Prompt number, without rolling." onclick="stepBackOnePrompt()">← Back one Prompt</button>
+                <button id="btnUndo" class="btn-small" style="background: #607d8b;" title="Undo your last action. You can keep pressing to go further back." onclick="undoLastRoll()" disabled>Undo last action</button>
+                <span class="jump-group">Go to Prompt
+                    <input type="number" id="jumpPromptNum" placeholder="#" min="1" max="80" title="Type a Prompt number from 1 to 80." style="width: 56px; padding: 4px;">
+                    <button class="btn-small" style="background: #ff5722;" title="Jump straight to that Prompt number instead of rolling." onclick="jumpToPrompt()">Go</button>
+                </span>
             </div>
-        </div>
+        </details>
 
-        <button id="btnRoll" onclick="rollAndMove()" aria-label="Roll dice and advance to the next prompt" style="font-size: 1.2em; padding: 10px 20px;">Roll Dice & Advance</button>
+        <button id="btnRoll" onclick="rollAndMove()" aria-label="Roll the dice to get your next prompt" style="font-size: 1.2em; padding: 10px 20px;">🎲 Roll for my next Prompt</button>
+        <div id="coachLine" class="coach-line"></div>
 
         <div id="diceAnim" class="dice-anim" aria-hidden="true"></div>
 
         <h3 id="promptResult" style="margin-top: 15px; color: #ff4d4d;">Awaiting First Roll...</h3>
         <div id="tierBadge" style="font-size: 0.85em; color: #aaa; min-height: 1.2em;"></div>
+        <div id="tierExplain" class="tier-explain"></div>
         <p id="rollResultDetails" style="font-size: 0.9em; color: #aaa;"></p>
         <div id="promptTextDisplay" style="margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.1); border-left: 4px solid var(--accent-color); font-style: italic; text-align: left;">
             Your prompt narrative will appear here.
@@ -228,7 +310,7 @@
         <div id="advanceNote" class="prompt-note">You've answered all entries (a, b, c) for this Prompt. <button class="btn-small" onclick="advanceToNextPrompt()">Move to next Prompt →</button></div>
 
         <div class="prompt-actions" id="promptActions" role="group" aria-label="Guided prompt actions">
-            <span class="prompt-actions-label">When a Prompt instructs you:</span>
+            <span class="prompt-actions-label">Did the Prompt tell you to do one of these? Tap it:</span>
             <div class="prompt-action-btns">
                 <button class="btn-small" id="btnCheckSkill" onclick="promptCheckSkill()">Check a Skill</button>
                 <button class="btn-small btn-strike" id="btnLoseResource" onclick="promptLoseResource()">Lose a Resource</button>
@@ -249,14 +331,14 @@
             <div class="trait-recap" id="playTraitRecap"></div>
         </details>
 
-        <textarea id="promptJournal" class="autogrow" rows="3" oninput="autoGrow(this)" placeholder="Write your detailed narrative response to this prompt here... (This automatically saves to your Chronicle when you roll the dice)" style="margin-top: 15px; min-height: 120px; font-size: 1.05em; border-color: var(--accent-color);"></textarea>
+        <textarea id="promptJournal" class="autogrow" rows="3" oninput="autoGrow(this)" placeholder="Answer the Prompt here, in your own words. A sentence is plenty — a paragraph is fine too. There are no wrong answers, and this saves as you type." style="margin-top: 15px; min-height: 120px; font-size: 1.05em; border-color: var(--accent-color);"></textarea>
         <div class="journal-spark-row">
             <button type="button" class="btn-small spark-btn" onclick="sparkInto('sparkJournal','promptJournal')">🎲 Spark idea</button>
             <div class="meaning-spark" id="sparkJournal"></div>
         </div>
         <div class="entry-actions" id="entryActions">
-            <button type="button" class="btn-small" id="btnFileExperience" onclick="fileExperience()">📓 File as an Experience…</button>
-            <button type="button" class="btn-small btn-strike" id="btnSaveEntry" onclick="saveEntryNow()">Save entry to Chronicle</button>
+            <button type="button" class="btn-small" id="btnFileExperience" title="Keep this moment as one of your vampire's Memories." onclick="fileExperience()">📓 Keep this as a Memory…</button>
+            <button type="button" class="btn-small btn-strike" id="btnSaveEntry" title="Add this writing to your Chronicle now, without rolling." onclick="saveEntryNow()">Save to my Chronicle</button>
         </div>
 
         <div id="rollHistoryLog"><b>History:</b><br></div>
@@ -280,28 +362,32 @@
 
         <div class="panel">
             <div style="display: flex; justify-content: space-between; align-items: baseline;">
-                <h2>Traits</h2>
+                <h2 class="has-help">Traits</h2>
                 <label style="font-size: 0.8em;">
-                    <input type="checkbox" id="hideGraveyardToggle" onchange="toggleGraveyard()"> Hide Lost
+                    <input type="checkbox" id="hideGraveyardToggle" onchange="toggleGraveyard()" title="Hide everything you have lost, so only what you still have is listed."> Hide crossed-out
                 </label>
             </div>
             
+            <p class="section-help">Everything your vampire has: what they can do, what they own, who they know, and what marks them. Prompts will add to these and take them away.</p>
             <div id="traitsContainer">
                 <h3>Skills</h3>
+            <p class="section-help">Things your vampire is good at. Tick the box when a Prompt says to <b>check</b> a Skill — that means it's been spent and can't be used again. Press <b>Lose</b> to cross one out for good.</p>
                 <ul class="trait-list" id="skillsList"></ul>
                 <button class="btn-small" onclick="addSkill()">+ Add Skill</button>
                 
                 <h3 style="margin-top: 20px;">Resources</h3>
+                <p class="section-help">Things your vampire owns or controls — a house, a horse, a debt owed. Press <b>Lose</b> when a Prompt takes one away.</p>
                 <ul class="trait-list" id="resourcesList"></ul>
                 <button class="btn-small" onclick="addResource()">+ Add Resource</button>
                 
                 <h3 style="margin-top: 20px;">Characters</h3>
-                <p style="font-size: 0.8em; color: #aaa;">Click [+•] to add a Doom Dot.</p>
+                <p class="section-help">People in your vampire's life. <b>Mortals</b> die of old age within a generation — <b>Pass a Century</b> below kills off the ones still living. <b>Immortals</b> endure. The [+•] button adds a Doom Dot, a countdown used by one late Prompt.</p>
                 <ul class="trait-list" id="charactersList"></ul>
                 <button class="btn-small" onclick="addCharacter()">+ Add Character</button>
                 <button class="btn-small btn-strike" style="margin-top: 5px; width: 100%;" onclick="killAllMortals()">Pass a Century</button>
                 
                 <h3 style="margin-top: 20px;">Marks</h3>
+                <p class="section-help">Visible signs of what you have become: no reflection, cold hands, a wound that never healed.</p>
                 <ul class="trait-list" id="marksList"></ul>
                 <button class="btn-small" onclick="addMark()">+ Add Mark</button>
             </div>
@@ -310,7 +396,7 @@
         <div class="panel">
             <div style="display:flex; justify-content:space-between; align-items:baseline;">
                 <h2 style="border:none;">Memories <span id="memoryCount">(0/5 Active)</span></h2>
-                <button class="btn-small btn-strike" onclick="loseMemorySlot()" title="Permanently lose a Memory slot">-1 Slot</button>
+                <button class="btn-small btn-strike" onclick="loseMemorySlot()" title="Only when a Prompt says so: permanently reduces how many Memories you can hold.">−1 Slot</button>
             </div>
 
             <div class="boxed-experience">
@@ -319,6 +405,7 @@
                 <textarea id="boxedExpText" class="autogrow" rows="3" oninput="autoGrow(this)" placeholder="A moment that never fades... (*italics* / **bold**)"></textarea>
             </div>
             
+            <p class="section-help">Your vampire can hold only <b>five</b> Memories. Each holds up to three <b>Experiences</b> — the sentences you write. When all five are full and a new one arrives, you must move one to the Diary or forget it forever.</p>
             <div id="memoriesContainer"></div>
             <button class="btn-small" onclick="addMemoryBlock('memoriesContainer')" style="margin-bottom: 20px; width: 100%;">+ Add Memory</button>
         </div>
@@ -328,8 +415,8 @@
 
     <section id="panel-diary" class="tab-panel" role="tabpanel" aria-labelledby="tab-diary" hidden>
     <div class="panel full-width">
-        <h2 style="border:none;">Diary / Storage <span id="diaryCount">(0/4 Slots)</span></h2>
-        <p style="font-size: 0.8em; color: #aaa; margin: 0 0 10px;">The Diary is a Resource that holds up to 4 Memories. Memories moved here are frozen — no new Experiences. If the Diary Resource is lost, its Memories are struck out.</p>
+        <h2 style="border:none;">Diary <span id="diaryCount">(0/4 Slots)</span></h2>
+        <p class="section-help">A book your vampire keeps, holding up to 4 Memories you would otherwise have to forget. Stored Memories are frozen — you can read them but not add to them. The Diary is itself a Resource: if you ever lose it, everything written in it is lost too.</p>
         <div id="diaryContainer"></div>
         <button class="btn-small" onclick="addMemoryBlock('diaryContainer')" style="width: 100%;">+ Add Storage Entry</button>
     </div>
@@ -351,12 +438,15 @@
     <div class="panel full-width">
         <h2 style="border:none;">Settings</h2>
         <h3>Your chronicles</h3>
+        <p class="section-help">You can keep several vampires going at once. Each slot is a separate story.</p>
         <ul id="slotList" class="slot-list"></ul>
         <button class="btn-small" onclick="newSlot()">+ New chronicle</button>
         <p style="font-size:0.8em; color:#aaa; margin-top:4px;">Each slot holds its own vampire, saved separately in this browser.</p>
 
-        <h3>Display</h3>
+        <h3>Help &amp; display</h3>
         <div class="settings-group">
+            <button class="btn-small" onclick="openWelcome()">How to play</button>
+            <button class="btn-small" onclick="openGlossary()">What the words mean</button>
             <button class="btn-small" onclick="toggleTheme()" id="btnTheme">Toggle Light Mode</button>
             <span>Font size:
                 <button class="btn-small" onclick="changeFontSize(2)" aria-label="Increase font size">A+</button>
