@@ -302,7 +302,7 @@
 
     <section id="panel-play" class="tab-panel" role="tabpanel" aria-labelledby="tab-play">
 
-    <div class="panel full-width" style="text-align: center; margin-bottom: 20px;">
+    <div class="panel full-width play-main" style="text-align: center; margin-bottom: 20px;">
         <!-- Beginners meet the Roll button first; the fiddly navigation tools
              are folded away so they can't be mistaken for normal play. -->
         <details class="options-bar advanced-bar">
@@ -319,18 +319,30 @@
             </div>
         </details>
 
-        <button id="btnRoll" onclick="rollAndMove()" aria-label="Roll the dice to get your next prompt" style="font-size: 1.2em; padding: 10px 20px;">🎲 Roll for my next Prompt</button>
-        <div id="coachLine" class="coach-line"></div>
-
-        <div id="diceAnim" class="dice-anim" aria-hidden="true"></div>
-
-        <h3 id="promptResult" class="prompt-result">Awaiting First Roll...</h3>
-        <div id="tierBadge" class="tier-badge"></div>
-        <div id="tierExplain" class="tier-explain"></div>
-        <p id="rollResultDetails" class="roll-details"></p>
-        <div id="promptTextDisplay" class="prompt-text">
-            Your prompt narrative will appear here.
+        <!-- Roll zone: the button, the dice that were thrown, and where you
+             stand in the 80-Prompt book. -->
+        <div class="roll-zone">
+            <button id="btnRoll" class="roll-btn" onclick="rollAndMove()" aria-label="Roll the dice to get your next prompt">🎲 Roll for my next Prompt</button>
+            <div id="diceAnim" class="dice-anim" aria-hidden="true"></div>
+            <div id="progressTrack" class="progress-track" role="img" aria-label="Progress through the Prompt book"></div>
         </div>
+
+        <!-- The Prompt is the hero: number seal + a/b/c pill, then the text. -->
+        <article class="prompt-card" id="promptCard" aria-live="off">
+            <header class="prompt-card-head">
+                <span class="prompt-seal" id="promptSeal" aria-hidden="true"></span>
+                <div class="prompt-card-meta">
+                    <h3 id="promptResult" class="prompt-result">Awaiting First Roll...</h3>
+                    <div id="tierBadge" class="tier-badge"></div>
+                    <div id="tierExplain" class="tier-explain"></div>
+                    <p id="rollResultDetails" class="roll-details"></p>
+                </div>
+            </header>
+            <div id="promptTextDisplay" class="prompt-text">
+                Your prompt narrative will appear here.
+            </div>
+        </article>
+        <div id="coachLine" class="coach-line"></div>
 
         <div id="startNote" class="prompt-note">Your vampire is made. Roll the dice to enter the Prompt book and begin the chronicle.</div>
         <div id="endNote" class="prompt-note">This Prompt lets you end the game now, if it feels right. <button class="btn-small btn-strike" onclick="declareGameOver('You chose to end the chronicle here.')">End the Game</button></div>
@@ -352,11 +364,18 @@
             </div>
         </div>
 
-        <!-- (4) Traits at a glance, so answering a Prompt needs no tab switch. -->
-        <details id="playRecap" class="play-recap">
-            <summary>Your traits at a glance</summary>
-            <div class="trait-recap" id="playTraitRecap"></div>
-        </details>
+        <!-- Side column on wide screens (beside the Prompt); inline on phones.
+             Memory candles + traits at a glance, so answering needs no tab switch. -->
+        <aside class="play-side" aria-label="Your vampire at a glance">
+            <div class="side-block">
+                <div class="side-head">Memories <span class="side-count" id="playMemCount"></span></div>
+                <div class="candles" id="candlesPlay" role="img"></div>
+            </div>
+            <details id="playRecap" class="play-recap">
+                <summary>Your traits at a glance</summary>
+                <div class="trait-recap" id="playTraitRecap"></div>
+            </details>
+        </aside>
 
         <textarea id="promptJournal" class="autogrow" rows="3" oninput="autoGrow(this)" placeholder="Answer the Prompt here, in your own words. A sentence is plenty — a paragraph is fine too. There are no wrong answers, and this saves as you type." ></textarea>
         <div class="journal-spark-row">
@@ -425,6 +444,7 @@
                 <h2 style="border:none;">Memories <span id="memoryCount">(0/5 Active)</span></h2>
                 <button class="btn-small btn-strike" onclick="loseMemorySlot()" title="Only when a Prompt says so: permanently reduces how many Memories you can hold.">−1 Slot</button>
             </div>
+            <div class="candles candles-inline" id="candlesChar" role="img"></div>
 
             <div class="boxed-experience">
                 <h4 class="boxed-title">The Boxed Experience</h4>

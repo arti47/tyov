@@ -242,3 +242,23 @@ test('traitForms normalises tagged entries and plain strings', () => {
     assert.strictEqual(traitForms('', 'skill'), null);
     assert.strictEqual(traitForms(null, 'skill'), null);
 });
+
+test('candleStates lights occupied slots, skips starred/lost, marks lost slots', () => {
+    const { candleStates } = require('../logic.js');
+    const mems = [
+        { memState: 'normal' }, { memState: 'starred' }, { memState: 'normal', lost: true },
+        { memState: 'hazy' }
+    ];
+    assert.deepStrictEqual(candleStates(mems, 5), ['lit', 'lit', 'unlit', 'unlit', 'unlit']);
+    assert.deepStrictEqual(candleStates(mems, 3), ['lit', 'lit', 'unlit', 'lost', 'lost']);
+    assert.deepStrictEqual(candleStates([], 0), ['lost', 'lost', 'lost', 'lost', 'lost']);
+});
+
+test('trackMarks lists visited prompts in order and flags the current one', () => {
+    const { trackMarks } = require('../logic.js');
+    assert.deepStrictEqual(trackMarks({ 12: 2, 3: 1, 99: 1, 7: 0 }, 12), [
+        { n: 3, visits: 1, current: false },
+        { n: 12, visits: 2, current: true }
+    ]);
+    assert.deepStrictEqual(trackMarks(null, 0), []);
+});

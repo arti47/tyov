@@ -251,6 +251,39 @@
             });
     }
 
+    // --- Visual gauges (pure; rendered by app.js) ---------------------------
+
+    // One entry per Memory-slot candle. Slots are lit when occupied by an
+    // active Memory (starred Memories take no slot; struck-out ones are gone),
+    // unlit when free, and 'lost' for slots removed by "lose a Memory slot".
+    // `total` is the starting slot count (5 in the rules).
+    function candleStates(memories, maxMemories, total) {
+        total = Math.max(total || 5, maxMemories || 0);
+        var used = (memories || []).filter(function (m) {
+            return m && m.memState !== 'starred' && !m.lost;
+        }).length;
+        var out = [];
+        for (var i = 0; i < total; i++) {
+            if (i >= (maxMemories || 0)) out.push('lost');
+            else out.push(i < used ? 'lit' : 'unlit');
+        }
+        return out;
+    }
+
+    // Marks for the 1–80 progress track: every visited Prompt with its visit
+    // count, plus which one is current. Ignores out-of-range keys.
+    function trackMarks(promptVisits, current, total) {
+        total = total || 80;
+        var marks = [];
+        Object.keys(promptVisits || {}).forEach(function (k) {
+            var n = parseInt(k, 10);
+            var v = promptVisits[k] || 0;
+            if (n >= 1 && n <= total && v > 0) marks.push({ n: n, visits: v, current: n === current });
+        });
+        marks.sort(function (a, b) { return a.n - b.n; });
+        return marks;
+    }
+
     // --- Save-state shape + validation (pure; shared with the app & tests) ----
 
     var SAVE_VERSION = 2;
@@ -352,6 +385,8 @@
         pickSuggestions: pickSuggestions,
         fillTemplate: fillTemplate,
         traitForms: traitForms,
+        candleStates: candleStates,
+        trackMarks: trackMarks,
         genId: genId,
         defaultState: defaultState,
         normMem: normMem,

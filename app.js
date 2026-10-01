@@ -988,32 +988,126 @@ function calculateMove() {
 // B11: brief dice-roll animation. Flashes random faces, then settles on the
 // actual d10/d6 and the net movement. Purely cosmetic; state updates happen
 // immediately in rollAndMove regardless.
-function dieFace(val, cls) { return '<span class="die die-' + cls + '">' + val + '</span>'; }
+// SVG dice. The d10 is drawn as the kite face of a pentagonal
+// trapezohedron with its number; the d6 as a bone cube face with pips.
+var D6_PIPS = {
+    1: [[24, 24]],
+    2: [[15, 15], [33, 33]],
+    3: [[15, 15], [24, 24], [33, 33]],
+    4: [[15, 15], [33, 15], [15, 33], [33, 33]],
+    5: [[15, 15], [33, 15], [24, 24], [15, 33], [33, 33]],
+    6: [[15, 14], [33, 14], [15, 24], [33, 24], [15, 34], [33, 34]]
+};
+function dieFace(val, cls) {
+    if (cls === 'd6') {
+        var pips = (D6_PIPS[val] || []).map(function (p) {
+            return '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="3.6"/>';
+        }).join('');
+        return '<svg class="die die-d6" viewBox="0 0 48 48" role="img" aria-label="d6: ' + val + '">' +
+            '<rect class="die-body" x="4" y="4" width="40" height="40" rx="8"/>' +
+            '<g class="die-pips">' + pips + '</g></svg>';
+    }
+    return '<svg class="die die-d10" viewBox="0 0 48 48" role="img" aria-label="d10: ' + val + '">' +
+        '<path class="die-body" d="M24 2.5 45 20 24 45.5 3 20Z"/>' +
+        '<path class="die-facet" d="M3 20 24 28.5 45 20M24 28.5V45.5"/>' +
+        '<text x="24" y="22.5" text-anchor="middle" dominant-baseline="middle">' + val + '</text></svg>';
+}
+function d10Faces(a, b, multi) {
+    return multi
+        ? dieFace(a, 'd10') + '<span class="die-op">+</span>' + dieFace(b, 'd10')
+        : dieFace(a, 'd10');
+}
 function animateDice(m) {
     var box = el('diceAnim');
     if (!box) return;
     clearInterval(box._t);
-    var d10Final = m.multi ? (m.d10_1 + ' + ' + m.d10_2) : ('' + m.d10_1);
-    var op = m.reverse ? '−' : '−'; // d10 − d6 (or d6 − d10 shown by order below)
-    var ticks = 0;
-    box.classList.add('rolling');
+    var op = '<span class="die-op">−</span>';
+    function faces(a, a2, b) {
+        var tens = d10Faces(a, a2, m.multi);
+        var six = dieFace(b, 'd6');
+        // Rev. Time reads d6 − d10, so show the dice in that order.
+        return m.reverse ? six + op + tens : tens + op + six;
+    }
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var ticks = reduce ? 99 : 0;
+    box.classList.toggle('rolling', !reduce);
     box._t = setInterval(function () {
         ticks++;
         if (ticks <= 8) {
-            var a = 1 + Math.floor(Math.random() * 10);
-            var b = 1 + Math.floor(Math.random() * 6);
-            box.innerHTML = m.reverse
-                ? dieFace(b, 'd6') + '<span class="die-op">' + op + '</span>' + dieFace(a, 'd10')
-                : dieFace(a, 'd10') + '<span class="die-op">' + op + '</span>' + dieFace(b, 'd6');
+            box.innerHTML = faces(1 + Math.floor(Math.random() * 10), 1 + Math.floor(Math.random() * 10),
+                1 + Math.floor(Math.random() * 6));
         } else {
             clearInterval(box._t);
             box.classList.remove('rolling');
-            var faces = m.reverse
-                ? dieFace(m.d6, 'd6') + '<span class="die-op">' + op + '</span>' + dieFace(d10Final, 'd10')
-                : dieFace(d10Final, 'd10') + '<span class="die-op">' + op + '</span>' + dieFace(m.d6, 'd6');
-            box.innerHTML = faces + '<span class="die-net">= ' + (m.diff >= 0 ? '+' : '') + m.diff + '</span>';
+            box.innerHTML = faces(m.d10_1, m.d10_2, m.d6) +
+                '<span class="die-net">= ' + (m.diff >= 0 ? '+' : '') + m.diff + '</span>';
         }
-    }, 55);
+    }, reduce ? 0 : 55);
+}
+
+// The number seal on the Prompt card: the Prompt number with its a/b/c tier.
+function renderPromptSeal() {
+    var seal = el('promptSeal');
+    if (!seal) return;
+    var p = state.currentPrompt;
+    var visits = state.promptVisits[p] || 0;
+    if (p < 1) {
+        seal.className = 'prompt-seal is-empty';
+        seal.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-die"/></svg>';
+        return;
+    }
+    seal.className = 'prompt-seal' + (state.gameOver ? ' is-ended' : '');
+    seal.innerHTML = '<span class="seal-num">' + p + '</span>' +
+        (visits >= 1 && visits <= 3 ? '<span class="seal-tier">' + getTier(visits) + '</span>' : '');
+}
+
+// 1–80 progress track: visited Prompts as ticks (taller for repeat visits),
+// the current one as a gold bead, and the end zone (72–80, where every Prompt
+// ends the game) shaded.
+function renderProgressTrack() {
+    var box = el('progressTrack');
+    if (!box) return;
+    var cur = state.currentPrompt;
+    if (cur < 1) { box.innerHTML = ''; box.hidden = true; return; }
+    box.hidden = false;
+    function pos(n) { return ((n - 1) / 79 * 100).toFixed(2) + '%'; }
+    var marks = TYOV.trackMarks(state.promptVisits, cur);
+    var ticks = marks.map(function (m) {
+        return '<span class="pt-tick v' + Math.min(m.visits, 3) + (m.current ? ' is-current' : '') +
+            '" style="left:' + pos(m.n) + '"></span>';
+    }).join('');
+    box.innerHTML =
+        '<div class="pt-rail"><span class="pt-end" style="left:' + pos(72) + '"></span>' + ticks +
+            '<span class="pt-bead" style="left:' + pos(cur) + '"></span></div>' +
+        '<div class="pt-labels"><span>1</span><span>80</span></div>';
+    box.setAttribute('aria-label', 'Prompt ' + cur + ' of 80. ' + marks.length + ' Prompts visited.');
+}
+
+// Memory-slot candles (Play side column + Character tab).
+function candleSvg(kind) {
+    var flame = kind === 'lit'
+        ? '<g class="flame"><path class="flame-outer" d="M10 1.5C13 6 14.2 8.6 14.2 10.6a4.2 4.2 0 0 1-8.4 0C5.8 8.6 7 6 10 1.5Z"/>' +
+          '<path class="flame-inner" d="M10 6.5c1.4 2 2 3.2 2 4.2a2 2 0 0 1-4 0c0-1 .6-2.2 2-4.2Z"/></g>'
+        : '';
+    var body = kind === 'lost' ? '' :
+        '<line class="wick" x1="10" y1="12.5" x2="10" y2="16"/>' +
+        '<path class="wax" d="M5.5 16h9v20h-9z"/><path class="drip" d="M8 16v4.5a1.2 1.2 0 0 0 2.4 0V16"/>';
+    return '<svg class="candle candle-' + kind + '" viewBox="0 0 20 44" aria-hidden="true">' + flame + body +
+        '<path class="dish" d="M2 37.5h16l-1.6 3.5H3.6Z"/></svg>';
+}
+function renderCandles() {
+    var states = TYOV.candleStates(state.memories, state.maxMemories, 5);
+    var lit = states.filter(function (x) { return x === 'lit'; }).length;
+    var label = lit + ' of ' + state.maxMemories + ' Memory slots in use';
+    ['candlesPlay', 'candlesChar'].forEach(function (id) {
+        var box = el(id);
+        if (!box) return;
+        box.innerHTML = states.map(candleSvg).join('');
+        box.setAttribute('aria-label', label);
+        box.title = label;
+    });
+    var c = el('playMemCount');
+    if (c) c.textContent = lit + '/' + state.maxMemories;
 }
 
 function updatePromptDisplay(promptNum, visits) {
@@ -1046,6 +1140,8 @@ function updatePromptMeta() {
     toggleNote('startNote', p === 0 && !state.gameOver);
     updateTierExplain();
     updateCoachLine();
+    renderPromptSeal();
+    renderProgressTrack();
     var ea = el('entryActions');
     if (ea) ea.style.display = p === 0 ? 'none' : '';
     updatePromptBanner();
@@ -1865,6 +1961,7 @@ function updateMemoryCount() {
         return m.memState !== 'starred' && !m.lost;
     }).length;
     setText('memoryCount', '(' + count + '/' + state.maxMemories + ' Active Slots)');
+    renderCandles();
 }
 
 function updateDiaryCount() {
@@ -1976,6 +2073,9 @@ function applyState() {
     showAgeNudgeIfDue();
     showBackupNudgeIfDue();
     showTab(state.activeTab || 'play');
+    // On wide screens the traits recap is the side column — open it.
+    var rec = el('playRecap');
+    if (rec && window.matchMedia && window.matchMedia('(min-width: 1024px)').matches) rec.open = true;
 }
 
 // ==========================================
