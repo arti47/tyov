@@ -262,3 +262,14 @@ test('trackMarks lists visited prompts in order and flags the current one', () =
     ]);
     assert.deepStrictEqual(trackMarks(null, 0), []);
 });
+
+test('monogram takes two initials from the bare name and a stable hue', () => {
+    const { monogram } = require('../logic.js');
+    assert.strictEqual(monogram('Old Hallam, my master smith').initials, 'OH');
+    assert.strictEqual(monogram('Eliza, my sister').initials, 'E');
+    assert.strictEqual(monogram('Ase of Bjornfjord').initials, 'AO');
+    assert.strictEqual(monogram('').initials, '?');
+    const a = monogram('Rosa, the innkeeper');
+    assert.strictEqual(a.hue, monogram('Rosa, the innkeeper').hue);
+    assert.ok(a.hue >= 0 && a.hue < 360);
+});

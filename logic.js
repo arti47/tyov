@@ -284,6 +284,22 @@
         return marks;
     }
 
+    // Wax-seal monogram for a Character: up to two initials from the bare name
+    // (the part before any ", my sister" appositive), plus a stable 0–359 hue
+    // hashed from the full text so each person keeps the same wax colour.
+    function monogram(text) {
+        var name = deriveName(String(text || '').trim());
+        var words = name.split(/\s+/).filter(function (w) { return /[A-Za-z\u00C0-\u024F]/.test(w); });
+        var initials = words.slice(0, 2).map(function (w) {
+            var m = w.match(/[A-Za-z\u00C0-\u024F]/);
+            return m ? m[0].toUpperCase() : '';
+        }).join('') || '?';
+        var h = 0;
+        var src = String(text || '');
+        for (var i = 0; i < src.length; i++) h = (h * 31 + src.charCodeAt(i)) >>> 0;
+        return { initials: initials, hue: h % 360 };
+    }
+
     // --- Save-state shape + validation (pure; shared with the app & tests) ----
 
     var SAVE_VERSION = 2;
@@ -387,6 +403,7 @@
         traitForms: traitForms,
         candleStates: candleStates,
         trackMarks: trackMarks,
+        monogram: monogram,
         genId: genId,
         defaultState: defaultState,
         normMem: normMem,

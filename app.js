@@ -1697,7 +1697,7 @@ function checkSurvivalState() {
 
 function renderSkills() {
     el('skillsList').innerHTML = state.skills.map(function (s) {
-        return '<li class="' + (s.lost ? 'strikethrough' : '') + '">' +
+        return '<li class="' + (s.lost ? 'strikethrough' : '') + '" data-stamp="LOST">' +
             '<input type="checkbox" aria-label="Tick when this Skill has been checked (used up)" ' +
                 'title="Tick when a Prompt says to check a Skill. A checked Skill has been spent and cannot be checked again." ' +
                 (s.checked ? 'checked' : '') +
@@ -1713,7 +1713,7 @@ function renderSkills() {
 
 function renderResources() {
     el('resourcesList').innerHTML = state.resources.map(function (r) {
-        return '<li class="' + (r.lost ? 'strikethrough' : '') + '">' +
+        return '<li class="' + (r.lost ? 'strikethrough' : '') + '" data-stamp="LOST">' +
             '<input type="text" aria-label="Resource name" value="' + escapeHtml(r.text) +
                 '" oninput="setEntityText(\'resources\',\'' + r.id + '\', this.value)">' +
             '<button class="btn-small btn-strike" title="' +
@@ -1725,7 +1725,7 @@ function renderResources() {
 
 function renderMarks() {
     el('marksList').innerHTML = state.marks.map(function (m) {
-        return '<li class="' + (m.lost ? 'strikethrough' : '') + '">' +
+        return '<li class="' + (m.lost ? 'strikethrough' : '') + '" data-stamp="LOST">' +
             '<input type="text" aria-label="Mark description" value="' + escapeHtml(m.text) +
                 '" oninput="setEntityText(\'marks\',\'' + m.id + '\', this.value)">' +
             '<button class="btn-small btn-strike" title="' +
@@ -1735,24 +1735,37 @@ function renderMarks() {
     }).join('');
 }
 
+// Monogram wax seal for a Character: red wax for mortals (hue nudged per
+// person), black wax with a gold rim for immortals.
+function sigilHtml(c) {
+    var mono = TYOV.monogram(c.text);
+    var hueShift = (mono.hue % 36) - 18; // keep mortals in the red family
+    return '<span class="sigil sigil-' + (c.type === 'Immortal' ? 'immortal' : 'mortal') +
+        '" style="--wax-shift:' + hueShift + 'deg" aria-hidden="true">' + escapeHtml(mono.initials) + '</span>';
+}
+
 function renderCharacters() {
     el('charactersList').innerHTML = state.characters.map(function (c) {
-        var dots = new Array(c.doom + 1).join('•');
         var doomTip = 'Doom dots (Appendix Prompt 98): each dot halves this mortal’s remaining lifespan.';
-        return '<li class="' + (c.lost ? 'strikethrough' : '') + '" id="' + c.id + '">' +
-            '<select aria-label="Character mortality" onchange="setCharacterType(\'' + c.id + '\', this.value)">' +
-                '<option value="Mortal" ' + (c.type === 'Mortal' ? 'selected' : '') + '>Mortal</option>' +
-                '<option value="Immortal" ' + (c.type === 'Immortal' ? 'selected' : '') + '>Immortal</option>' +
-            '</select>' +
+        var pips = '';
+        for (var i = 0; i < c.doom; i++) pips += '<span class="doom-pip"></span>';
+        var other = c.type === 'Mortal' ? 'Immortal' : 'Mortal';
+        return '<li class="char-row' + (c.lost ? ' strikethrough' : '') + '" id="' + c.id + '" data-stamp="DEAD">' +
+            sigilHtml(c) +
             '<input type="text" aria-label="Character name" value="' + escapeHtml(c.text) +
                 '" oninput="setEntityText(\'characters\',\'' + c.id + '\', this.value)">' +
-            '<span class="doom-dots" title="' + doomTip + '">' + dots + '</span>' +
-            '<button class="btn-small doom-btn" aria-label="Add doom dot" title="' + doomTip + '" style="display:' +
-                (c.type === 'Mortal' ? 'inline-block' : 'none') + '" onclick="addDoom(\'' + c.id + '\')">+•</button>' +
-            '<button class="btn-small btn-strike" title="' +
-                (c.lost ? 'Bring this Character back.' : 'Cross this Character out. It stays listed, struck through, as part of the record.') +
-                '" onclick="toggleLoseEntity(\'characters\',\'' + c.id + '\')">' +
-                (c.lost ? 'Restore' : 'Lose') + '</button></li>';
+            '<div class="char-controls">' +
+                '<button type="button" class="type-chip type-' + c.type.toLowerCase() + '" aria-label="Character mortality: ' +
+                    c.type + '. Tap to switch to ' + other + '." title="Tap to switch to ' + other + '" ' +
+                    'onclick="setCharacterType(\'' + c.id + '\', \'' + other + '\')">' + c.type + '</button>' +
+                '<span class="doom-dots" title="' + doomTip + '">' + pips + '</span>' +
+                '<button class="btn-small btn-strike doom-btn" aria-label="Add doom dot" title="' + doomTip + '"' +
+                    (c.type === 'Mortal' ? '' : ' hidden') + ' onclick="addDoom(\'' + c.id + '\')">+•</button>' +
+                '<button class="btn-small btn-strike" title="' +
+                    (c.lost ? 'Bring this Character back.' : 'Cross this Character out. It stays listed, struck through, as part of the record.') +
+                    '" onclick="toggleLoseEntity(\'characters\',\'' + c.id + '\')">' +
+                    (c.lost ? 'Restore' : 'Lose') + '</button>' +
+            '</div></li>';
     }).join('');
 }
 
@@ -1814,7 +1827,7 @@ function memExpCap(m) { return m.memState === 'vast' ? 5 : 3; }
 
 function changeMemoryState(name, id, memState) {
     var m = findMem(name, id);
-    if (!m) return;
+    if (!m || m.memState === memState) return;
     pushUndo();
     m.memState = memState;
     // Leaving Vast drops any Experiences beyond the normal three (rules).
@@ -1923,8 +1936,11 @@ function memoryBlockHtml(m, name) {
     var sparkDiv = inDiary ? '' : '<div class="meaning-spark" id="spark-' + m.id + '"></div>';
     var states = [['normal', 'Normal'], ['starred', '⭐ Starred'], ['hazy', '🌫️ Hazy'],
                   ['vast', '🌌 Vast'], ['primal', '🐾 Primal']];
-    var options = states.map(function (s) {
-        return '<option value="' + s[0] + '" ' + (m.memState === s[0] ? 'selected' : '') + '>' + s[1] + '</option>';
+    var chips = states.map(function (st) {
+        var on = m.memState === st[0];
+        return '<button type="button" role="radio" aria-checked="' + on + '" class="seal-chip seal-' + st[0] +
+            (on ? ' is-on' : '') + '" onclick="changeMemoryState(\'' + name + '\',\'' + m.id + '\',\'' + st[0] + '\')">' +
+            st[1] + '</button>';
     }).join('');
     // Writing-constraint reminders for the states that impose them (A11).
     var hint = '';
@@ -1933,21 +1949,47 @@ function memoryBlockHtml(m, name) {
     else if (m.memState === 'vast') hint = '<div class="mem-hint">🌌 Vast: holds up to five Experiences.</div>';
     else if (m.memState === 'starred') hint = '<div class="mem-hint">⭐ Starred: fixed forever and does not count toward your Memory limit.</div>';
     var migrateBtn = name === 'memories'
-        ? '<button class="btn-small btn-strike migrate-btn" style="margin-right:5px;" onclick="migrateToDiary(\'' + m.id + '\')">Move to Diary</button>'
+        ? '<button type="button" role="menuitem" class="mem-menu-item" onclick="closeMemMenus(); migrateToDiary(\'' + m.id + '\')">Move to Diary</button>'
         : '';
     var cls = 'memory-block' + (m.memState !== 'normal' ? ' mem-' + m.memState : '') + (m.lost ? ' strikethrough' : '');
-    return '<div class="' + cls + '" id="' + m.id + '">' +
+    return '<div class="' + cls + '" id="' + m.id + '" data-stamp="LOST">' +
         '<input type="text" aria-label="Memory theme" placeholder="Memory Theme" value="' + escapeHtml(m.theme) +
             '"' + (inDiary ? ' readonly' : ' oninput="setMemoryTheme(\'' + name + '\',\'' + m.id + '\', this.value)"') + '>' +
         '<div class="exp-container">' + exps + '</div>' + addExpBtn + sparkBtn + hint + sparkDiv +
         '<div class="mem-controls">' +
-            '<select aria-label="Memory state" onchange="changeMemoryState(\'' + name + '\',\'' + m.id + '\', this.value)">' +
-                options + '</select>' +
-            '<div>' + migrateBtn +
-                '<button class="btn-small btn-strike" onclick="deleteMemory(\'' + name + '\',\'' + m.id + '\')">Delete</button>' +
+            '<div class="seal-chips" role="radiogroup" aria-label="Memory state">' + chips + '</div>' +
+            '<div class="mem-menu">' +
+                '<button type="button" class="icon-btn mem-menu-btn" aria-haspopup="menu" aria-expanded="false" ' +
+                    'aria-label="More actions for this Memory" title="More actions" onclick="toggleMemMenu(this)">⋯</button>' +
+                '<div class="mem-menu-pop" role="menu" hidden>' + migrateBtn +
+                    '<button type="button" role="menuitem" class="mem-menu-item is-danger" onclick="closeMemMenus(); deleteMemory(\'' + name + '\',\'' + m.id + '\')">Delete</button>' +
+                '</div>' +
             '</div>' +
         '</div></div>';
 }
+
+// Overflow (⋯) menu on each Memory card: Move to Diary / Delete.
+function toggleMemMenu(btn) {
+    var pop = btn.parentNode.querySelector('.mem-menu-pop');
+    var opening = pop.hidden;
+    closeMemMenus();
+    if (!opening) return;
+    pop.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+    var first = pop.querySelector('button');
+    if (first) first.focus();
+}
+function closeMemMenus() {
+    var pops = document.querySelectorAll('.mem-menu-pop');
+    for (var i = 0; i < pops.length; i++) {
+        pops[i].hidden = true;
+        var b = pops[i].parentNode.querySelector('.mem-menu-btn');
+        if (b) b.setAttribute('aria-expanded', 'false');
+    }
+}
+document.addEventListener('click', function (e) {
+    if (e.target.closest && !e.target.closest('.mem-menu')) closeMemMenus();
+});
 
 function renderMemoryList(name) {
     var containerId = name === 'diary' ? 'diaryContainer' : 'memoriesContainer';
@@ -2905,6 +2947,7 @@ document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
         // Esc dismisses dismissable overlays (not the required setup wizard).
         if (openTraitPicker) { closeTraitPicker(); return; }
+        if (document.querySelector('.mem-menu-pop:not([hidden])')) { closeMemMenus(); return; }
         if (isAppModalOpen()) { closeAppModal(); return; }
         if (isOverlayOpen('glossaryOverlay')) { closeGlossary(); return; }
         // The welcome explainer is only Esc-dismissable once the game exists;

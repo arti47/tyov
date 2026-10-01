@@ -111,27 +111,27 @@
             <div id="step1" class="wizard-step">
                 <h2>Step 1: Your Mortal Identity</h2>
                 <p>Before you became a monster, you were a person. What was your name?</p>
-                <input type="text" id="setupName" placeholder="Enter your mortal name..." style="margin-bottom: 5px;">
+                <input type="text" id="setupName" placeholder="Enter your mortal name...">
                 <button type="button" class="btn-small spark-btn" onclick="suggestInto('names','sugSetup1','setupName')">🎲 Suggest a name</button>
                 <div class="meaning-spark" id="sugSetup1"></div>
                 <button type="button" class="btn-small surprise-btn" onclick="surpriseMe()">✨ Surprise me — roll a whole vampire</button>
                 <div class="wizard-error" id="err1"></div>
-                <button onclick="gotoStep(2)" style="width: 100%; margin-top: 15px;">Next Step</button>
+                <button class="btn-block wizard-first-next" onclick="gotoStep(2)">Next Step</button>
             </div>
 
             <div id="step2" class="wizard-step" style="display: none;">
                 <h2>Step 2: Mortal Skills</h2>
                 <p class="step-help">A <b>Skill</b> is anything your vampire is good at. It doesn't have to be heroic — a trade, a knack, a way with people all count.</p>
                 <p>What were you exceptionally good at in your human life? List three. (e.g., "Blacksmithing", "Charming", "Spear Fighting", "Herbalism")</p>
-                <input type="text" id="setupSkill1" placeholder="Skill 1" style="margin-bottom: 5px;">
-                <input type="text" id="setupSkill2" placeholder="Skill 2" style="margin-bottom: 5px;">
+                <input type="text" id="setupSkill1" placeholder="Skill 1">
+                <input type="text" id="setupSkill2" placeholder="Skill 2">
                 <input type="text" id="setupSkill3" placeholder="Skill 3">
                 <button type="button" class="btn-small spark-btn" onclick="suggestInto('skills','sugSetup2','setupSkill1,setupSkill2,setupSkill3')">🎲 Suggest ideas</button>
                 <div class="meaning-spark" id="sugSetup2"></div>
                 <div class="wizard-error" id="err2"></div>
-                <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <button class="btn-strike" onclick="nextStep(1)" style="flex: 1;">Back</button>
-                    <button onclick="gotoStep(3)" style="flex: 2;">Next Step</button>
+                <div class="wizard-nav">
+                    <button class="btn-strike" onclick="nextStep(1)">Back</button>
+                    <button onclick="gotoStep(3)">Next Step</button>
                 </div>
             </div>
 
@@ -139,15 +139,15 @@
                 <h2>Step 3: Resources</h2>
                 <p class="step-help">A <b>Resource</b> is something you own or control. Later Prompts will take these away from you, one by one.</p>
                 <p>What valuable physical items or properties do you possess from your human years? List three. (e.g., "A fine horse", "A hidden cave", "Bag of gold coins", "Family signet ring")</p>
-                <input type="text" id="setupRes1" placeholder="Resource 1" style="margin-bottom: 5px;">
-                <input type="text" id="setupRes2" placeholder="Resource 2" style="margin-bottom: 5px;">
+                <input type="text" id="setupRes1" placeholder="Resource 1">
+                <input type="text" id="setupRes2" placeholder="Resource 2">
                 <input type="text" id="setupRes3" placeholder="Resource 3">
                 <button type="button" class="btn-small spark-btn" onclick="suggestInto('resources','sugSetup3','setupRes1,setupRes2,setupRes3')">🎲 Suggest ideas</button>
                 <div class="meaning-spark" id="sugSetup3"></div>
                 <div class="wizard-error" id="err3"></div>
-                <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <button class="btn-strike" onclick="nextStep(2)" style="flex: 1;">Back</button>
-                    <button onclick="gotoStep(4)" style="flex: 2;">Next Step</button>
+                <div class="wizard-nav">
+                    <button class="btn-strike" onclick="nextStep(2)">Back</button>
+                    <button onclick="gotoStep(4)">Next Step</button>
                 </div>
             </div>
 
@@ -155,15 +155,15 @@
                 <h2>Step 4: Mortal Characters</h2>
                 <p class="step-help">A <b>Character</b> is a person who matters to your vampire. They can be loved or hated — either works, and both hurt to lose.</p>
                 <p>Name three mortals intimately tied to your life — relatives, friends, lovers, enemies, mentors. (e.g., "Eliza, my sister", "Marcus, the local priest"). The immortal who turns you comes later, in Step 8.</p>
-                <input type="text" id="setupChar1" placeholder="Character 1" style="margin-bottom: 5px;">
-                <input type="text" id="setupChar2" placeholder="Character 2" style="margin-bottom: 5px;">
+                <input type="text" id="setupChar1" placeholder="Character 1">
+                <input type="text" id="setupChar2" placeholder="Character 2">
                 <input type="text" id="setupChar3" placeholder="Character 3">
                 <button type="button" class="btn-small spark-btn" onclick="suggestInto('characters','sugSetup4','setupChar1,setupChar2,setupChar3')">🎲 Suggest ideas</button>
                 <div class="meaning-spark" id="sugSetup4"></div>
                 <div class="wizard-error" id="err4"></div>
-                <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <button class="btn-strike" onclick="nextStep(3)" style="flex: 1;">Back</button>
-                    <button onclick="gotoStep(5)" style="flex: 2;">Next Step</button>
+                <div class="wizard-nav">
+                    <button class="btn-strike" onclick="nextStep(3)">Back</button>
+                    <button onclick="gotoStep(5)">Next Step</button>
                 </div>
             </div>
 
@@ -172,16 +172,16 @@
                 <p class="step-help">The next four steps are the writing part. A <b>Memory</b> is just a titled box holding a sentence or two — its title is the <b>Theme</b>, and each sentence inside is an <b>Experience</b>. Write plainly; nobody else has to read this.</p>
                 <p>Start your first Memory with one broad Experience summarizing who you were before unlife. (e.g. Theme: 'Mortal Life', Experience: 'I am Henri, son of Jon, a poor knight swindled out of my inheritance near the Loire.')</p>
                 <div class="trait-recap"></div>
-                <input type="text" id="setupMemTheme1" placeholder="Memory 1 Theme (e.g. Mortal Life)" style="margin-bottom: 5px;">
+                <input type="text" id="setupMemTheme1" placeholder="Memory 1 Theme (e.g. Mortal Life)">
                 <textarea id="setupMemExp1" class="autogrow" rows="3" oninput="autoGrow(this)" placeholder="Your life-summary Experience..."></textarea>
                 <button type="button" class="btn-small spark-btn" onclick="sparkInto('sparkSetup1','setupMemTheme1,setupMemExp1')">🎲 Spark idea</button>
                 <button type="button" class="btn-small spark-btn" onclick="templateInto('life','tplSetup1','setupMemExp1','setupMemTheme1')">💡 Sentence starter</button>
                 <div class="meaning-spark" id="tplSetup1"></div>
                 <div class="meaning-spark" id="sparkSetup1"></div>
                 <div class="wizard-error" id="err5"></div>
-                <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <button class="btn-strike" onclick="nextStep(4)" style="flex: 1;">Back</button>
-                    <button onclick="gotoStep(6)" style="flex: 2;">Next Step</button>
+                <div class="wizard-nav">
+                    <button class="btn-strike" onclick="nextStep(4)">Back</button>
+                    <button onclick="gotoStep(6)">Next Step</button>
                 </div>
             </div>
 
@@ -190,18 +190,18 @@
                 <p class="step-help">Now tie your vampire's life together: each of these should mention <b>two</b> of the things you listed in steps 2–4 (a Skill, a Resource or a person). The panel below reminds you what you wrote.</p>
                 <p>Create two more Experiences, each in its own Memory, each combining <b>two</b> of your traits. (e.g. "Gundar takes me on my first voyage aboard the Longship Bøkesuden; his touch calms me when we first leave sight of land.")</p>
                 <div class="trait-recap"></div>
-                <input type="text" id="setupMemTheme2" placeholder="Memory 2 Theme" style="margin-bottom: 5px;">
-                <textarea id="setupMemExp2" class="autogrow" rows="3" oninput="autoGrow(this)" placeholder="Experience 2 (combine two traits)..." style="margin-bottom: 10px;"></textarea>
-                <input type="text" id="setupMemTheme3" placeholder="Memory 3 Theme" style="margin-bottom: 5px;">
+                <input type="text" id="setupMemTheme2" placeholder="Memory 2 Theme">
+                <textarea id="setupMemExp2" class="autogrow" rows="3" oninput="autoGrow(this)" placeholder="Experience 2 (combine two traits)..."></textarea>
+                <input type="text" id="setupMemTheme3" placeholder="Memory 3 Theme">
                 <textarea id="setupMemExp3" class="autogrow" rows="3" oninput="autoGrow(this)" placeholder="Experience 3 (combine two traits)..."></textarea>
                 <button type="button" class="btn-small spark-btn" onclick="sparkInto('sparkSetup6','setupMemTheme2,setupMemExp2,setupMemTheme3,setupMemExp3')">🎲 Spark idea</button>
                 <button type="button" class="btn-small spark-btn" onclick="templateInto('combine','tplSetup6','setupMemExp2,setupMemExp3','setupMemTheme2,setupMemTheme3')">💡 Sentence starter</button>
                 <div class="meaning-spark" id="tplSetup6"></div>
                 <div class="meaning-spark" id="sparkSetup6"></div>
                 <div class="wizard-error" id="err6"></div>
-                <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <button class="btn-strike" onclick="nextStep(5)" style="flex: 1;">Back</button>
-                    <button onclick="gotoStep(7)" style="flex: 2;">Next Step</button>
+                <div class="wizard-nav">
+                    <button class="btn-strike" onclick="nextStep(5)">Back</button>
+                    <button onclick="gotoStep(7)">Next Step</button>
                 </div>
             </div>
 
@@ -209,16 +209,16 @@
                 <h2>Step 7: Memory 4</h2>
                 <p>One more Experience in its own Memory, again combining two of your traits.</p>
                 <div class="trait-recap"></div>
-                <input type="text" id="setupMemTheme4" placeholder="Memory 4 Theme" style="margin-bottom: 5px;">
+                <input type="text" id="setupMemTheme4" placeholder="Memory 4 Theme">
                 <textarea id="setupMemExp4" class="autogrow" rows="3" oninput="autoGrow(this)" placeholder="Experience 4 (combine two traits)..."></textarea>
                 <button type="button" class="btn-small spark-btn" onclick="sparkInto('sparkSetup7','setupMemTheme4,setupMemExp4')">🎲 Spark idea</button>
                 <button type="button" class="btn-small spark-btn" onclick="templateInto('combine','tplSetup7','setupMemExp4','setupMemTheme4')">💡 Sentence starter</button>
                 <div class="meaning-spark" id="tplSetup7"></div>
                 <div class="meaning-spark" id="sparkSetup7"></div>
                 <div class="wizard-error" id="err7"></div>
-                <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <button class="btn-strike" onclick="nextStep(6)" style="flex: 1;">Back</button>
-                    <button onclick="gotoStep(8)" style="flex: 2;">Next Step</button>
+                <div class="wizard-nav">
+                    <button class="btn-strike" onclick="nextStep(6)">Back</button>
+                    <button onclick="gotoStep(8)">Next Step</button>
                 </div>
             </div>
 
@@ -227,18 +227,18 @@
                 <p class="step-help">The last step: how you stopped being human. The vampire who did it to you is called your <b>sire</b>, and a <b>Mark</b> is the physical trace it left on you.</p>
                 <p>Lastly, create the <b>Immortal</b> who gifted (or cursed) you with unlife, the <b>Mark</b> it left, and the Memory of your transformation (Memory 5). (e.g. Sire: 'Baron Hollmueller, an Austrian vampire'; Mark: 'My neck is permanently broken'; Experience: 'I duel the eerie Baron across the abbey roof; he nearly takes my head, but I do not die.')</p>
                 <div class="trait-recap"></div>
-                <input type="text" id="setupSire" placeholder="The immortal who turned you..." style="margin-bottom: 5px;">
-                <input type="text" id="setupMark" placeholder="The Mark your turning left..." style="margin-bottom: 5px;">
-                <input type="text" id="setupMemTheme5" placeholder="Memory 5 Theme (e.g. The Night I Died)" style="margin-bottom: 5px;">
+                <input type="text" id="setupSire" placeholder="The immortal who turned you...">
+                <input type="text" id="setupMark" placeholder="The Mark your turning left...">
+                <input type="text" id="setupMemTheme5" placeholder="Memory 5 Theme (e.g. The Night I Died)">
                 <textarea id="setupMemExp5" class="autogrow" rows="3" oninput="autoGrow(this)" placeholder="The Experience of your transformation..."></textarea>
                 <button type="button" class="btn-small spark-btn" onclick="sparkInto('sparkSetup8','setupSire,setupMark,setupMemTheme5,setupMemExp5')">🎲 Spark idea</button>
                 <button type="button" class="btn-small spark-btn" onclick="templateInto('turning','tplSetup8','setupMemExp5','setupMemTheme5')">💡 Sentence starter</button>
                 <div class="meaning-spark" id="tplSetup8"></div>
                 <div class="meaning-spark" id="sparkSetup8"></div>
                 <div class="wizard-error" id="err8"></div>
-                <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <button class="btn-strike" onclick="nextStep(7)" style="flex: 1;">Back</button>
-                    <button class="btn-success" onclick="finishSetup()" style="flex: 2;">Begin Chronicle</button>
+                <div class="wizard-nav">
+                    <button class="btn-strike" onclick="nextStep(7)">Back</button>
+                    <button class="btn-success" onclick="finishSetup()">Begin Chronicle</button>
                 </div>
             </div>
 
@@ -246,9 +246,9 @@
     </div>
 
     <div id="appModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="appModalTitle">
-        <div class="modal-content" style="max-width: 460px;">
+        <div class="modal-content modal-sm">
             <h2 id="appModalTitle"></h2>
-            <p id="appModalMsg" style="white-space: pre-line;"></p>
+            <p id="appModalMsg"></p>
             <div class="modal-actions">
                 <button id="appModalCancel" class="btn-strike" onclick="closeAppModal()">Cancel</button>
                 <button id="appModalOk" onclick="appModalConfirm()">Confirm</button>
@@ -302,7 +302,7 @@
 
     <section id="panel-play" class="tab-panel" role="tabpanel" aria-labelledby="tab-play">
 
-    <div class="panel full-width play-main" style="text-align: center; margin-bottom: 20px;">
+    <div class="panel full-width play-main">
         <!-- Beginners meet the Roll button first; the fiddly navigation tools
              are folded away so they can't be mistaken for normal play. -->
         <details class="options-bar advanced-bar">
@@ -313,7 +313,7 @@
                 <button class="btn-small btn-strike" title="Go back one Prompt number, without rolling." onclick="stepBackOnePrompt()">← Back one Prompt</button>
                 <button id="btnUndo" class="btn-small btn-strike" title="Undo your last action. You can keep pressing to go further back." onclick="undoLastRoll()" disabled>Undo last action</button>
                 <span class="jump-group">Go to Prompt
-                    <input type="number" id="jumpPromptNum" placeholder="#" min="1" max="80" title="Type a Prompt number from 1 to 80." style="width: 56px; padding: 4px;">
+                    <input type="number" id="jumpPromptNum" placeholder="#" min="1" max="80" title="Type a Prompt number from 1 to 80.">
                     <button class="btn-small btn-strike" title="Jump straight to that Prompt number instead of rolling." onclick="jumpToPrompt()">Go</button>
                 </span>
             </div>
@@ -390,11 +390,11 @@
         <div id="rollHistoryLog"><b>History:</b><br></div>
     </div>
 
-    <div class="panel full-width" style="margin-bottom: 20px;">
-        <h3 style="margin: 0;">Future Prompt Triggers</h3>
+    <div class="panel full-width triggers-panel">
+        <h3>Future Prompt Triggers</h3>
         <p class="section-help">Set a trap, hide a treasure, or track a dying mortal.</p>
-        <div class="trigger-row" style="display: flex; gap: 10px; margin-bottom: 10px;">
-            <input type="number" id="triggerPromptNum" placeholder="Prompt #" style="width: 100px;">
+        <div class="trigger-row">
+            <input type="number" id="triggerPromptNum" placeholder="Prompt #">
             <input type="text" id="triggerDesc" placeholder="What happens here?">
             <button onclick="addTrigger()">Add Trigger</button>
         </div>
@@ -407,9 +407,9 @@
     <div class="container">
 
         <div class="panel">
-            <div style="display: flex; justify-content: space-between; align-items: baseline;">
+            <div class="panel-head">
                 <h2 class="has-help">Traits</h2>
-                <label style="font-size: 0.8em;">
+                <label class="toggle-label">
                     <input type="checkbox" id="hideGraveyardToggle" onchange="toggleGraveyard()" title="Hide everything you have lost, so only what you still have is listed."> Hide crossed-out
                 </label>
             </div>
@@ -421,18 +421,18 @@
                 <ul class="trait-list" id="skillsList"></ul>
                 <button class="btn-small" onclick="addSkill()">+ Add Skill</button>
                 
-                <h3 style="margin-top: 20px;">Resources</h3>
+                <h3 class="sub-head">Resources</h3>
                 <p class="section-help">Things your vampire owns or controls — a house, a horse, a debt owed. Press <b>Lose</b> when a Prompt takes one away.</p>
                 <ul class="trait-list" id="resourcesList"></ul>
                 <button class="btn-small" onclick="addResource()">+ Add Resource</button>
                 
-                <h3 style="margin-top: 20px;">Characters</h3>
+                <h3 class="sub-head">Characters</h3>
                 <p class="section-help">People in your vampire's life. <b>Mortals</b> die of old age within a generation — <b>Pass a Century</b> below kills off the ones still living. <b>Immortals</b> endure. The [+•] button adds a Doom Dot, a countdown used by one late Prompt.</p>
                 <ul class="trait-list" id="charactersList"></ul>
                 <button class="btn-small" onclick="addCharacter()">+ Add Character</button>
-                <button class="btn-small btn-strike" style="margin-top: 5px; width: 100%;" onclick="killAllMortals()">Pass a Century</button>
+                <button class="btn-small btn-strike btn-block" onclick="killAllMortals()">Pass a Century</button>
                 
-                <h3 style="margin-top: 20px;">Marks</h3>
+                <h3 class="sub-head">Marks</h3>
                 <p class="section-help">Visible signs of what you have become: no reflection, cold hands, a wound that never healed.</p>
                 <ul class="trait-list" id="marksList"></ul>
                 <button class="btn-small" onclick="addMark()">+ Add Mark</button>
@@ -440,21 +440,21 @@
         </div>
 
         <div class="panel">
-            <div style="display:flex; justify-content:space-between; align-items:baseline;">
-                <h2 style="border:none;">Memories <span id="memoryCount">(0/5 Active)</span></h2>
+            <div class="panel-head">
+                <h2 class="h-plain">Memories <span id="memoryCount">(0/5 Active)</span></h2>
                 <button class="btn-small btn-strike" onclick="loseMemorySlot()" title="Only when a Prompt says so: permanently reduces how many Memories you can hold.">−1 Slot</button>
             </div>
             <div class="candles candles-inline" id="candlesChar" role="img"></div>
 
             <div class="boxed-experience">
                 <h4 class="boxed-title">The Boxed Experience</h4>
-                <p style="font-size: 0.8em; margin: 5px 0;">This serendipitous moment never fades and does not count towards your limit.</p>
+                <p class="boxed-note">This serendipitous moment never fades and does not count towards your limit.</p>
                 <textarea id="boxedExpText" class="autogrow" rows="3" oninput="autoGrow(this)" placeholder="A moment that never fades... (*italics* / **bold**)"></textarea>
             </div>
             
             <p class="section-help">Your vampire can hold only <b>five</b> Memories. Each holds up to three <b>Experiences</b> — the sentences you write. When all five are full and a new one arrives, you must move one to the Diary or forget it forever.</p>
             <div id="memoriesContainer"></div>
-            <button class="btn-small" onclick="addMemoryBlock('memoriesContainer')" style="margin-bottom: 20px; width: 100%;">+ Add Memory</button>
+            <button class="btn-small btn-block" onclick="addMemoryBlock('memoriesContainer')">+ Add Memory</button>
         </div>
 
     </div>
@@ -462,17 +462,17 @@
 
     <section id="panel-diary" class="tab-panel" role="tabpanel" aria-labelledby="tab-diary" hidden>
     <div class="panel full-width">
-        <h2 style="border:none;">Diary <span id="diaryCount">(0/4 Slots)</span></h2>
+        <h2 class="h-plain">Diary <span id="diaryCount">(0/4 Slots)</span></h2>
         <p class="section-help">A book your vampire keeps, holding up to 4 Memories you would otherwise have to forget. Stored Memories are frozen — you can read them but not add to them. The Diary is itself a Resource: if you ever lose it, everything written in it is lost too.</p>
         <div id="diaryContainer"></div>
-        <button class="btn-small" onclick="addMemoryBlock('diaryContainer')" style="width: 100%;">+ Add Storage Entry</button>
+        <button class="btn-small btn-block" onclick="addMemoryBlock('diaryContainer')">+ Add Storage Entry</button>
     </div>
     </section>
 
     <section id="panel-journal" class="tab-panel" role="tabpanel" aria-labelledby="tab-journal" hidden>
     <div class="panel full-width">
-        <div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:10px;">
-            <h2 style="border:none;">The Chronicle</h2>
+        <div class="panel-head">
+            <h2 class="h-plain">The Chronicle</h2>
             <button class="btn-small btn-strike" onclick="exportJournal()">Export (.txt)</button>
             <button class="btn-small btn-strike" onclick="exportJournalMarkdown()">Export (.md)</button>
             <button class="btn-small btn-strike" onclick="printChronicle()">Print / PDF</button>
@@ -483,12 +483,12 @@
 
     <section id="panel-settings" class="tab-panel" role="tabpanel" aria-labelledby="tab-settings" hidden>
     <div class="panel full-width">
-        <h2 style="border:none;">Settings</h2>
+        <h2 class="h-plain">Settings</h2>
         <h3>Your chronicles</h3>
         <p class="section-help">You can keep several vampires going at once. Each slot is a separate story.</p>
         <ul id="slotList" class="slot-list"></ul>
         <button class="btn-small" onclick="newSlot()">+ New chronicle</button>
-        <p class="section-help" style="margin-top:4px;">Each slot holds its own vampire, saved separately in this browser.</p>
+        <p class="section-help">Each slot holds its own vampire, saved separately in this browser.</p>
 
         <h3>Help &amp; display</h3>
         <div class="settings-group">
@@ -502,7 +502,7 @@
             <label><input type="checkbox" id="optMuteSound" onchange="saveGame()"> Mute Sounds</label>
         </div>
 
-        <h3 style="margin-top:20px;">Save Data</h3>
+        <h3 class="sub-head">Save Data</h3>
         <p class="section-help">Everything is stored in this browser. Back up regularly — clearing browser data will erase your chronicle.</p>
         <div class="settings-group">
             <button class="btn-small btn-strike" onclick="exportSaveData()">Backup Save (.json)</button>
