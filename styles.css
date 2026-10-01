@@ -1306,6 +1306,28 @@ body.light-mode .tier-explain { color: var(--ink-muted); }
 
 /* Mobile: the tab bar moves to a fixed bottom bar in the thumb zone, with an
    icon over each label. Toasts and the oracle sit above it. */
+/* App shell (screens only — printing must not be clipped): the body scrolls,
+   the document doesn't. Phone browsers only collapse/expand their address bar
+   when the document scrolls; that resize is what made the fixed bottom bar
+   jump up when switching from a scrolled tab to a short one. With the
+   document still, the visible height never changes. (Also stops accidental
+   pull-to-refresh.) Read/write scroll via getPageScroll/setPageScroll. */
+@media screen and (max-width: 680px) {
+    html { height: 100%; overflow: hidden; }
+    body {
+        position: relative; /* contain absolutely-positioned descendants, or
+                               they escape the body scroller and stretch the
+                               document — which could then scroll again */
+        box-sizing: border-box;
+        height: 100vh;
+        height: -webkit-fill-available;
+        height: 100dvh;
+        overflow-y: auto;
+        overscroll-behavior-y: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
 @media (max-width: 680px) {
     :root { --nav-h: 62px; }
     body { padding-bottom: calc(var(--nav-h) + 20px + env(safe-area-inset-bottom, 0px)); }

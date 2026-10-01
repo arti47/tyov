@@ -172,12 +172,22 @@ var TABS = ['play', 'character', 'diary', 'journal', 'settings'];
 // fixed bottom tab bar slide.
 var tabScroll = {};
 
+// On phones the body is the scroll container (see styles.css), so the page
+// itself never scrolls; elsewhere it's the document. Read/write through these.
+function pageScroller() {
+    return getComputedStyle(document.documentElement).overflowY === 'hidden'
+        ? document.body
+        : (document.scrollingElement || document.documentElement);
+}
+function getPageScroll() { return pageScroller().scrollTop; }
+function setPageScroll(y) { pageScroller().scrollTop = y; }
+
 function showTab(name) {
     if (TABS.indexOf(name) === -1) name = 'play';
     if (typeof closeTraitPicker === 'function') closeTraitPicker();
     var prev = state.activeTab;
     var switching = prev !== name;
-    if (switching && prev) tabScroll[prev] = window.scrollY;
+    if (switching && prev) tabScroll[prev] = getPageScroll();
     state.activeTab = name;
     TABS.forEach(function (t) {
         var panel = el('panel-' + t), btn = el('tab-' + t);
@@ -193,7 +203,7 @@ function showTab(name) {
     autoGrowAll(el('panel-' + name));
     updatePromptBanner();
     // Same-tab calls (load, undo, re-render) leave the scroll alone.
-    if (switching) window.scrollTo(0, tabScroll[name] || 0);
+    if (switching) setPageScroll(tabScroll[name] || 0);
     persist();
 }
 
@@ -1433,7 +1443,10 @@ function showTraitPicker(kind, anchorBtn) {
     positionTraitPicker(pop, anchorBtn);
     openTraitPicker = pop;
     var first = pop.querySelector('.tp-row') || pop.querySelector('.tp-close');
-    if (first) first.focus();
+    if (first) first.focus({ preventScroll: true });
+    // A picker opened low on the page (e.g. under the journal) can run past the
+    // bottom of the screen — bring all of it into view.
+    if (pop.scrollIntoView) pop.scrollIntoView({ block: 'nearest' });
 }
 
 function traitPickerHTML(kind) {
