@@ -1336,7 +1336,10 @@ body.light-mode .tier-explain { color: var(--ink-muted); }
         border-bottom: none;
         border-top: 2px solid transparent;
     }
-    .tab-btn.active { border-top-color: var(--gold); border-bottom: none; }
+    /* Full shorthand, not just the colour: the desktop .tab-btn.active rule sets
+       border-top: none, which would otherwise win and leave the active tab 2px
+       taller-reaching than the rest — the icons/labels jumped on every switch. */
+    .tab-btn.active { border-top: 2px solid var(--gold); border-bottom: none; }
     .tab-label { display: block; }
     .tab-icon .ico { width: 22px; height: 22px; }
 
