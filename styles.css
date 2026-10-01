@@ -1329,8 +1329,14 @@ body.light-mode .tier-explain { color: var(--ink-muted); }
 }
 
 @media (max-width: 680px) {
-    :root { --nav-h: 62px; }
-    body { padding-bottom: calc(var(--nav-h) + 20px + env(safe-area-inset-bottom, 0px)); }
+    /* --safe-b: the space the bar keeps clear for the iPhone home indicator.
+       The full inset (~34px) floated the icons far above the screen edge;
+       ~18px keeps the labels just above the indicator line. */
+    :root {
+        --nav-h: 62px;
+        --safe-b: max(0px, calc(env(safe-area-inset-bottom, 0px) - 16px));
+    }
+    body { padding-bottom: calc(var(--nav-h) + 20px + var(--safe-b)); }
     .tabs {
         position: fixed;
         top: auto;
@@ -1338,9 +1344,9 @@ body.light-mode .tier-explain { color: var(--ink-muted); }
         right: 0;
         bottom: 0;
         margin: 0;
-        padding: 4px 4px calc(4px + env(safe-area-inset-bottom, 0px));
+        padding: 4px 4px calc(4px + var(--safe-b));
         gap: 0;
-        background: color-mix(in srgb, var(--surface) 92%, transparent);
+        background: var(--surface);
         border-top: 1px solid var(--border-strong);
         border-bottom: none;
         box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.35);
@@ -1362,17 +1368,31 @@ body.light-mode .tier-explain { color: var(--ink-muted); }
        border-top: none, which would otherwise win and leave the active tab 2px
        taller-reaching than the rest — the icons/labels jumped on every switch. */
     .tab-btn.active { border-top: 2px solid var(--gold); border-bottom: none; }
+    /* Bar colour continues past its bottom edge. Some iOS versions give a
+       home-screen app (translucent status bar) a layout viewport shorter than
+       the screen, so a bottom:0 bar stops short and the page shows beneath
+       it; this fills that strip so the bar always meets the screen edge. */
+    .tabs::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 100%;
+        height: 120px;
+        background: var(--surface);
+        pointer-events: none;
+    }
     .tab-label { display: block; }
     .tab-icon .ico { width: 22px; height: 22px; }
 
-    .toast, .update-toast { bottom: calc(var(--nav-h) + 14px + env(safe-area-inset-bottom, 0px)); }
+    .toast, .update-toast { bottom: calc(var(--nav-h) + 14px + var(--safe-b)); }
     .oracle-panel {
         top: auto;
         right: 12px;
         left: 12px;
         width: auto;
         max-width: none;
-        bottom: calc(var(--nav-h) + 12px + env(safe-area-inset-bottom, 0px));
+        bottom: calc(var(--nav-h) + 12px + var(--safe-b));
     }
     .name-row { flex-wrap: wrap; }
     .name-row > input { flex: 1 1 100%; }

@@ -69,7 +69,7 @@ npm run lint      # ESLint (needs `npm install` first; no network = skip)
 | `assets/dice.wav`, `assets/page.wav` | Bundled, precached sound effects (dice roll, page turn) — local so audio works offline. Generated lightweight WAVs. |
 | `assets/icon-192.png`, `assets/icon-512.png`, `assets/icon-180.png` | PWA / home-screen icons (192 & 512 for the manifest incl. `maskable`; 180 for the iOS `apple-touch-icon`). Generated PNGs (blood-red field, dark moon, white fangs). |
 | `manifest.json` | PWA manifest: name/short_name/description, `start_url`/`scope`/`id` (all relative so it works under a Pages subpath), `standalone`, colors, and PNG icons (`any` + `maskable`). Drives "Add to Home Screen". |
-| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v32`. Precaches assets (incl. `assets/*.wav`, `assets/icon-*.png` and `assets/fonts/*.woff2`), deletes old caches on activate, network-first for navigations + same-origin html/js/css/json (avoids version skew), stale-while-revalidate for other assets. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
+| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v33`. Precaches assets (incl. `assets/*.wav`, `assets/icon-*.png` and `assets/fonts/*.woff2`), deletes old caches on activate, network-first for navigations + same-origin html/js/css/json (avoids version skew), stale-while-revalidate for other assets. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
 | `.github/workflows/pages.yml` | GitHub Actions workflow: on push to `main`, runs `npm test` then deploys the repo root to **GitHub Pages**. Requires Pages Source = "GitHub Actions" (one-time repo setting). |
 | `.github/workflows/ci.yml` | CI workflow: on push to `main` and on PRs, runs `npm ci` → `npm test` → `npm run lint`. |
 | `tests/logic.test.js` | Unit tests for `logic.js` (escaping, tiers, prompt text, markdown, dice, `resolveTraitAction`, `rollMeaning`, `pickSuggestions`, `fillTemplate`, `traitForms`, `candleStates`, `trackMarks`, `monogram`, and state normalization: `normalizeState`/`normMem`/`defaultState`). |
@@ -244,8 +244,13 @@ or no `version`.
    **Tabs** (`showTab`, `TABS` array, persisted in `state.activeTab`): Play (dice/
    prompt/response/history/triggers) · Character (traits + Memories) · Diary ·
    Journal · Settings (theme/font/mute + backup/restore/wipe). On `≤680px` the tab
-   bar becomes a fixed bottom bar (icon over label, safe-area padded); toasts and
-   the oracle sheet sit above it (`--nav-h`). Every tab button keeps a 2px top
+   bar becomes a fixed bottom bar (icon over label); toasts and the oracle
+   sheet sit above it (`--nav-h`). Home-indicator clearance is `--safe-b`
+   (`env(safe-area-inset-bottom) − 16px`, ~18px on iPhones — the full 34px
+   floated the icons far above the edge). The bar is solid `--surface` and its
+   `::after` extends that colour 120px below it, because some iOS versions give
+   a home-screen app a layout viewport shorter than the screen, which left the
+   page showing under a `bottom: 0` bar. Every tab button keeps a 2px top
    border (gold when active) — the mobile `.tab-btn.active` rule must use the
    full `border-top` shorthand, or the desktop `border-top: none` wins and the
    active icon/label jumps 2px on each switch. `showTab` keeps a per-tab
@@ -366,7 +371,7 @@ under that subpath. Every asset the SW precaches must stay same-origin/relative.
 ### Bumping the service worker cache
 If you change any cached asset (`index.html`, `styles.css`, `logic.js`,
 `app.js`, `data.js`, `manifest.json`, `assets/*.wav`, `assets/icon-*.png`), bump
-`CACHE_NAME` in `sw.js` (currently `-v32`). Bumping it is also what makes the
+`CACHE_NAME` in `sw.js` (currently `-v33`). Bumping it is also what makes the
 deployed `sw.js` byte-different, which is what triggers the tap-to-update toast
 for existing installs. The SW also network-first-loads navigations, so updates
 generally land on next load even without a bump — but bump for certainty, and
