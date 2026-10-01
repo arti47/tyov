@@ -8,7 +8,7 @@
     <link rel="manifest" href="manifest.json">
 
     <!-- Theme + installable PWA (Add to Home Screen) -->
-    <meta name="theme-color" content="#8b0000">
+    <meta name="theme-color" content="#0f0c0b">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -16,9 +16,25 @@
     <link rel="apple-touch-icon" href="assets/icon-180.png">
     <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
 
+    <link rel="preload" href="assets/fonts/ebgaramond-400.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="assets/fonts/cinzel-700.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <!-- Inline SVG icon set (replaces OS-dependent emoji in navigation). -->
+    <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+        <defs>
+            <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+            <symbol id="i-character" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.2" r="3.3"/><path d="M4.5 20.5c.7-4.7 3.6-7.3 7.5-7.3s6.8 2.6 7.5 7.3"/><path d="M8.3 13.9 6.4 10.9M15.7 13.9l1.9-3"/></g></symbol>
+            <symbol id="i-diary" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4.5h11.5a1 1 0 0 1 1 1v14H7.5A1.5 1.5 0 0 1 6 18z"/><path d="M6 18a1.5 1.5 0 0 1 1.5-1.5h11"/><path d="M18.5 9.5h-3.2v3.2h3.2"/></g></symbol>
+            <symbol id="i-journal" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 6.8C10 5.4 7.4 4.8 4 4.8v13c3.4 0 6 .6 8 2 2-1.4 4.6-2 8-2v-13c-3.4 0-6 .6-8 2z"/><path d="M12 6.8v13"/></g></symbol>
+            <symbol id="i-settings" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="6.4"/><path d="M12 2.6v3M12 18.4v3M2.6 12h3M18.4 12h3M5.4 5.4l2.1 2.1M16.5 16.5l2.1 2.1M5.4 18.6l2.1-2.1M16.5 7.5l2.1-2.1"/></g></symbol>
+            <symbol id="i-eye" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M2.5 12s3.5-6.4 9.5-6.4 9.5 6.4 9.5 6.4-3.5 6.4-9.5 6.4S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.7"/></g></symbol>
+            <symbol id="i-quill" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 4C12.5 4.2 7.4 9.3 5.6 18.4"/><path d="M20 4c-.4 6.6-4.7 10.9-11.6 12.1"/><path d="M5.6 18.4 4 20"/></g></symbol>
+            <symbol id="i-die" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="3.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8.6" cy="8.6" r="1.35" fill="currentColor"/><circle cx="12" cy="12" r="1.35" fill="currentColor"/><circle cx="15.4" cy="15.4" r="1.35" fill="currentColor"/></symbol>
+        </defs>
+    </svg>
+
 
     <audio id="sfxDice" src="assets/dice.wav" preload="auto"></audio>
     <audio id="sfxPage" src="assets/page.wav" preload="auto"></audio>
@@ -222,7 +238,7 @@
                 <div class="wizard-error" id="err8"></div>
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
                     <button class="btn-strike" onclick="nextStep(7)" style="flex: 1;">Back</button>
-                    <button onclick="finishSetup()" style="flex: 2; background: #4CAF50;">Begin Chronicle</button>
+                    <button class="btn-success" onclick="finishSetup()" style="flex: 2;">Begin Chronicle</button>
                 </div>
             </div>
 
@@ -240,19 +256,30 @@
         </div>
     </div>
 
-    <div class="title-row">
-        <h1 style="border: none; margin: 0; padding: 0;">Vampire Chronicle</h1>
-        <button id="btnHelp" class="help-btn" onclick="openHelpMenu()" aria-label="How to play and glossary" title="How to play / what the words mean">?</button>
-    </div>
+    <!-- Header: the vampire's name is the page title; editing it (and Adopt New
+         Name) is tucked behind the quill so the header stays compact. -->
+    <header class="app-header">
+        <div class="title-row">
+            <h1 class="app-title">Vampire Chronicle</h1>
+            <div class="header-actions">
+                <button id="btnOracle" class="icon-btn" onclick="toggleOracle()" aria-label="Open the meaning oracle" aria-controls="oraclePanel" aria-expanded="false" title="Meaning oracle — roll d100 ×3"><svg class="ico" aria-hidden="true"><use href="#i-eye"/></svg></button>
+                <button id="btnHelp" class="icon-btn help-btn" onclick="openHelpMenu()" aria-label="How to play and glossary" title="How to play / what the words mean">?</button>
+            </div>
+        </div>
 
-    <div class="name-row" style="display: flex; gap: 10px; margin-top: 10px; margin-bottom: 5px;">
-        <input type="text" id="currentName" placeholder="Enter your current alias/name..." style="font-size: 1.2em; font-weight: bold;">
-        <button onclick="changeName()">Adopt New Name</button>
-    </div>
-    <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
-        <span id="nameHistory" style="font-size: 0.8em; color: #aaa; font-style: italic;">Forgotten Names: None yet.</span>
-        <span id="saveStatus" style="font-size: 0.75em; color: #888;"></span>
-    </div>
+        <button type="button" id="nameDisplay" class="name-display" onclick="editName(true)" aria-label="Edit your vampire's name" title="Edit name">
+            <span id="nameDisplayText" class="name-display-text"></span>
+            <svg class="ico ico-quill" aria-hidden="true"><use href="#i-quill"/></svg>
+        </button>
+        <div class="name-row" id="nameEditRow" hidden>
+            <input type="text" id="currentName" placeholder="Enter your current alias/name..." oninput="syncNameDisplay()" onkeydown="nameKeydown(event)">
+            <button onclick="changeName()">Adopt New Name</button>
+        </div>
+        <div class="meta-row">
+            <span id="nameHistory" class="name-history">Forgotten Names: None yet.</span>
+            <span id="saveStatus" class="save-status"></span>
+        </div>
+    </header>
 
     <div id="gameWarning" role="alert" aria-live="assertive">⚠️ SURVIVAL WARNING: You have 0 available Skills or Resources. If a Prompt makes you check a Skill or lose a Resource now, the game is over.</div>
     <div id="triggerAlert" role="alert" aria-live="assertive">🔔 FUTURE PROMPT TRIGGERED: <span id="triggerAlertText"></span></div>
@@ -266,11 +293,11 @@
     </button>
 
     <div class="tabs" role="tablist" aria-label="Sections">
-        <button class="tab-btn" id="tab-play" role="tab" aria-selected="true" aria-controls="panel-play" aria-label="Play" onclick="showTab('play')"><span class="tab-icon">▶</span><span class="tab-label">Play</span></button>
-        <button class="tab-btn" id="tab-character" role="tab" aria-selected="false" aria-controls="panel-character" aria-label="Character" onclick="showTab('character')"><span class="tab-icon">📜</span><span class="tab-label">Character</span></button>
-        <button class="tab-btn" id="tab-diary" role="tab" aria-selected="false" aria-controls="panel-diary" aria-label="Diary" onclick="showTab('diary')"><span class="tab-icon">📔</span><span class="tab-label">Diary</span></button>
-        <button class="tab-btn" id="tab-journal" role="tab" aria-selected="false" aria-controls="panel-journal" aria-label="Journal" onclick="showTab('journal')"><span class="tab-icon">📖</span><span class="tab-label">Journal</span></button>
-        <button class="tab-btn" id="tab-settings" role="tab" aria-selected="false" aria-controls="panel-settings" aria-label="Settings" onclick="showTab('settings')"><span class="tab-icon">⚙</span><span class="tab-label">Settings</span></button>
+        <button class="tab-btn" id="tab-play" role="tab" aria-selected="true" aria-controls="panel-play" aria-label="Play" onclick="showTab('play')"><span class="tab-icon"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg></span><span class="tab-label">Play</span></button>
+        <button class="tab-btn" id="tab-character" role="tab" aria-selected="false" aria-controls="panel-character" aria-label="Character" onclick="showTab('character')"><span class="tab-icon"><svg class="ico" aria-hidden="true"><use href="#i-character"/></svg></span><span class="tab-label">Character</span></button>
+        <button class="tab-btn" id="tab-diary" role="tab" aria-selected="false" aria-controls="panel-diary" aria-label="Diary" onclick="showTab('diary')"><span class="tab-icon"><svg class="ico" aria-hidden="true"><use href="#i-diary"/></svg></span><span class="tab-label">Diary</span></button>
+        <button class="tab-btn" id="tab-journal" role="tab" aria-selected="false" aria-controls="panel-journal" aria-label="Journal" onclick="showTab('journal')"><span class="tab-icon"><svg class="ico" aria-hidden="true"><use href="#i-journal"/></svg></span><span class="tab-label">Journal</span></button>
+        <button class="tab-btn" id="tab-settings" role="tab" aria-selected="false" aria-controls="panel-settings" aria-label="Settings" onclick="showTab('settings')"><span class="tab-icon"><svg class="ico" aria-hidden="true"><use href="#i-settings"/></svg></span><span class="tab-label">Settings</span></button>
     </div>
 
     <section id="panel-play" class="tab-panel" role="tabpanel" aria-labelledby="tab-play">
@@ -284,10 +311,10 @@
                 <label title="Some Prompts tell you to reverse time. Tick this and your next roll moves you BACKWARDS through the book. It clears itself afterwards."><input type="checkbox" id="optReverseTime"> Move backwards on the next roll</label>
                 <label title="Only for playing with other people at the same table: rolls two ten-sided dice instead of one, so the story moves faster."><input type="checkbox" id="optMultiplayer"> Group play (two d10s)</label>
                 <button class="btn-small btn-strike" title="Go back one Prompt number, without rolling." onclick="stepBackOnePrompt()">← Back one Prompt</button>
-                <button id="btnUndo" class="btn-small" style="background: #607d8b;" title="Undo your last action. You can keep pressing to go further back." onclick="undoLastRoll()" disabled>Undo last action</button>
+                <button id="btnUndo" class="btn-small btn-strike" title="Undo your last action. You can keep pressing to go further back." onclick="undoLastRoll()" disabled>Undo last action</button>
                 <span class="jump-group">Go to Prompt
                     <input type="number" id="jumpPromptNum" placeholder="#" min="1" max="80" title="Type a Prompt number from 1 to 80." style="width: 56px; padding: 4px;">
-                    <button class="btn-small" style="background: #ff5722;" title="Jump straight to that Prompt number instead of rolling." onclick="jumpToPrompt()">Go</button>
+                    <button class="btn-small btn-strike" title="Jump straight to that Prompt number instead of rolling." onclick="jumpToPrompt()">Go</button>
                 </span>
             </div>
         </details>
@@ -297,11 +324,11 @@
 
         <div id="diceAnim" class="dice-anim" aria-hidden="true"></div>
 
-        <h3 id="promptResult" style="margin-top: 15px; color: #ff4d4d;">Awaiting First Roll...</h3>
-        <div id="tierBadge" style="font-size: 0.85em; color: #aaa; min-height: 1.2em;"></div>
+        <h3 id="promptResult" class="prompt-result">Awaiting First Roll...</h3>
+        <div id="tierBadge" class="tier-badge"></div>
         <div id="tierExplain" class="tier-explain"></div>
-        <p id="rollResultDetails" style="font-size: 0.9em; color: #aaa;"></p>
-        <div id="promptTextDisplay" style="margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.1); border-left: 4px solid var(--accent-color); font-style: italic; text-align: left;">
+        <p id="rollResultDetails" class="roll-details"></p>
+        <div id="promptTextDisplay" class="prompt-text">
             Your prompt narrative will appear here.
         </div>
 
@@ -331,7 +358,7 @@
             <div class="trait-recap" id="playTraitRecap"></div>
         </details>
 
-        <textarea id="promptJournal" class="autogrow" rows="3" oninput="autoGrow(this)" placeholder="Answer the Prompt here, in your own words. A sentence is plenty — a paragraph is fine too. There are no wrong answers, and this saves as you type." style="margin-top: 15px; min-height: 120px; font-size: 1.05em; border-color: var(--accent-color);"></textarea>
+        <textarea id="promptJournal" class="autogrow" rows="3" oninput="autoGrow(this)" placeholder="Answer the Prompt here, in your own words. A sentence is plenty — a paragraph is fine too. There are no wrong answers, and this saves as you type." ></textarea>
         <div class="journal-spark-row">
             <button type="button" class="btn-small spark-btn" onclick="sparkInto('sparkJournal','promptJournal')">🎲 Spark idea</button>
             <div class="meaning-spark" id="sparkJournal"></div>
@@ -346,7 +373,7 @@
 
     <div class="panel full-width" style="margin-bottom: 20px;">
         <h3 style="margin: 0;">Future Prompt Triggers</h3>
-        <p style="font-size: 0.8em; color: #aaa; margin-bottom: 10px;">Set a trap, hide a treasure, or track a dying mortal.</p>
+        <p class="section-help">Set a trap, hide a treasure, or track a dying mortal.</p>
         <div class="trigger-row" style="display: flex; gap: 10px; margin-bottom: 10px;">
             <input type="number" id="triggerPromptNum" placeholder="Prompt #" style="width: 100px;">
             <input type="text" id="triggerDesc" placeholder="What happens here?">
@@ -400,7 +427,7 @@
             </div>
 
             <div class="boxed-experience">
-                <h4 style="margin: 0; color: var(--boxed-color); border-bottom: none;">The Boxed Experience</h4>
+                <h4 class="boxed-title">The Boxed Experience</h4>
                 <p style="font-size: 0.8em; margin: 5px 0;">This serendipitous moment never fades and does not count towards your limit.</p>
                 <textarea id="boxedExpText" class="autogrow" rows="3" oninput="autoGrow(this)" placeholder="A moment that never fades... (*italics* / **bold**)"></textarea>
             </div>
@@ -426,11 +453,11 @@
     <div class="panel full-width">
         <div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:10px;">
             <h2 style="border:none;">The Chronicle</h2>
-            <button class="btn-small" style="background:#4CAF50;" onclick="exportJournal()">Export (.txt)</button>
-            <button class="btn-small" style="background:#4CAF50;" onclick="exportJournalMarkdown()">Export (.md)</button>
-            <button class="btn-small" style="background:#607d8b;" onclick="printChronicle()">Print / PDF</button>
+            <button class="btn-small btn-strike" onclick="exportJournal()">Export (.txt)</button>
+            <button class="btn-small btn-strike" onclick="exportJournalMarkdown()">Export (.md)</button>
+            <button class="btn-small btn-strike" onclick="printChronicle()">Print / PDF</button>
         </div>
-        <div id="journalTabContent"><p style="color:#888; font-style:italic;">Your chronicle will appear here as you answer prompts.</p></div>
+        <div id="journalTabContent"><p class="empty-note">Your chronicle will appear here as you answer prompts.</p></div>
     </div>
     </section>
 
@@ -441,7 +468,7 @@
         <p class="section-help">You can keep several vampires going at once. Each slot is a separate story.</p>
         <ul id="slotList" class="slot-list"></ul>
         <button class="btn-small" onclick="newSlot()">+ New chronicle</button>
-        <p style="font-size:0.8em; color:#aaa; margin-top:4px;">Each slot holds its own vampire, saved separately in this browser.</p>
+        <p class="section-help" style="margin-top:4px;">Each slot holds its own vampire, saved separately in this browser.</p>
 
         <h3>Help &amp; display</h3>
         <div class="settings-group">
@@ -456,17 +483,15 @@
         </div>
 
         <h3 style="margin-top:20px;">Save Data</h3>
-        <p style="font-size:0.8em; color:#aaa; margin:0 0 10px;">Everything is stored in this browser. Back up regularly — clearing browser data will erase your chronicle.</p>
+        <p class="section-help">Everything is stored in this browser. Back up regularly — clearing browser data will erase your chronicle.</p>
         <div class="settings-group">
-            <button class="btn-small" style="background:#9c27b0;" onclick="exportSaveData()">Backup Save (.json)</button>
+            <button class="btn-small btn-strike" onclick="exportSaveData()">Backup Save (.json)</button>
             <input type="file" id="importSaveFile" accept=".json" style="display:none;" onchange="importSaveData(event)">
-            <button class="btn-small" style="background:#673ab7;" onclick="document.getElementById('importSaveFile').click()">Restore Save</button>
-            <button class="btn-small" style="background:#d32f2f;" onclick="resetGame()">Wipe Data</button>
+            <button class="btn-small btn-strike" onclick="document.getElementById('importSaveFile').click()">Restore Save</button>
+            <button class="btn-small btn-danger" onclick="resetGame()">Wipe Data</button>
         </div>
     </div>
     </section>
-
-    <button id="oracleFab" class="oracle-fab" aria-label="Open the meaning oracle" title="Meaning oracle — roll d100 ×3" onclick="toggleOracle()">🎲</button>
     <div id="oraclePanel" class="oracle-panel" role="dialog" aria-label="Meaning oracle" aria-modal="false">
         <div class="oracle-head">
             <strong>Meaning Oracle</strong>
@@ -474,8 +499,8 @@
         </div>
         <div id="oracleWords" class="oracle-words" aria-live="polite"></div>
         <div class="oracle-actions">
-            <button class="btn-small" onclick="rerollOracle()">🎲 Reroll</button>
-            <button class="btn-small" style="background:#4CAF50;" onclick="insertOracle()">Insert all three</button>
+            <button class="btn-small btn-strike" onclick="rerollOracle()">🎲 Reroll</button>
+            <button class="btn-small" onclick="insertOracle()">Insert all three</button>
         </div>
         <div id="oracleHint" class="oracle-hint"></div>
     </div>

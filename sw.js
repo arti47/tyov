@@ -1,6 +1,6 @@
 // sw.js — Service worker for the Vampire Chronicle PWA.
 // Bump CACHE_NAME whenever you ship changes to any cached asset.
-const CACHE_NAME = 'vampire-chronicle-v25';
+const CACHE_NAME = 'vampire-chronicle-v26';
 const ASSETS = [
     './index.html',
     './styles.css',
@@ -12,7 +12,12 @@ const ASSETS = [
     './assets/page.wav',
     './assets/icon-192.png',
     './assets/icon-512.png',
-    './assets/icon-180.png'
+    './assets/icon-180.png',
+    './assets/fonts/cinzel-600.woff2',
+    './assets/fonts/cinzel-700.woff2',
+    './assets/fonts/ebgaramond-400.woff2',
+    './assets/fonts/ebgaramond-400i.woff2',
+    './assets/fonts/ebgaramond-600.woff2'
 ];
 
 // Precache core assets. We DON'T skipWaiting() here: a freshly-installed worker

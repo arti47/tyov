@@ -226,7 +226,14 @@ function playSound(type) {
 function toggleTheme() {
     var isLight = document.body.classList.toggle('light-mode');
     setText('btnTheme', isLight ? 'Toggle Dark Mode' : 'Toggle Light Mode');
+    syncThemeColor();
     persist();
+}
+
+// Browser/OS chrome (status bar, task switcher) follows the theme.
+function syncThemeColor() {
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', document.body.classList.contains('light-mode') ? '#e3d4b4' : '#0f0c0b');
 }
 
 function changeFontSize(delta) {
@@ -633,9 +640,8 @@ function newSlot() {
 function renameSlot() {
     // The slot label tracks the vampire's current name, so renaming means
     // editing that name — send the player there rather than keeping two names.
-    var field = el('currentName');
-    if (field) { field.focus(); field.select(); }
     showTab('play');
+    editName(true);
     toast('Rename your vampire in the name field — the slot follows it.', 'info');
 }
 
@@ -922,9 +928,58 @@ function changeName() {
         renderNameHistory();
         input.value = '';
         state.currentName = '';
+        syncNameDisplay();
         persist();
+        input.focus(); // stay in edit mode so the new name can be typed
     }
 }
+
+// The name is shown as the page title; the input + Adopt New Name live in a
+// row revealed by the quill. The input stays in the DOM (persist reads it).
+function syncNameDisplay() {
+    var input = el('currentName');
+    var text = el('nameDisplayText');
+    if (!input || !text) return;
+    var v = input.value.trim();
+    text.textContent = v || input.getAttribute('placeholder') || '';
+    text.classList.toggle('is-empty', !v);
+}
+
+function editName(open) {
+    var row = el('nameEditRow');
+    var disp = el('nameDisplay');
+    if (!row || !disp) return;
+    row.hidden = !open;
+    disp.hidden = !!open;
+    if (open) {
+        var input = el('currentName');
+        input.focus();
+        input.select();
+    } else {
+        syncNameDisplay();
+        disp.focus();
+    }
+}
+
+// Enter / Esc close the editor. preventDefault matters: focus moves back to
+// the name button during keydown, and Enter's default activation would
+// otherwise "click" it and reopen the editor immediately.
+function nameKeydown(e) {
+    if (e.key === 'Enter' || e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        editName(false);
+    }
+}
+
+// Leaving the edit row (focus moves outside it) closes it again.
+document.addEventListener('focusout', function (e) {
+    var row = el('nameEditRow');
+    if (!row || row.hidden || !row.contains(e.target)) return;
+    setTimeout(function () {
+        if (!row.hidden && !row.contains(document.activeElement)) editName(false);
+    }, 0);
+});
 
 function calculateMove() {
     return TYOV.rollDice({ reverse: checked('optReverseTime'), multi: checked('optMultiplayer') });
@@ -1782,7 +1837,7 @@ function memoryBlockHtml(m, name) {
     else if (m.memState === 'vast') hint = '<div class="mem-hint">🌌 Vast: holds up to five Experiences.</div>';
     else if (m.memState === 'starred') hint = '<div class="mem-hint">⭐ Starred: fixed forever and does not count toward your Memory limit.</div>';
     var migrateBtn = name === 'memories'
-        ? '<button class="btn-small migrate-btn" style="background:#2196F3; margin-right:5px;" onclick="migrateToDiary(\'' + m.id + '\')">Move to Diary</button>'
+        ? '<button class="btn-small btn-strike migrate-btn" style="margin-right:5px;" onclick="migrateToDiary(\'' + m.id + '\')">Move to Diary</button>'
         : '';
     var cls = 'memory-block' + (m.memState !== 'normal' ? ' mem-' + m.memState : '') + (m.lost ? ' strikethrough' : '');
     return '<div class="' + cls + '" id="' + m.id + '">' +
@@ -1894,6 +1949,7 @@ function renderAll() {
 
 function applyState() {
     setVal('currentName', state.currentName);
+    syncNameDisplay();
     setVal('boxedExpText', state.boxedExp);
     setVal('promptJournal', state.currentJournal);
     autoGrowAll(); // fit the free-form boxes to whatever was just loaded in
@@ -1903,6 +1959,7 @@ function applyState() {
         document.body.classList.add('light-mode');
         setText('btnTheme', 'Toggle Dark Mode');
     }
+    syncThemeColor();
     if (st.fontSize) document.body.style.setProperty('--base-font-size', st.fontSize);
     setChecked('hideGraveyardToggle', !!st.hideGraveyard);
     if (st.hideGraveyard) el('traitsContainer').classList.add('hide-graveyard');
@@ -1948,6 +2005,8 @@ function toggleOracle() {
     if (!p) return;
     var opening = !p.classList.contains('show');
     p.classList.toggle('show', opening);
+    var b = el('btnOracle');
+    if (b) b.setAttribute('aria-expanded', opening ? 'true' : 'false');
     if (opening) {
         if (!oracleResults.length) rerollOracle();
         setOracleHint('');
