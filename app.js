@@ -757,26 +757,41 @@ function importSaveData(e) {
 }
 
 // Render the accumulated chronicle into the Journal tab (was the preview modal).
+// The Journal tab is laid out as a book page: Prompt rubrics, a drop cap on
+// each entry, and ornamental rules between sections. (Text content is the
+// same as before; only the markup/presentation changed.)
+var ORNAMENT = '<div class="ornament" aria-hidden="true"><span></span></div>';
+function artHtml(id, cls) {
+    return '<svg class="art ' + cls + '" aria-hidden="true"><use href="#' + id + '"/></svg>';
+}
+
 function renderJournalTab() {
     var box = el('journalTabContent');
     if (!box) return;
     var name = state.currentName || 'Unnamed Vampire';
-    var html = '<p style="font-style:italic; color:#aaa; margin-top:0;">The Chronicle of ' + escapeHtml(name) + '</p>';
+    var hasAnything = state.journalHistory.length || val('boxedExpText').trim() ||
+        state.memories.some(function (m) { return m.theme && !m.lost; });
+    if (!hasAnything) {
+        box.innerHTML = '<div class="empty-state">' + artHtml('art-journal', 'art-empty') +
+            '<p class="empty-note">Your chronicle will appear here as you answer prompts.</p></div>';
+        return;
+    }
+    var html = '<p class="chronicle-title">The Chronicle of ' + escapeHtml(name) + '</p>' + ORNAMENT;
     var boxed = val('boxedExpText');
     if (boxed.trim()) {
-        html += '<div style="background:rgba(76,175,80,0.1);padding:15px;border-left:4px solid #4CAF50;margin-bottom:20px;">' +
-                '<i>"A serendipitous moment that never fades..."</i><br><br>' + parseMarkdown(boxed) + '</div>';
+        html += '<blockquote class="chronicle-boxed">' +
+                '<i>"A serendipitous moment that never fades..."</i><br><br>' + parseMarkdown(boxed) + '</blockquote>';
     }
     if (state.journalHistory.length > 0) {
-        html += '<h3>Narrative Journal</h3><div style="margin-bottom: 30px; padding: 15px; background: rgba(0,0,0,0.05); border: 1px solid var(--border-color);">';
+        html += '<h3>Narrative Journal</h3><div class="chronicle-entries">';
         state.journalHistory.forEach(function (entry) {
-            html += '<div style="margin-bottom: 15px;"><b>[Prompt ' + escapeHtml(String(entry.prompt)) + ']</b><br>' +
-                    parseMarkdown(entry.text) + '</div>';
+            html += '<section class="chronicle-entry"><div class="rubric">[Prompt ' + escapeHtml(String(entry.prompt)) + ']</div>' +
+                    '<div class="entry-text">' + parseMarkdown(entry.text) + '</div></section>';
         });
-        html += '</div>';
+        html += '</div>' + ORNAMENT;
     }
     html += '<h3>Active Memories</h3>' + renderMemoriesPreview(state.memories, false);
-    html += '<hr style="border-color: var(--border-color); margin: 30px 0;">';
+    html += ORNAMENT;
     html += '<h3>The Diary / Lost Storage</h3>' + renderMemoriesPreview(state.diary, true);
     box.innerHTML = html;
 }
@@ -785,7 +800,7 @@ function renderMemoriesPreview(list, faded) {
     var out = '';
     list.forEach(function (m) {
         if (!m.theme || m.lost) return;
-        out += '<div style="margin-bottom: 15px;' + (faded ? ' color:#888;' : '') + '"><b>Theme: ' +
+        out += '<div class="chronicle-memory' + (faded ? ' is-faded' : '') + '"><b><span class="theme-label">Theme:</span> ' +
                escapeHtml(m.theme) + '</b><ul>';
         m.experiences.forEach(function (x) {
             if (x.trim() !== '') out += '<li>' + parseMarkdown(x) + '</li>';
@@ -794,6 +809,25 @@ function renderMemoriesPreview(list, faded) {
     });
     return out;
 }
+
+// Journal "Export ▾" menu (Text / Markdown / Print).
+function toggleExportMenu(btn) {
+    var pop = btn.parentNode.querySelector('.export-pop');
+    var opening = pop.hidden;
+    pop.hidden = !opening;
+    btn.setAttribute('aria-expanded', opening ? 'true' : 'false');
+    if (opening) { var f = pop.querySelector('button'); if (f) f.focus(); }
+}
+function closeExportMenu() {
+    var pop = document.querySelector('.export-pop');
+    if (!pop || pop.hidden) return;
+    pop.hidden = true;
+    var b = document.querySelector('.export-toggle');
+    if (b) b.setAttribute('aria-expanded', 'false');
+}
+document.addEventListener('click', function (e) {
+    if (e.target.closest && !e.target.closest('.export-menu')) closeExportMenu();
+});
 
 function exportJournal() {
     var txt = 'CHRONICLE OF ' + (state.currentName || 'Unnamed Vampire') +
@@ -1113,6 +1147,17 @@ function renderCandles() {
 function updatePromptDisplay(promptNum, visits) {
     state.display.promptText = getPromptText(promptDB, promptNum, visits);
     el('promptTextDisplay').innerText = state.display.promptText;
+    turnPage();
+}
+
+// Brief page-turn on the Prompt card when a new Prompt arrives (CSS animation;
+// suppressed under prefers-reduced-motion).
+function turnPage() {
+    var card = el('promptCard');
+    if (!card) return;
+    card.classList.remove('turning');
+    void card.offsetWidth; // restart the animation
+    card.classList.add('turning');
 }
 
 // Show/hide a small note element under the prompt.
@@ -1160,6 +1205,9 @@ function checkGameOver() {
         state.display.promptResult += ' [GAME OVER]';
         setText('promptResult', state.display.promptResult);
     }
+    // gameOver may have just flipped after the meta/coach pass ran.
+    updateCoachLine();
+    renderPromptSeal();
 }
 
 // Roll counters that drive the old-age (A12) and backup (B12) nudges.
@@ -1993,7 +2041,10 @@ document.addEventListener('click', function (e) {
 
 function renderMemoryList(name) {
     var containerId = name === 'diary' ? 'diaryContainer' : 'memoriesContainer';
-    el(containerId).innerHTML = memList(name).map(function (m) { return memoryBlockHtml(m, name); }).join('');
+    var list = memList(name);
+    el(containerId).innerHTML = (name === 'diary' && !list.length)
+        ? '<div class="empty-state">' + artHtml('art-diary', 'art-empty') + '</div>'
+        : list.map(function (m) { return memoryBlockHtml(m, name); }).join('');
     autoGrowAll(el(containerId)); // size each Experience box to its text
 }
 
@@ -2330,6 +2381,12 @@ function openHelpMenu() {
 function updateCoachLine() {
     var box = el('coachLine');
     if (!box) return;
+    var art = el('gameOverArt');
+    // An <svg> has no .hidden property — toggle the attribute itself.
+    if (art) art.toggleAttribute('hidden', !state.gameOver);
+    // A soft candle-glow on Roll until the very first roll.
+    var rb = el('btnRoll');
+    if (rb) rb.classList.toggle('is-inviting', state.currentPrompt === 0 && !state.gameOver);
     var msg;
     if (state.gameOver) {
         msg = 'Your vampire\u2019s story is over. Read it in 📖, then export or print it.';
@@ -2948,6 +3005,7 @@ document.addEventListener('keydown', function (e) {
         // Esc dismisses dismissable overlays (not the required setup wizard).
         if (openTraitPicker) { closeTraitPicker(); return; }
         if (document.querySelector('.mem-menu-pop:not([hidden])')) { closeMemMenus(); return; }
+        if (document.querySelector('.export-pop:not([hidden])')) { closeExportMenu(); return; }
         if (isAppModalOpen()) { closeAppModal(); return; }
         if (isOverlayOpen('glossaryOverlay')) { closeGlossary(); return; }
         // The welcome explainer is only Esc-dismissable once the game exists;
