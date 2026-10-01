@@ -62,17 +62,17 @@ npm run lint      # ESLint (needs `npm install` first; no network = skip)
 |------|---------|
 | `index.html` | The UI markup only. An inline **SVG icon sprite** (`<symbol id="i-*">`: play/character/diary/journal/settings/eye/quill/die, used via `<use href="#i-…">`), then the `.app-header`: a letter-spaced "Vampire Chronicle" overline, the header icon buttons (`#btnOracle` eye → Meaning Oracle, `#btnHelp` ?), the **vampire's name as the page title** (`#nameDisplay`; the quill reveals `#nameEditRow` with the `#currentName` input + Adopt New Name), and a meta row (forgotten names, autosave). Then warnings/nudges and the **tab bar** (`Play`/`Character`/`Diary`/`Journal`/`Settings` with SVG icons — top tabs on desktop, a fixed **bottom bar with labels** on ≤680px) over five `.tab-panel` sections, a sticky `#promptBanner` (current prompt, shown on non-Play tabs), the setup wizard, the first-run explainer (`#welcomeOverlay`) and glossary (`#glossaryOverlay`), the confirm modal (`#appModal`), and the floating oracle. Section copy is written for players who have never read the rulebook: `.section-help` blocks under every heading, `.step-help` in the wizard, and `title=` tooltips on each control. Loads `logic.js` → `data.js` → `app.js`. No inline CSS. |
 | `styles.css` | All styles. Opens with self-hosted `@font-face` rules (**Cinzel** display, **EB Garamond** body) and a **design-token layer**: type scale (`--fs-*`), spacing (`--sp-*`), radii (`--r-*`), and colour roles (`--bg`, `--surface`/`-2`/`-3`, `--ink`/`-soft`/`-muted`/`-faint`, `--accent`/`--accent-hover`/`--accent-ink`/`--on-accent`, `--gold`, `--moss`, `--steel`, `--amber-ink`, `--border`/`-strong`, shadows, `--page-bg`/`--surface-bg`). Two themes: **candlelit night** (`:root`, default) and **aged parchment** (`body.light-mode`, with an inline-SVG paper grain). The old names (`--bg-color`, `--accent-color`, …) survive as **aliases declared on `body`** (not `:root`) so they follow the active theme. Buttons: filled primary, `.btn-strike` = outlined secondary, `.btn-success`, `.btn-danger`. Then layout, components, `:focus-visible` gold outlines. Ends with a `@media (max-width: 680px)` block for the responsive/mobile layout; form controls use `min-width: 0` and the body has `overflow-x: hidden` so nothing scrolls sideways on phones. The body padding adds `env(safe-area-inset-*)` (with `viewport-fit=cover` in the `<head>`) so header content clears the iOS notch/status bar. The guided prompt-action buttons stack as a centered caption over two equal-width-button rows (`.prompt-actions` column + `.prompt-action-btns`; the second row is the green `.btn-add` quick-creates). `.play-recap`/`.recap-input` style the collapsible Play-tab trait recap, `.entry-actions` the File/Save entry buttons, `.slot-list`/`.slot-row` the Settings chronicle chooser, and `.welcome-*`/`.glossary`/`.section-help`/`.step-help`/`.coach-line`/`.advanced-bar` the onboarding layer (`.modal-content` scrolls internally so a long explainer never pushes its title off a phone screen). A trailing `@media print` block hides all chrome and prints only `#journalTabContent` (B9). Free-form textareas marked `.autogrow` (Experiences, the setup Memory steps, the prompt journal, the Boxed Experience) size themselves to their content via `autoGrow`/`autoGrowAll`; `#journalTabContent` is capped to a 70ch measure. Tappable suggestion chips are `button.spark-tap` (wrapping, since sentence starters hold a whole clause) with a `.spark-dismiss` ✕; `.surprise-btn` is the full-width Surprise me action. |
-| `logic.js` | **Pure**, DOM-free helpers shared by the app and tests: `escapeHtml`, `getTier`, `getPromptText`, `parseMarkdown`, `rollDice` (RNG injectable), `resolveTraitAction` (Skill/Resource substitution ladder), `rollMeaning` (d100 → meaning-table word), `pickSuggestions` (n distinct setup-wizard example entries), `fillTemplate` (substitutes `{skill}`/`{resource}`/`{character}`/`{character2}`/`{sire}` in a Memory sentence template — capitalised tokens give a sentence-initial form, `{character2}` is always a different person, one pick per token kind, with fallbacks) and `traitForms` (normalises a tagged pool entry **or** a plain player-typed string to `full`/`short`/`name`), and the save-state helpers `genId`/`defaultState`/`normMem`/`normalizeState` (+`SAVE_VERSION`). Exposed as `window.TYOV` in the browser and `module.exports` in Node. |
+| `logic.js` | **Pure**, DOM-free helpers shared by the app and tests: `escapeHtml`, `getTier`, `getPromptText`, `parseMarkdown`, `rollDice` (RNG injectable), `resolveTraitAction` (Skill/Resource substitution ladder), `rollMeaning` (d100 → meaning-table word), `pickSuggestions` (n distinct setup-wizard example entries), `fillTemplate` (substitutes `{skill}`/`{resource}`/`{character}`/`{character2}`/`{sire}` in a Memory sentence template — capitalised tokens give a sentence-initial form, `{character2}` is always a different person, one pick per token kind, with fallbacks) and `traitForms` (normalises a tagged pool entry **or** a plain player-typed string to `full`/`short`/`name`), the gauge helpers `candleStates` (per-slot `lit`/`unlit`/`lost` for the Memory candles) and `trackMarks` (visited Prompts for the 1–80 track), and the save-state helpers `genId`/`defaultState`/`normMem`/`normalizeState` (+`SAVE_VERSION`). Exposed as `window.TYOV` in the browser and `module.exports` in Node. |
 | `app.js` | The game engine: the `state` object, render-from-state functions, save/load + v1→v2 migration, full-state undo stack, dice/prompts, traits/memories/diary, triggers, guided prompt actions, nudges, the Meaning Oracle, import/export. |
 | `data.js` | The prompt database: `const promptDB`, keyed `1..80`, each with tiers `a`/`b`/`c` (first/second/third visit). Also `const meaningTable` — the 100-word Meaning Oracle list (1-indexed by a d100 roll) — `const settingPacks`, **six coherent setting packs** (Medieval Europe, Norse Coast, Silk Road, West African Sahel, Imperial China, Mesoamerica), each with 8 `names`/`skills`/`resources`/`characters`/`marks`; skills/resources/characters are **tagged** (`{ text, short }` / `{ text, name }`) so templates can substitute them mid-sentence without breaking grammar. And `const memoryTemplates` (`themes.{life,combine,turning}`/`life`/`combine`/`turning`), the sentence-starter templates behind 💡 Sentence starter and Surprise me. |
 | `assets/fonts/*.woff2` | Self-hosted Latin subsets: Cinzel 600/700, EB Garamond 400/400-italic/600 (~112 KB), precached by the SW and `<link rel=preload>`ed. Licences in `assets/fonts/OFL-*.txt` (SIL OFL 1.1). |
 | `assets/dice.wav`, `assets/page.wav` | Bundled, precached sound effects (dice roll, page turn) — local so audio works offline. Generated lightweight WAVs. |
 | `assets/icon-192.png`, `assets/icon-512.png`, `assets/icon-180.png` | PWA / home-screen icons (192 & 512 for the manifest incl. `maskable`; 180 for the iOS `apple-touch-icon`). Generated PNGs (blood-red field, dark moon, white fangs). |
 | `manifest.json` | PWA manifest: name/short_name/description, `start_url`/`scope`/`id` (all relative so it works under a Pages subpath), `standalone`, colors, and PNG icons (`any` + `maskable`). Drives "Add to Home Screen". |
-| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v26`. Precaches assets (incl. `assets/*.wav`, `assets/icon-*.png` and `assets/fonts/*.woff2`), deletes old caches on activate, network-first for navigations + same-origin html/js/css/json (avoids version skew), stale-while-revalidate for other assets. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
+| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v27`. Precaches assets (incl. `assets/*.wav`, `assets/icon-*.png` and `assets/fonts/*.woff2`), deletes old caches on activate, network-first for navigations + same-origin html/js/css/json (avoids version skew), stale-while-revalidate for other assets. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
 | `.github/workflows/pages.yml` | GitHub Actions workflow: on push to `main`, runs `npm test` then deploys the repo root to **GitHub Pages**. Requires Pages Source = "GitHub Actions" (one-time repo setting). |
 | `.github/workflows/ci.yml` | CI workflow: on push to `main` and on PRs, runs `npm ci` → `npm test` → `npm run lint`. |
-| `tests/logic.test.js` | Unit tests for `logic.js` (escaping, tiers, prompt text, markdown, dice, `resolveTraitAction`, `rollMeaning`, `pickSuggestions`, `fillTemplate`, and state normalization: `normalizeState`/`normMem`/`defaultState`). |
+| `tests/logic.test.js` | Unit tests for `logic.js` (escaping, tiers, prompt text, markdown, dice, `resolveTraitAction`, `rollMeaning`, `pickSuggestions`, `fillTemplate`, `traitForms`, `candleStates`, `trackMarks`, and state normalization: `normalizeState`/`normMem`/`defaultState`). |
 | `package.json` / `package-lock.json` | Scripts: `test`, `serve`, `lint`. ESLint as the sole devDependency; the lockfile pins it for reproducible CI. |
 | `eslint.config.js` | Flat ESLint config with browser + test globals. |
 | `.gitignore` | Ignores `node_modules/`, editor cruft, and `_qa_*.html` scratch files. |
@@ -166,7 +166,9 @@ or no `version`.
 2. **Roll** (`rollAndMove`): snapshots undo, archives the journal entry, rolls via
    `TYOV.rollDice` (d10−d6; d6−d10 if "Rev. Time"; two d10s if "Multi"),
    **clears the one-shot Rev. Time**, plays a brief dice animation (`animateDice`
-   → the `#diceAnim` faces + net), advances `currentPrompt`, picks tier a/b/c from
+   → `#diceAnim`: SVG dice from `dieFace` — the d10 as a kite face, the d6 as a
+   pipped bone cube, two d10s in group play; the tumble is skipped under
+   reduced motion), advances `currentPrompt`, picks tier a/b/c from
    visit count, updates the tier/visit badge (`updatePromptMeta`), ticks the
    old-age/backup nudge counters, logs history, checks triggers/game-over.
 3. **Navigation**: `jumpToPrompt`, `stepBackOnePrompt` (manual back-one; formerly
@@ -239,6 +241,16 @@ or no `version`.
    words beside the field; with `fieldIds` each word is a **tappable chip** that
    inserts via `applySuggestion`. The Play tab's prompt journal has the same
    🎲 spark row (`#sparkJournal`). The floating oracle still inserts at the caret.
+   **Play layout (restyle phase 2):** a `.roll-zone` (Roll button, dice, and
+   `#progressTrack` — `renderProgressTrack`: visited Prompts as ticks, a gold
+   bead for the current one, 72–80 hatched as the end zone), then the
+   **`.prompt-card` hero** (`renderPromptSeal` draws the wax-seal number with
+   its a/b/c pill; the Prompt text gets an illuminated drop cap), then the coach
+   line *below* the card. `.play-side` holds the **Memory candles**
+   (`renderCandles`/`candleSvg`, mirrored under the Character-tab Memories
+   heading as `#candlesChar`; refreshed by `updateMemoryCount`) and the traits
+   recap. On ≥1024px `.play-main` is a two-column grid with that side column
+   sticky on the right (and the recap opened by `applyState`).
 8. **Teaching the game** (players arrive without the rulebook): a first-run
    `#welcomeOverlay` explains what a solo journalling RPG is and how a turn
    works before the wizard opens (`showWelcomeIfFirstRun`/`dismissWelcome`,
@@ -316,7 +328,7 @@ under that subpath. Every asset the SW precaches must stay same-origin/relative.
 ### Bumping the service worker cache
 If you change any cached asset (`index.html`, `styles.css`, `logic.js`,
 `app.js`, `data.js`, `manifest.json`, `assets/*.wav`, `assets/icon-*.png`), bump
-`CACHE_NAME` in `sw.js` (currently `-v26`). Bumping it is also what makes the
+`CACHE_NAME` in `sw.js` (currently `-v27`). Bumping it is also what makes the
 deployed `sw.js` byte-different, which is what triggers the tap-to-update toast
 for existing installs. The SW also network-first-loads navigations, so updates
 generally land on next load even without a bump — but bump for certainty, and
@@ -341,10 +353,8 @@ until it lands.)*
 
 **UI restyle — "gothic manuscript" (in progress, phased)**
 - ~~Phase 1~~ done: tokens, fonts, both themes, header, nav, oracle, contrast.
-- **Phase 2** Play: prompt as a hero card (number badge + a/b/c pill, drop
-  cap), coach line moved below it, compact roll strip with SVG dice + tumble,
-  1–80 progress track (end zone 72–80 shaded), 5 candle Memory-slot gauge,
-  two-column Play on ≥1024px, quick-create row that never wraps.
+- ~~Phase 2~~ done: hero Prompt card, SVG dice, 1–80 track, candles,
+  two-column Play, tidy action grid.
 - **Phase 3** Character/Memory/Diary: Memory cards with wax-seal state chips
   and a `⋯` menu, Character type chip + visible doom pips, monogram sigils,
   "LOST" ink stamp, book-spine Diary, remaining inline styles → classes.
@@ -360,6 +370,12 @@ until it lands.)*
   `checkGameOver()` disabling the roll across that range is **faithful**.
 
 ### Done
+
+**UI restyle Phase 2** — Play rebuilt around the Prompt: wax-seal number +
+a/b/c pill, drop cap, coach line moved under the card (it said "above" while
+sitting above), SVG d10/d6 with tumble, 1–80 progress track, 5 Memory-slot
+candles with flicker (lit = used, missing = slot lost), sticky side column on
+desktop, action buttons in a grid that wraps cleanly instead of truncating.
 
 **UI restyle Phase 1** — design tokens + two themes (candlelit dark, parchment
 light), self-hosted Cinzel/EB Garamond, SVG icon sprite, compact header with the
