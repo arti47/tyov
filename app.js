@@ -166,9 +166,18 @@ function announce(msg) {
 // ==========================================
 var TABS = ['play', 'character', 'diary', 'journal', 'settings'];
 
+// Scroll position per tab (session only). Switching back returns you where you
+// were instead of jumping to the top — on phones, scrolling to the top brings
+// the browser's address bar back, which resizes the viewport and makes the
+// fixed bottom tab bar slide.
+var tabScroll = {};
+
 function showTab(name) {
     if (TABS.indexOf(name) === -1) name = 'play';
     if (typeof closeTraitPicker === 'function') closeTraitPicker();
+    var prev = state.activeTab;
+    var switching = prev !== name;
+    if (switching && prev) tabScroll[prev] = window.scrollY;
     state.activeTab = name;
     TABS.forEach(function (t) {
         var panel = el('panel-' + t), btn = el('tab-' + t);
@@ -183,7 +192,8 @@ function showTab(name) {
     // Textareas measure 0 while hidden, so re-fit them when their tab appears.
     autoGrowAll(el('panel-' + name));
     updatePromptBanner();
-    window.scrollTo(0, 0);
+    // Same-tab calls (load, undo, re-render) leave the scroll alone.
+    if (switching) window.scrollTo(0, tabScroll[name] || 0);
     persist();
 }
 

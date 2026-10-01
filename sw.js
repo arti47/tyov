@@ -1,6 +1,6 @@
 // sw.js — Service worker for the Vampire Chronicle PWA.
 // Bump CACHE_NAME whenever you ship changes to any cached asset.
-const CACHE_NAME = 'vampire-chronicle-v30';
+const CACHE_NAME = 'vampire-chronicle-v31';
 const ASSETS = [
     './index.html',
     './styles.css',
