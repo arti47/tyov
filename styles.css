@@ -2201,6 +2201,7 @@ body.light-mode .memory-block.strikethrough::after { color: #9b1c14; border-colo
 .night[data-stage="reveal"] .stage[data-stage="reveal"],
 .night[data-stage="obey"] .stage[data-stage="obey"],
 .night[data-stage="write"] .stage[data-stage="write"],
+.night[data-stage="gain"] .stage[data-stage="gain"],
 .night[data-stage="remember"] .stage[data-stage="remember"] {
     display: flex;
     flex-direction: column;
@@ -2655,7 +2656,9 @@ body:not(.light-mode) .t-checked { color: #93b07a; }
     animation: none;
 }
 .night.is-compact .stage + .stage { margin-top: var(--sp-6); }
-.night.is-compact.no-actions .stage[data-stage="obey"],
+.night.is-compact.no-loss .stage[data-stage="obey"],
+.night.is-compact.no-gain .stage[data-stage="gain"],
+.night.is-compact .stage[data-stage="gain"] .keep-quote,
 .night.is-compact .stage:not([data-stage="roll"]) .next-btn,
 .night.is-compact .stage[data-stage="write"] .prompt-peek { display: none !important; }
 

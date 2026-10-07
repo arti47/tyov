@@ -2380,6 +2380,7 @@ function updateCoachLine() {
     else if (stage === 'roll') msg = 'Dawn. Roll when you are ready for the next night.';
     else if (stage === 'reveal') msg = 'Read tonight\u2019s Prompt.';
     else if (stage === 'obey') msg = 'Tap each card to do what the Prompt asks.';
+    else if (stage === 'gain') msg = 'Name each new thing from what you wrote.';
     else if (stage === 'write') msg = val('promptJournal').trim() ? 'Done? Keep it as a Memory.' : 'Answer in a sentence or two. There are no wrong answers.';
     else msg = 'Choose where this Experience lives.';
     box.textContent = msg;
@@ -3255,6 +3256,8 @@ function nightActions() {
     if (state.currentPrompt < 1 || state.gameOver) return [];
     return TYOV.promptActions(state.display.promptText);
 }
+// { loss: [...], gain: [...] } — Do comes before Write, Gain after it.
+function nightSplit() { return TYOV.splitActions(nightActions()); }
 
 function setStage(stage) {
     state.turn = state.turn || { stage: 'roll', done: [] };
@@ -3272,7 +3275,8 @@ function rollNight() {
 
 function nextBeat() {
     var stage = state.turn ? state.turn.stage : 'roll';
-    var next = TYOV.nextStage(stage, nightActions().length > 0);
+    var sp = nightSplit();
+    var next = TYOV.nextStage(stage, sp.loss.length > 0, sp.gain.length > 0);
     if (next === 'roll') { finishNight(); return; }
     setStage(next);
     if (next === 'write') {
@@ -3287,7 +3291,9 @@ function gotoBeat(stage) {
     if (state.currentPrompt < 1) return;
     // Only beats already reached tonight (never back to the roll).
     if (stage === 'roll' || order.indexOf(stage) > order.indexOf(cur)) return;
-    if (stage === 'obey' && !nightActions().length) return;
+    var sp = nightSplit();
+    if (stage === 'obey' && !sp.loss.length) return;
+    if (stage === 'gain' && !sp.gain.length) return;
     setStage(stage);
 }
 
@@ -3311,6 +3317,7 @@ function renderNight() {
     if (state.currentPrompt < 1) stage = 'roll';
     // The final Prompt is still read, answered and kept; it just asks nothing.
     if (state.gameOver && stage === 'obey') stage = 'write';
+    if (state.gameOver && stage === 'gain') stage = 'remember';
     night.setAttribute('data-stage', stage);
     night.classList.toggle('is-over', !!state.gameOver);
     night.classList.toggle('is-first', state.currentPrompt < 1);
@@ -3319,12 +3326,14 @@ function renderNight() {
 
     // beat dots
     var order = TYOV.STAGES, ci = order.indexOf(stage);
-    var hasActions = nightActions().length > 0;
-    night.classList.toggle('no-actions', !hasActions);
+    var sp = nightSplit(), hasLoss = sp.loss.length > 0, hasGain = sp.gain.length > 0;
+    night.classList.toggle('no-loss', !hasLoss);
+    night.classList.toggle('no-gain', !hasGain);
     var lis = night.querySelectorAll('.beats li');
     for (var i = 0; i < lis.length; i++) {
         var b = lis[i].getAttribute('data-beat'), bi = order.indexOf(b);
-        lis[i].className = (bi < ci ? 'done' : bi === ci ? 'now' : '') + (b === 'obey' && !hasActions ? ' skip' : '');
+        var skip = (b === 'obey' && !hasLoss) || (b === 'gain' && !hasGain);
+        lis[i].className = (bi < ci ? 'done' : bi === ci ? 'now' : '') + (skip ? ' skip' : '');
         lis[i].onclick = (bi < ci && b !== 'roll') ? gotoBeat.bind(null, b) : null;
     }
 
@@ -3339,8 +3348,11 @@ function renderNight() {
     }
     renderNightCandle();
     var all = compact && stage !== 'roll';
-    if (all || stage === 'obey') renderStepCards();
+    if (all || stage === 'obey' || stage === 'gain') renderStepCards();
     if (all || stage === 'write') renderPeek();
+    if (all || stage === 'gain') setText('gainQuote', val('promptJournal').trim() || 'You haven’t written anything tonight.');
+    var wn = el('writeNext');
+    if (wn) wn.textContent = hasGain ? 'Next →' : 'Keep it →';
     if (all || stage === 'remember') renderKeep();
     renderTour(all ? '' : stage);
     syncNudges();
@@ -3380,10 +3392,15 @@ var STEP_CARDS = {
     memory:       { icon: 'i-flame',       title: 'Change your Memories',   run: 'promptMemoryOps()',         picker: true }
 };
 
+// Losses go on the Do beat (#stepCards), creations on the Gain beat (#gainCards).
 function renderStepCards() {
-    var box = el('stepCards');
+    var sp = nightSplit();
+    fillStepCards('stepCards', sp.loss);
+    fillStepCards('gainCards', sp.gain);
+}
+function fillStepCards(boxId, acts) {
+    var box = el(boxId);
     if (!box) return;
-    var acts = nightActions();
     var done = (state.turn && state.turn.done) || [];
     box.innerHTML = acts.map(function (a) {
         var c = STEP_CARDS[a];
@@ -3413,7 +3430,7 @@ function markStep(action, isDone) {
     var d = state.turn.done.filter(function (x) { return x !== action; });
     if (isDone) d.push(action);
     state.turn.done = d;
-    if (state.turn.stage === 'obey' || isCompact()) renderStepCards();
+    if (state.turn.stage === 'obey' || state.turn.stage === 'gain' || isCompact()) renderStepCards();
     persist();
 }
 
@@ -3719,7 +3736,8 @@ function playDawn() {
 var TOUR_TIPS = {
     roll: 'Each night starts with a roll. The dice move you through 80 Prompts, the story of your vampire.',
     reveal: 'This is tonight’s Prompt: what happens to your vampire. a, b, c means your first, second or third visit.',
-    obey: 'The Prompt changes your vampire. Tap each card to make the change; it ticks when done.',
+    obey: 'First, what the Prompt takes from your vampire. Tap each card to make the change; it ticks when done.',
+    gain: 'Now name what you gained, drawing on what you just wrote.',
     write: 'Now answer the Prompt in a sentence or two, as your vampire. There are no wrong answers.',
     remember: 'Your answer becomes an Experience inside a Memory. You can hold only five Memories. Forgetting is the heart of the game.'
 };
@@ -3771,7 +3789,8 @@ function initNightSwipe() {
         if (dx < 0) {
             if (stage !== 'remember') nextBeat(); // Keep needs a chosen Memory
         } else {
-            var prev = TYOV.prevStage(stage, nightActions().length > 0);
+            var sp = nightSplit();
+            var prev = TYOV.prevStage(stage, sp.loss.length > 0, sp.gain.length > 0);
             if (prev !== stage) gotoBeat(prev);
         }
     }, { passive: true });

@@ -431,7 +431,20 @@
     //   roll → reveal (read the Prompt) → obey (do what it asks) → write →
     //   remember (keep it in a Memory) → back to roll.
     // `obey` is skipped when the Prompt asks for no bookkeeping.
-    var STAGES = ['roll', 'reveal', 'obey', 'write', 'remember'];
+    // obey = what the Prompt takes or changes (done before writing, so the
+    // loss is part of the story); gain = what it creates "to reflect this"
+    // (named after writing, from the answer).
+    var STAGES = ['roll', 'reveal', 'obey', 'write', 'gain', 'remember'];
+    var GAIN_ACTIONS = ['newSkill', 'newResource', 'newCharacter', 'mark'];
+
+    // Split promptActions() keys into the two beats.
+    function splitActions(actions) {
+        var out = { loss: [], gain: [] };
+        (actions || []).forEach(function (a) {
+            (GAIN_ACTIONS.indexOf(a) !== -1 ? out.gain : out.loss).push(a);
+        });
+        return out;
+    }
 
     // Repair a saved turn. Saves from before the ritual have none: a game that
     // has started resumes at the Prompt (reveal), a new one at the roll.
@@ -443,17 +456,19 @@
         return { stage: stage, done: done };
     }
 
-    function nextStage(stage, hasActions) {
+    function nextStage(stage, hasLoss, hasGain) {
         if (stage === 'roll') return 'reveal';
-        if (stage === 'reveal') return hasActions ? 'obey' : 'write';
+        if (stage === 'reveal') return hasLoss ? 'obey' : 'write';
         if (stage === 'obey') return 'write';
-        if (stage === 'write') return 'remember';
+        if (stage === 'write') return hasGain ? 'gain' : 'remember';
+        if (stage === 'gain') return 'remember';
         return 'roll';
     }
 
-    function prevStage(stage, hasActions) {
-        if (stage === 'remember') return 'write';
-        if (stage === 'write') return hasActions ? 'obey' : 'reveal';
+    function prevStage(stage, hasLoss, hasGain) {
+        if (stage === 'remember') return hasGain ? 'gain' : 'write';
+        if (stage === 'gain') return 'write';
+        if (stage === 'write') return hasLoss ? 'obey' : 'reveal';
         if (stage === 'obey') return 'reveal';
         return stage; // roll/reveal have nothing before them within a night
     }
@@ -474,6 +489,8 @@
         monogram: monogram,
         promptActions: promptActions,
         STAGES: STAGES,
+        GAIN_ACTIONS: GAIN_ACTIONS,
+        splitActions: splitActions,
         normTurn: normTurn,
         nextStage: nextStage,
         prevStage: prevStage,

@@ -359,6 +359,7 @@
             <li data-beat="reveal"><span>Read</span></li>
             <li data-beat="obey"><span>Do</span></li>
             <li data-beat="write"><span>Write</span></li>
+            <li data-beat="gain"><span>Gain</span></li>
             <li data-beat="remember"><span>Keep</span></li>
         </ol>
         <div id="tourTip" class="tour-tip" role="note" hidden>
@@ -399,7 +400,7 @@
 
         <!-- 3 · DO -->
         <div class="stage" data-stage="obey">
-            <h2 class="stage-title">The Prompt asks you to…</h2>
+            <h2 class="stage-title">First, the Prompt takes…</h2>
             <div id="stepCards" class="step-cards"></div>
             <details class="more-actions">
                 <summary>Something else…</summary>
@@ -440,10 +441,18 @@
                 <summary>Your traits at a glance</summary>
                 <div class="trait-recap" id="playTraitRecap"></div>
             </details>
+            <button class="next-btn" id="writeNext" onclick="nextBeat()">Keep it →</button>
+        </div>
+
+        <!-- 5 · GAIN — what the Prompt creates, named from the answer -->
+        <div class="stage" data-stage="gain">
+            <h2 class="stage-title">Now, what you gained</h2>
+            <blockquote id="gainQuote" class="keep-quote"></blockquote>
+            <div id="gainCards" class="step-cards"></div>
             <button class="next-btn" onclick="nextBeat()">Keep it →</button>
         </div>
 
-        <!-- 5 · KEEP -->
+        <!-- 6 · KEEP -->
         <div class="stage" data-stage="remember">
             <h2 class="stage-title">Which Memory holds this?</h2>
             <blockquote id="keepQuote" class="keep-quote"></blockquote>

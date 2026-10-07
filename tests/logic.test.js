@@ -303,16 +303,30 @@ test('promptActions maps rulebook phrasing to the bookkeeping it asks for', () =
 
 test('turn stages: order, skipping "obey" when the Prompt asks for nothing', () => {
     const { nextStage, prevStage, STAGES } = require('../logic.js');
-    assert.deepStrictEqual(STAGES, ['roll', 'reveal', 'obey', 'write', 'remember']);
-    assert.strictEqual(nextStage('roll', true), 'reveal');
-    assert.strictEqual(nextStage('reveal', true), 'obey');
-    assert.strictEqual(nextStage('reveal', false), 'write');
-    assert.strictEqual(nextStage('obey', true), 'write');
-    assert.strictEqual(nextStage('write', false), 'remember');
-    assert.strictEqual(nextStage('remember', false), 'roll');
-    assert.strictEqual(prevStage('write', false), 'reveal');
-    assert.strictEqual(prevStage('write', true), 'obey');
-    assert.strictEqual(prevStage('reveal', true), 'reveal');
+    assert.deepStrictEqual(STAGES, ['roll', 'reveal', 'obey', 'write', 'gain', 'remember']);
+    assert.strictEqual(nextStage('roll', true, true), 'reveal');
+    assert.strictEqual(nextStage('reveal', true, false), 'obey');
+    assert.strictEqual(nextStage('reveal', false, true), 'write');
+    assert.strictEqual(nextStage('obey', true, false), 'write');
+    assert.strictEqual(nextStage('write', false, false), 'remember');
+    assert.strictEqual(nextStage('write', false, true), 'gain');
+    assert.strictEqual(nextStage('gain', false, true), 'remember');
+    assert.strictEqual(nextStage('remember', false, false), 'roll');
+    assert.strictEqual(prevStage('write', false, false), 'reveal');
+    assert.strictEqual(prevStage('write', true, false), 'obey');
+    assert.strictEqual(prevStage('remember', false, true), 'gain');
+    assert.strictEqual(prevStage('remember', false, false), 'write');
+    assert.strictEqual(prevStage('gain', true, true), 'write');
+    assert.strictEqual(prevStage('reveal', true, true), 'reveal');
+});
+
+test('splitActions: losses before writing, creations after', () => {
+    const { splitActions, promptActions } = require('../logic.js');
+    assert.deepStrictEqual(splitActions(['check', 'newSkill', 'kill', 'mark', 'memory']),
+        { loss: ['check', 'kill', 'memory'], gain: ['newSkill', 'mark'] });
+    assert.deepStrictEqual(splitActions(undefined), { loss: [], gain: [] });
+    const a = splitActions(promptActions('Lose a Resource. Create a Skill that reflects this.'));
+    assert.ok(a.loss.includes('lose') && a.gain.includes('newSkill'));
 });
 
 test('normTurn repairs saved turns (and pre-ritual saves)', () => {
