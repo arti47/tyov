@@ -1020,7 +1020,14 @@ textarea.autogrow {
    RESPONSIVE — narrow / mobile screens
    ========================================== */
 @media (max-width: 680px) {
-    body { padding: 12px; }
+    /* Keep the safe-area insets: a plain 12px put the header under the iOS
+       status bar / Dynamic Island in the home-screen app. */
+    body {
+        padding: calc(12px + env(safe-area-inset-top, 0px))
+                 calc(12px + env(safe-area-inset-right, 0px))
+                 12px
+                 calc(12px + env(safe-area-inset-left, 0px));
+    }
 
     h1 { font-size: 1.6em; }
 
@@ -2730,4 +2737,30 @@ body.nudges-quiet #backupNudge { display: none !important; }
 }
 @media (prefers-reduced-motion: reduce) {
     .vessel.is-forgetting, .vessel.is-forgetting::before { animation: none; }
+}
+
+/* Phones: the name bar stays pinned under the status bar on a solid strip,
+   so scrolled content never runs under the clock and the name stays visible.
+   The strip is a pseudo-element (not clip-path) so the ⋯ menu isn't clipped. */
+@media (max-width: 680px) {
+    .app-header {
+        position: sticky;
+        /* Sticky offsets count from inside the body's padding, so pull it
+           up by that padding to pin it to the very top of the screen. */
+        top: calc(-12px - env(safe-area-inset-top, 0px));
+        z-index: 600;
+        margin-top: calc(-12px - env(safe-area-inset-top, 0px));
+        padding: calc(8px + env(safe-area-inset-top, 0px)) 0 8px;
+    }
+    .app-header::before {
+        content: '';
+        position: absolute;
+        z-index: -1;
+        top: 0;
+        bottom: 0;
+        left: calc(-12px - env(safe-area-inset-left, 0px));
+        right: calc(-12px - env(safe-area-inset-right, 0px));
+        background: var(--bg);
+        border-bottom: 1px solid var(--border);
+    }
 }

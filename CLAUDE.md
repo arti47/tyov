@@ -69,7 +69,7 @@ npm run lint      # ESLint (needs `npm install` first; no network = skip)
 | `assets/dice.wav`, `assets/page.wav` | Bundled, precached sound effects (dice roll, page turn) — local so audio works offline. Generated lightweight WAVs. |
 | `assets/icon-192.png`, `assets/icon-512.png`, `assets/icon-180.png` | PWA / home-screen icons (192 & 512 for the manifest incl. `maskable`; 180 for the iOS `apple-touch-icon`). Generated PNGs (blood-red field, dark moon, white fangs). |
 | `manifest.json` | PWA manifest: name/short_name/description, `start_url`/`scope`/`id` (all relative so it works under a Pages subpath), `standalone`, colors, and PNG icons (`any` + `maskable`). Drives "Add to Home Screen". |
-| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v38`. Precaches assets (incl. `assets/*.wav`, `assets/icon-*.png` and `assets/fonts/*.woff2`), deletes old caches on activate, network-first for navigations + same-origin html/js/css/json (avoids version skew), stale-while-revalidate for other assets. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
+| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v39`. Precaches assets (incl. `assets/*.wav`, `assets/icon-*.png` and `assets/fonts/*.woff2`), deletes old caches on activate, network-first for navigations + same-origin html/js/css/json (avoids version skew), stale-while-revalidate for other assets. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
 | `.github/workflows/pages.yml` | GitHub Actions workflow: on push to `main`, runs `npm test` then deploys the repo root to **GitHub Pages**. Requires Pages Source = "GitHub Actions" (one-time repo setting). |
 | `.github/workflows/ci.yml` | CI workflow: on push to `main` and on PRs, runs `npm ci` → `npm test` → `npm run lint`. |
 | `tests/logic.test.js` | Unit tests for `logic.js` (escaping, tiers, prompt text, markdown, dice, `resolveTraitAction`, `rollMeaning`, `pickSuggestions`, `fillTemplate`, `traitForms`, `candleStates`, `trackMarks`, `monogram`, `promptActions`, the turn stages (`nextStage`/`prevStage`/`normTurn`), and state normalization: `normalizeState`/`normMem`/`defaultState`). |
@@ -384,7 +384,14 @@ the old Play/Character/Diary/Journal tabs, read Night/Vampire/Vampire/Chronicle.
    descendants inside the body scroller (otherwise they stretched the
    document and made it scrollable again). Always read/write page scroll via
    `getPageScroll`/`setPageScroll` (`pageScroller()` picks body or document);
-   don't use `window.scrollTo`/`scrollY`. Pickers call `scrollIntoView
+   don't use `window.scrollTo`/`scrollY`.
+   The phone body padding must keep `env(safe-area-inset-*)` (a plain `12px`
+   once put the header under the iOS status bar). The `.app-header` is
+   **sticky on phones**: `top` and `margin-top` are both
+   `-(12px + safe-top)` because sticky offsets count from inside the body
+   scroller's padding; its `::before` paints a solid `--bg` strip edge to edge
+   (a pseudo-element, not `clip-path`, so the `⋯` menu isn't clipped), so
+   scrolled content never runs under the clock and the name stays visible. Pickers call `scrollIntoView
    ({block:'nearest'})` on open so low ones don't open off-screen. The `#promptBanner`
    (`updatePromptBanner`) shows the current prompt on non-Play tabs and jumps back
    to Play when tapped.
@@ -489,7 +496,7 @@ under that subpath. Every asset the SW precaches must stay same-origin/relative.
 ### Bumping the service worker cache
 If you change any cached asset (`index.html`, `styles.css`, `logic.js`,
 `app.js`, `data.js`, `manifest.json`, `assets/*.wav`, `assets/icon-*.png`), bump
-`CACHE_NAME` in `sw.js` (currently `-v38`). Bumping it is also what makes the
+`CACHE_NAME` in `sw.js` (currently `-v39`). Bumping it is also what makes the
 deployed `sw.js` byte-different, which is what triggers the tap-to-update toast
 for existing installs. The SW also network-first-loads navigations, so updates
 generally land on next load even without a bump — but bump for certainty, and
