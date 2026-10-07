@@ -1207,6 +1207,7 @@ function updatePromptMeta() {
     updateCoachLine();
     renderPromptSeal();
     renderProgressTrack();
+    updatePromptSuggestions();
     var ea = el('entryActions');
     if (ea) ea.style.display = p === 0 ? 'none' : '';
     updatePromptBanner();
@@ -1228,6 +1229,7 @@ function checkGameOver() {
     // gameOver may have just flipped after the meta/coach pass ran.
     updateCoachLine();
     renderPromptSeal();
+    updatePromptSuggestions();
 }
 
 // Roll counters that drive the old-age (A12) and backup (B12) nudges.
@@ -1435,7 +1437,9 @@ function showTraitPicker(kind, anchorBtn) {
     pop.setAttribute('aria-label', kind === 'skills' ? 'Check a Skill'
         : kind === 'characters' ? 'Kill a Character'
         : kind === 'memories' ? 'File as an Experience'
-        : kind === 'memoryops' ? 'Memory actions' : 'Lose a Resource');
+        : kind === 'memoryops' ? 'Memory actions'
+        : kind === 'loseskills' ? 'Lose a Skill'
+        : kind === 'losemarks' ? 'Lose a Mark' : 'Lose a Resource');
     pop.innerHTML = kind === 'memories' ? memoryPickerHTML()
         : kind === 'memoryops' ? memoryOpsHTML()
         : traitPickerHTML(kind);
@@ -1474,6 +1478,16 @@ function traitPickerHTML(kind) {
             : '<p class="tp-empty">No Characters yet.</p>') +
             '<button type="button" class="tp-row tp-create" onclick="createMortalFromPicker()">' +
                 '<span class="tp-box">+</span><span class="tp-name">New mortal Character…</span></button>';
+    } else if (kind === 'loseskills' || kind === 'losemarks') {
+        var isSkill = kind === 'loseskills';
+        title = isSkill ? 'Lose a Skill' : 'Lose a Mark';
+        hint = 'Tap to lose — or restore — a ' + (isSkill ? 'Skill' : 'Mark') + '.';
+        var items = state[isSkill ? 'skills' : 'marks'];
+        body = items.length
+            ? items.map(function (x) {
+                return traitPickerRow(kind, x.id, x.text, x.lost, '✗', isSkill && x.checked ? 'checked' : '');
+            }).join('')
+            : '<p class="tp-empty">No ' + (isSkill ? 'Skills' : 'Marks') + '.</p>';
     } else {
         title = 'Lose a Resource';
         hint = 'Tap to lose — or restore — a Resource.';
@@ -1489,8 +1503,9 @@ function traitPickerHTML(kind) {
 }
 
 function traitPickerRow(kind, id, text, on, glyph, tag) {
-    var fallback = kind === 'skills' ? 'Unnamed Skill'
-        : (kind === 'characters' ? 'Unnamed Character' : 'Unnamed Resource');
+    var fallback = (kind === 'skills' || kind === 'loseskills') ? 'Unnamed Skill'
+        : kind === 'characters' ? 'Unnamed Character'
+        : kind === 'losemarks' ? 'Unnamed Mark' : 'Unnamed Resource';
     var name = escapeHtml(text || fallback);
     // A lost Resource / killed Character is struck out; a checked Skill is not
     // (it's marked by the ✓ box + accent border — checked ≠ lost).
@@ -1513,14 +1528,19 @@ function pickTrait(kind, id) {
         on = s.checked;
         announce((on ? 'Checked' : 'Un-checked') + ' Skill "' + (s.text || 'Unnamed') + '".');
     } else {
-        // Resources and mortal Characters both toggle .lost via toggleLoseEntity.
-        var list = kind === 'characters' ? 'characters' : 'resources';
+        // Resources, Characters, and lost Skills/Marks all toggle .lost via
+        // toggleLoseEntity.
+        var list = kind === 'characters' ? 'characters'
+            : kind === 'loseskills' ? 'skills'
+            : kind === 'losemarks' ? 'marks' : 'resources';
         toggleLoseEntity(list, id); // pushUndo + render + survival + persist (Diary-aware)
         var e = findEntity(list, id);
         if (!e) return;
         on = e.lost;
         if (kind === 'characters') {
             announce((on ? 'Killed' : 'Revived') + ' Character "' + (e.text || 'Unnamed') + '".');
+        } else if (kind === 'loseskills' || kind === 'losemarks') {
+            announce((on ? 'Lost' : 'Restored') + (kind === 'loseskills' ? ' Skill "' : ' Mark "') + (e.text || 'Unnamed') + '".');
         } else {
             announce((on ? 'Lost' : 'Restored') + ' Resource "' + (e.text || 'Unnamed') + '".');
         }
@@ -1667,7 +1687,6 @@ function renderList(list) {
     else if (list === 'resources') renderResources();
     else if (list === 'characters') renderCharacters();
     else if (list === 'marks') renderMarks();
-    renderPlayRecap();
 }
 
 // Text edits update state only — no re-render, so input focus is preserved.
@@ -1691,17 +1710,18 @@ function toggleLoseEntity(list, id) {
     }
     renderList(list);
     checkSurvivalState();
+    if (list === 'characters') showAgeNudgeIfDue(); // no living mortals → no old-age nudge
     persist();
 }
 
 function setSkillChecked(id, isChecked) {
     var e = findEntity('skills', id);
-    if (e) { pushUndo(); e.checked = isChecked; renderSkills(); persist(); }
+    if (e) { pushUndo(); e.checked = isChecked; renderSkills(); checkSurvivalState(); persist(); }
 }
 
 function setCharacterType(id, type) {
     var e = findEntity('characters', id);
-    if (e) { pushUndo(); e.type = type === 'Immortal' ? 'Immortal' : 'Mortal'; renderCharacters(); persist(); }
+    if (e) { pushUndo(); e.type = type === 'Immortal' ? 'Immortal' : 'Mortal'; renderCharacters(); showAgeNudgeIfDue(); persist(); }
 }
 
 function addDoom(id) {
@@ -1760,8 +1780,10 @@ function killAllMortals() {
     });
 }
 
+// Rules: a checked Skill can't be checked again, so only unchecked, unlost
+// Skills count as available (same as resolveTraitAction's ladder).
 function checkSurvivalState() {
-    var activeSkills = state.skills.filter(function (s) { return !s.lost; }).length;
+    var activeSkills = state.skills.filter(function (s) { return !s.lost && !s.checked; }).length;
     var activeRes = state.resources.filter(function (r) { return !r.lost; }).length;
     el('gameWarning').style.display = (activeSkills === 0 && activeRes === 0) ? 'block' : 'none';
 }
@@ -1780,6 +1802,7 @@ function renderSkills() {
                 '" onclick="toggleLoseEntity(\'skills\',\'' + s.id + '\')">' +
                 (s.lost ? 'Restore' : 'Lose') + '</button></li>';
     }).join('');
+    renderPlayRecap(); // Play-tab recap mirrors every trait list
 }
 
 function renderResources() {
@@ -1792,6 +1815,7 @@ function renderResources() {
                 '" onclick="toggleLoseEntity(\'resources\',\'' + r.id + '\')">' +
                 (r.lost ? 'Restore' : 'Lose') + '</button></li>';
     }).join('');
+    renderPlayRecap(); // Play-tab recap mirrors every trait list
 }
 
 function renderMarks() {
@@ -1804,6 +1828,7 @@ function renderMarks() {
                 '" onclick="toggleLoseEntity(\'marks\',\'' + m.id + '\')">' +
                 (m.lost ? 'Restore' : 'Lose') + '</button></li>';
     }).join('');
+    renderPlayRecap(); // Play-tab recap mirrors every trait list
 }
 
 // Monogram wax seal for a Character: red wax for mortals (hue nudged per
@@ -1838,6 +1863,7 @@ function renderCharacters() {
                     (c.lost ? 'Restore' : 'Lose') + '</button>' +
             '</div></li>';
     }).join('');
+    renderPlayRecap(); // Play-tab recap mirrors every trait list
 }
 
 // ==========================================
@@ -1992,7 +2018,9 @@ function memoryBlockHtml(m, name) {
         exps += '<div class="exp-row">' +
             '<textarea id="exp-' + m.id + '-' + i + '" class="experience-input autogrow" rows="2" aria-label="Experience ' + (i + 1) +
             '" placeholder="- Experience ' + (i + 1) + '"' +
-            (inDiary ? ' readonly' : ' oninput="setExperience(\'' + name + '\',\'' + m.id + '\',' + i + ', this.value); autoGrow(this)"') +
+            // Diary Memories can't gain Experiences, but their text stays
+            // editable: Prompts such as 39a/39b alter Diary entries directly.
+            ' oninput="setExperience(\'' + name + '\',\'' + m.id + '\',' + i + ', this.value); autoGrow(this)"' +
             '>' + escapeHtml(m.experiences[i] || '') + '</textarea>' +
             delBtn + '</div>';
     }
@@ -2019,13 +2047,14 @@ function memoryBlockHtml(m, name) {
     else if (m.memState === 'primal') hint = '<div class="mem-hint">🐾 Primal: write only the “how I felt” clause, not “what happened”.</div>';
     else if (m.memState === 'vast') hint = '<div class="mem-hint">🌌 Vast: holds up to five Experiences.</div>';
     else if (m.memState === 'starred') hint = '<div class="mem-hint">⭐ Starred: fixed forever and does not count toward your Memory limit.</div>';
+    if (inDiary) hint += '<div class="mem-hint">📔 In the Diary: no new Experiences. Change its words only when a Prompt tells you to.</div>';
     var migrateBtn = name === 'memories'
         ? '<button type="button" role="menuitem" class="mem-menu-item" onclick="closeMemMenus(); migrateToDiary(\'' + m.id + '\')">Move to Diary</button>'
         : '';
     var cls = 'memory-block' + (m.memState !== 'normal' ? ' mem-' + m.memState : '') + (m.lost ? ' strikethrough' : '');
     return '<div class="' + cls + '" id="' + m.id + '" data-stamp="LOST">' +
         '<input type="text" aria-label="Memory theme" placeholder="Memory Theme" value="' + escapeHtml(m.theme) +
-            '"' + (inDiary ? ' readonly' : ' oninput="setMemoryTheme(\'' + name + '\',\'' + m.id + '\', this.value)"') + '>' +
+            '" oninput="setMemoryTheme(\'' + name + '\',\'' + m.id + '\', this.value)">' +
         '<div class="exp-container">' + exps + '</div>' + addExpBtn + sparkBtn + hint + sparkDiv +
         '<div class="mem-controls">' +
             '<div class="seal-chips" role="radiogroup" aria-label="Memory state">' + chips + '</div>' +
@@ -2437,6 +2466,32 @@ function updateTierExplain() {
         : 'You have used up all three questions here. Roll again, or move on.';
 }
 
+// --- Lose a Skill / Lose a Mark (shown when a Prompt asks for it) ----------
+function promptLoseSkill() { showTraitPicker('loseskills', el('btnLoseSkill')); }
+function promptLoseMark() { showTraitPicker('losemarks', el('btnLoseMark')); }
+
+// --- Prompt-aware suggestions ----------------------------------------------
+// Links the Prompt to the controls that carry out its bookkeeping, on every
+// tab: TYOV.promptActions reads the current Prompt's text, and each control
+// tagged data-suggest="<action>" gets a gold "the Prompt asks for this" ring.
+// Rare actions (lose a Skill / a Mark, strike out all mortals) have buttons in
+// #promptExtras that only appear when the current Prompt calls for them.
+// Guided, never automatic: nothing changes until the player taps.
+function updatePromptSuggestions() {
+    var active = (state.currentPrompt >= 1 && !state.gameOver)
+        ? TYOV.promptActions(state.display.promptText) : [];
+    var nodes = document.querySelectorAll('[data-suggest]');
+    for (var i = 0; i < nodes.length; i++) {
+        var on = active.indexOf(nodes[i].getAttribute('data-suggest')) !== -1;
+        nodes[i].classList.toggle('is-suggested', on);
+        if (on) nodes[i].setAttribute('aria-describedby', 'suggestNote');
+        else if (nodes[i].getAttribute('aria-describedby') === 'suggestNote') nodes[i].removeAttribute('aria-describedby');
+        if (nodes[i].hasAttribute('data-extra')) nodes[i].hidden = !on;
+    }
+    var extras = el('promptExtras');
+    if (extras) extras.hidden = !extras.querySelector('[data-extra]:not([hidden])');
+}
+
 // --- Memory operations (Play tab) ----------------------------------------
 // 28 Prompt entries manipulate Memories: "strike out a Memory" / "lose a
 // Memory" (15), "lose a Memory slot permanently" (4), and "create a Skill
@@ -2479,8 +2534,13 @@ function memoryOpsHTML() {
             (tag ? '<span class="tp-tag">' + escapeHtml(tag) + '</span>' : '') + '</button>';
     }).join('');
     var body = rows || '<p class="tp-empty">No Memories yet.</p>';
+    // Rules: "Convert a Memory to a Skill" also strikes the Memory out, while
+    // "create a Skill based on a Memory" keeps it. Pre-tick from the Prompt.
+    var convert = /\bconvert a memory\b/i.test(state.display.promptText || '');
     var footer = skillMode
-        ? '<button type="button" class="tp-row tp-create" onclick="setMemoryOpsMode(\'forget\')">' +
+        ? '<label class="tp-row tp-check"><input type="checkbox" id="memConvert"' + (convert ? ' checked' : '') + '>' +
+          '<span class="tp-name">Also strike out that Memory (convert it)</span></label>' +
+          '<button type="button" class="tp-row tp-create" onclick="setMemoryOpsMode(\'forget\')">' +
           '<span class="tp-box">\u2190</span><span class="tp-name">Back to forgetting</span></button>'
         : '<button type="button" class="tp-row tp-create" onclick="setMemoryOpsMode(\'skill\')">' +
           '<span class="tp-box">+</span><span class="tp-name">Make a Skill from a Memory…</span></button>' +
@@ -2503,12 +2563,26 @@ function pickMemoryOp(list, id) {
     var m = findEntity(list, id);
     if (!m) return;
     if (memoryOpsMode === 'skill') {
+        var conv = el('memConvert');
+        var strike = !!(conv && conv.checked);
         pushUndo();
         var base = m.theme || firstExperienceOf(m) || '';
-        addSkill(base);
+        if (strike) {
+            m.lost = true;
+            renderMemoryList(list);
+            updateMemoryCount();
+            updateDiaryCount();
+        }
+        // Inline rather than addSkill(), which would push a second undo step and
+        // split the convert (strike + new Skill) across two undos.
+        state.skills.push({ id: genId(), text: base, lost: false, checked: false });
+        renderSkills();
+        checkSurvivalState();
+        persist();
         closeTraitPicker();
         showTab('play');
-        toast('Skill created from “' + (base || 'a Memory') + '” — reword it below.', 'info');
+        toast((strike ? 'Memory converted into a Skill' : 'Skill created from “' + (base || 'a Memory') + '”') +
+            ' — reword it below.', 'info');
         announce('Skill created from a Memory.');
         focusNewTrait('skills', state.skills[state.skills.length - 1]);
         return;
@@ -2636,10 +2710,14 @@ function activeMemoryCount() {
 // Character / Mark". Doing that used to mean leaving the Prompt for the
 // Character tab; these add the trait in place and focus it for naming.
 function quickCreate(list) {
-    pushUndo();
+    // addSkill/addResource/addCharacter/addMark each push their own undo step.
     if (list === 'skills') addSkill('');
     else if (list === 'resources') addResource('');
-    else if (list === 'characters') addCharacter('', 'Mortal');
+    else if (list === 'characters') {
+        // "Create a new immortal Character" → start it as an Immortal.
+        var immortal = /\bcreate\b[^.]{0,25}\bimmortal\b/i.test(state.display.promptText || '');
+        addCharacter('', immortal ? 'Immortal' : 'Mortal');
+    }
     else if (list === 'marks') addMark('');
     else return;
     var added = state[list][state[list].length - 1];
@@ -3003,7 +3081,7 @@ document.addEventListener('click', function (e) {
     // already detached by the time this runs — that is not an outside click.
     if (!t.isConnected) return;
     if (openTraitPicker.contains(t)) return;
-    if (t.closest && t.closest('#btnCheckSkill, #btnLoseResource, #btnKillCharacter, #btnFileExperience, #btnMemoryOps')) return;
+    if (t.closest && t.closest('#btnCheckSkill, #btnLoseResource, #btnKillCharacter, #btnFileExperience, #btnMemoryOps, #btnLoseSkill, #btnLoseMark')) return;
     closeTraitPicker();
 });
 

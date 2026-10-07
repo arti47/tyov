@@ -2075,3 +2075,32 @@ body.light-mode .memory-block.strikethrough::after { color: #9b1c14; border-colo
     .ornament span { box-shadow: none; }
     .art { display: none; }
 }
+
+/* Prompt-aware suggestions: a control the current Prompt asks for gets a gold
+   ring and a small gold dot (updatePromptSuggestions). */
+.is-suggested {
+    position: relative;
+    box-shadow: 0 0 0 2px var(--gold), 0 0 14px rgba(201, 162, 74, 0.45) !important;
+    animation: suggestIn 0.6s var(--ease) 1;
+}
+.is-suggested::after {
+    content: "";
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--gold);
+    box-shadow: 0 0 0 2px var(--surface);
+}
+@keyframes suggestIn {
+    0% { box-shadow: 0 0 0 0 var(--gold), 0 0 0 rgba(201, 162, 74, 0); }
+    60% { box-shadow: 0 0 0 4px var(--gold), 0 0 22px rgba(201, 162, 74, 0.6); }
+}
+/* Rare-action row: only the buttons the Prompt calls for are shown. */
+.prompt-extras[hidden], [data-extra][hidden] { display: none !important; }
+.prompt-extras { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (prefers-reduced-motion: reduce) { .is-suggested { animation: none; } }
+.tp-check { cursor: pointer; gap: 8px; border-style: dashed; }
+.tp-check input { flex: 0 0 auto; }

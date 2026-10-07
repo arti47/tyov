@@ -273,3 +273,30 @@ test('monogram takes two initials from the bare name and a stable hue', () => {
     assert.strictEqual(a.hue, monogram('Rosa, the innkeeper').hue);
     assert.ok(a.hue >= 0 && a.hue < 360);
 });
+
+test('promptActions maps rulebook phrasing to the bookkeeping it asks for', () => {
+    const { promptActions } = require('../logic.js');
+    const has = (t, k) => promptActions(t).includes(k);
+    assert.ok(has('Kill a mortal Character. Create a mortal if none are available. Take the skill Bloodthirsty.', 'kill'));
+    assert.ok(has('Take the skill Bloodthirsty.', 'newSkill'));
+    assert.ok(has('Create a Resource which represents their assistance.', 'newResource'));
+    assert.ok(has('Create a new mortal Character.', 'newCharacter'));
+    assert.ok(has('A century passes. Strikeout a Memory. Strikeout all mortal Characters.', 'allMortals'));
+    assert.ok(has('A century passes. Strikeout a Memory.', 'memory'));
+    assert.ok(has('Check three Skills to regain the Resource, or check one Skill.', 'check'));
+    assert.ok(has('Check three Skills to regain the Resource.', 'lose'));       // regain -> restore picker
+    assert.ok(has('Uncheck a Skill.', 'check'));
+    assert.ok(has('Lose a checked Skill.', 'loseSkill'));
+    assert.ok(has('You may lose one checked or unchecked Skill.', 'loseSkill'));
+    assert.ok(has('Gain a Mark.', 'mark'));
+    assert.ok(has('You may remove a Mark.', 'loseMark'));
+    assert.ok(has('Throw away your oldest or most precious Resource.', 'lose'));
+    assert.ok(has('Bring back the most recently struck out mortal Character.', 'kill'));
+    assert.ok(has('A Character is killed.', 'kill'));
+    assert.ok(has('Lose your oldest and newest Memories. Throw away your Diary.', 'memory'));
+    assert.ok(has('Throw away your Diary.', 'lose'));                          // the Diary is a Resource
+    // no false alarms on plain narrative
+    assert.deepStrictEqual(promptActions('Who are they? Why are they drawn to you?'), []);
+    assert.ok(!has('Lose a Resource.', 'loseSkill'));
+    assert.deepStrictEqual(promptActions(''), []);
+});

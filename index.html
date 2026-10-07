@@ -394,17 +394,24 @@
         <div class="prompt-actions" id="promptActions" role="group" aria-label="Guided prompt actions">
             <span class="prompt-actions-label">Did the Prompt tell you to do one of these? Tap it:</span>
             <div class="prompt-action-btns">
-                <button class="btn-small" id="btnCheckSkill" onclick="promptCheckSkill()">Check a Skill</button>
-                <button class="btn-small btn-strike" id="btnLoseResource" onclick="promptLoseResource()">Lose a Resource</button>
-                <button class="btn-small btn-strike" id="btnKillCharacter" onclick="promptKillCharacter()">Kill a Character</button>
+                <button class="btn-small" id="btnCheckSkill" data-suggest="check" onclick="promptCheckSkill()">Check a Skill</button>
+                <button class="btn-small btn-strike" id="btnLoseResource" data-suggest="lose" onclick="promptLoseResource()">Lose a Resource</button>
+                <button class="btn-small btn-strike" id="btnKillCharacter" data-suggest="kill" onclick="promptKillCharacter()">Kill a Character</button>
             </div>
             <div class="prompt-action-btns">
-                <button class="btn-small btn-add" onclick="quickCreate('skills')">+ Skill</button>
-                <button class="btn-small btn-add" onclick="quickCreate('resources')">+ Resource</button>
-                <button class="btn-small btn-add" onclick="quickCreate('characters')">+ Character</button>
-                <button class="btn-small btn-add" onclick="quickCreate('marks')">+ Mark</button>
-                <button class="btn-small btn-strike" id="btnMemoryOps" onclick="promptMemoryOps()">Memory…</button>
+                <button class="btn-small btn-add" data-suggest="newSkill" onclick="quickCreate('skills')">+ Skill</button>
+                <button class="btn-small btn-add" data-suggest="newResource" onclick="quickCreate('resources')">+ Resource</button>
+                <button class="btn-small btn-add" data-suggest="newCharacter" onclick="quickCreate('characters')">+ Character</button>
+                <button class="btn-small btn-add" data-suggest="mark" onclick="quickCreate('marks')">+ Mark</button>
+                <button class="btn-small btn-strike" id="btnMemoryOps" data-suggest="memory" onclick="promptMemoryOps()">Memory…</button>
             </div>
+            <!-- Rare actions: each appears only while the current Prompt calls for it. -->
+            <div class="prompt-action-btns prompt-extras" id="promptExtras" hidden>
+                <button class="btn-small btn-strike" id="btnLoseSkill" data-suggest="loseSkill" data-extra hidden onclick="promptLoseSkill()">Lose a Skill</button>
+                <button class="btn-small btn-strike" id="btnLoseMark" data-suggest="loseMark" data-extra hidden onclick="promptLoseMark()">Lose a Mark</button>
+                <button class="btn-small btn-strike" id="btnCenturyPlay" data-suggest="allMortals" data-extra hidden onclick="killAllMortals()">Pass a Century</button>
+            </div>
+            <span id="suggestNote" class="sr-only">The current Prompt asks for this.</span>
         </div>
 
         <!-- Side column on wide screens (beside the Prompt); inline on phones.
@@ -462,23 +469,23 @@
                 <h3>Skills</h3>
             <p class="section-help">Things your vampire is good at. Tick the box when a Prompt says to <b>check</b> a Skill — that means it's been spent and can't be used again. Press <b>Lose</b> to cross one out for good.</p>
                 <ul class="trait-list" id="skillsList"></ul>
-                <button class="btn-small" onclick="addSkill()">+ Add Skill</button>
+                <button class="btn-small" data-suggest="newSkill" onclick="addSkill()">+ Add Skill</button>
                 
                 <h3 class="sub-head">Resources</h3>
                 <p class="section-help">Things your vampire owns or controls — a house, a horse, a debt owed. Press <b>Lose</b> when a Prompt takes one away.</p>
                 <ul class="trait-list" id="resourcesList"></ul>
-                <button class="btn-small" onclick="addResource()">+ Add Resource</button>
+                <button class="btn-small" data-suggest="newResource" onclick="addResource()">+ Add Resource</button>
                 
                 <h3 class="sub-head">Characters</h3>
                 <p class="section-help">People in your vampire's life. <b>Mortals</b> die of old age within a generation — <b>Pass a Century</b> below kills off the ones still living. <b>Immortals</b> endure. The [+•] button adds a Doom Dot, a countdown used by one late Prompt.</p>
                 <ul class="trait-list" id="charactersList"></ul>
-                <button class="btn-small" onclick="addCharacter()">+ Add Character</button>
-                <button class="btn-small btn-strike btn-block" onclick="killAllMortals()">Pass a Century</button>
+                <button class="btn-small" data-suggest="newCharacter" onclick="addCharacter()">+ Add Character</button>
+                <button class="btn-small btn-strike btn-block" data-suggest="allMortals" onclick="killAllMortals()">Pass a Century</button>
                 
                 <h3 class="sub-head">Marks</h3>
                 <p class="section-help">Visible signs of what you have become: no reflection, cold hands, a wound that never healed.</p>
                 <ul class="trait-list" id="marksList"></ul>
-                <button class="btn-small" onclick="addMark()">+ Add Mark</button>
+                <button class="btn-small" data-suggest="mark" onclick="addMark()">+ Add Mark</button>
             </div>
         </div>
 

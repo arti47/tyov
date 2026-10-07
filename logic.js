@@ -300,6 +300,39 @@
         return { initials: initials, hue: h % 360 };
     }
 
+    // Read a Prompt's text and list the bookkeeping it asks for, so the app can
+    // point at the matching buttons (guided, never automatic — the player still
+    // decides). Keys: check, loseSkill, lose, kill, allMortals, newSkill,
+    // newResource, newCharacter, mark, loseMark, memory. Patterns follow the
+    // rulebook's phrasing.
+    var PROMPT_ACTIONS = [
+        ['allMortals', /strike ?out all mortal characters|all mortal characters (?:die|are struck)/i],
+        // "check a Skill", "check three Skills", and "uncheck a Skill" — the
+        // Check picker toggles both ways.
+        ['check', /\b(?:un)?check(?:ing)? (?:a|an|one|two|three|another|any|\d+)?\s*(?:\w+\s)?skills?\b/i],
+        ['loseSkill', /\blose (?:a|an|one|two|three|any)?\s*(?:(?:un)?checked\s|or\s)*skills?\b/i],
+        // losing/discarding/trading a Resource, or regaining a lost one (the same
+        // picker restores)
+        ['lose', /\b(?:lose|destroy|strike ?out|discard|throw away|trade|convert|recover) (?:a|an|one|two|three|any|your)?\s*(?:\w+\s){0,4}resources?\b|\bregain\b[^.]{0,20}\bresource\b|\b(?:lose|throw away|destroy) your diary\b/i],
+        // killing a Character, or bringing a dead one back (the picker revives)
+        ['kill', /\b(?:kill|murder|destroy) (?:a|an|one|any|the|your)?\s*(?:\w+\s){0,2}characters?\b|\bkill a mortal\b|\bstrike ?out (?:a|one|any|the)\s*(?:\w+\s){0,2}characters?\b|\bcharacter (?:is|are) killed\b|\b(?:has|have) died\b|\bcharacter dies\b|\bbring back\b[^.]{0,40}\bcharacter\b/i],
+        ['newSkill', /\b(?:create|gain|take|learn|add)\b[^.]{0,25}\bskill\b/i],
+        ['newResource', /\b(?:create|gain|add|acquire)\b[^.]{0,25}\bresources?\b/i],
+        ['newCharacter', /\bcreate\b[^.]{0,30}\bcharacters?\b|\bcreate (?:a |an )?(?:new )?(?:mortal|immortal)\b/i],
+        ['mark', /\b(?:gain|create|take|receive) (?:a |another |the )?mark\b/i],
+        ['loseMark', /\b(?:remove|lose|erase) (?:a|one|any|your)?\s*mark\b/i],
+        ['memory', /\bmemory slot\b|\b(?:strike ?out|lose|forget|erase|regain) (?:a|an|one|two|three|any|your)?\s*(?:\w+\s){0,4}memor(?:y|ies)\b|\bbased on (?:a|an|one)?\s*(?:\w+\s)?memory\b|\bconvert a memory\b/i]
+    ];
+
+    function promptActions(text) {
+        var t = String(text || '');
+        var out = [];
+        PROMPT_ACTIONS.forEach(function (pa) {
+            if (pa[1].test(t)) out.push(pa[0]);
+        });
+        return out;
+    }
+
     // --- Save-state shape + validation (pure; shared with the app & tests) ----
 
     var SAVE_VERSION = 2;
@@ -404,6 +437,7 @@
         candleStates: candleStates,
         trackMarks: trackMarks,
         monogram: monogram,
+        promptActions: promptActions,
         genId: genId,
         defaultState: defaultState,
         normMem: normMem,
