@@ -2764,3 +2764,19 @@ body.nudges-quiet #backupNudge { display: none !important; }
         border-bottom: 1px solid var(--border);
     }
 }
+
+/* iOS draws a white clock/battery (black-translucent status bar), so in the
+   parchment theme the strip behind it alone stays dark. Zero-height where
+   there is no top inset. */
+@media (max-width: 680px) {
+    body.light-mode .app-header::after {
+        content: '';
+        position: absolute;
+        z-index: -1;
+        top: 0;
+        height: env(safe-area-inset-top, 0px);
+        left: calc(-12px - env(safe-area-inset-left, 0px));
+        right: calc(-12px - env(safe-area-inset-right, 0px));
+        background: var(--ink);
+    }
+}
