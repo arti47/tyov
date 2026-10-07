@@ -368,6 +368,7 @@
             memories: [],    // { id, theme, experiences[], memState, lost }
             diary: [],       // same shape as memories
             settings: {},
+            turn: { stage: 'roll', done: [] },
             display: {
                 promptResult: 'Awaiting First Roll...',
                 rollDetails: '',
@@ -420,7 +421,41 @@
         s.diary = (s.diary || []).map(normMem);
         s.settings = s.settings || {};
         s.display = Object.assign(defaultState().display, s.display || {});
+        // Use the SAVED turn (not defaultState's), so pre-ritual saves resume at the Prompt.
+        s.turn = normTurn(d && d.turn, s.currentPrompt);
         return s;
+    }
+
+    // --- The night's ritual (turn stages) ------------------------------------
+    // Each Prompt is played as a short sequence of full-screen beats:
+    //   roll → reveal (read the Prompt) → obey (do what it asks) → write →
+    //   remember (keep it in a Memory) → back to roll.
+    // `obey` is skipped when the Prompt asks for no bookkeeping.
+    var STAGES = ['roll', 'reveal', 'obey', 'write', 'remember'];
+
+    // Repair a saved turn. Saves from before the ritual have none: a game that
+    // has started resumes at the Prompt (reveal), a new one at the roll.
+    function normTurn(t, currentPrompt) {
+        t = t || {};
+        var stage = STAGES.indexOf(t.stage) !== -1 ? t.stage : (currentPrompt > 0 ? 'reveal' : 'roll');
+        if (!(currentPrompt > 0)) stage = 'roll';
+        var done = Array.isArray(t.done) ? t.done.filter(function (x) { return typeof x === 'string'; }) : [];
+        return { stage: stage, done: done };
+    }
+
+    function nextStage(stage, hasActions) {
+        if (stage === 'roll') return 'reveal';
+        if (stage === 'reveal') return hasActions ? 'obey' : 'write';
+        if (stage === 'obey') return 'write';
+        if (stage === 'write') return 'remember';
+        return 'roll';
+    }
+
+    function prevStage(stage, hasActions) {
+        if (stage === 'remember') return 'write';
+        if (stage === 'write') return hasActions ? 'obey' : 'reveal';
+        if (stage === 'obey') return 'reveal';
+        return stage; // roll/reveal have nothing before them within a night
     }
 
     var api = {
@@ -438,6 +473,10 @@
         trackMarks: trackMarks,
         monogram: monogram,
         promptActions: promptActions,
+        STAGES: STAGES,
+        normTurn: normTurn,
+        nextStage: nextStage,
+        prevStage: prevStage,
         genId: genId,
         defaultState: defaultState,
         normMem: normMem,

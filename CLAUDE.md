@@ -60,19 +60,19 @@ npm run lint      # ESLint (needs `npm install` first; no network = skip)
 
 | File | Purpose |
 |------|---------|
-| `index.html` | The UI markup only. An inline **SVG icon sprite** (`<symbol id="i-*">`: play/character/diary/journal/settings/eye/quill/die; plus line-art illustrations `art-hero`/`art-grave`/`art-diary`/`art-journal`, stroked with `currentColor` so they follow the theme; used via `<use href="#…">`), then the `.app-header`: a letter-spaced "Vampire Chronicle" overline, the header icon buttons (`#btnOracle` eye → Meaning Oracle, `#btnHelp` ?), the **vampire's name as the page title** (`#nameDisplay`; the quill reveals `#nameEditRow` with the `#currentName` input + Adopt New Name), and a meta row (forgotten names, autosave). Then warnings/nudges and the **tab bar** (`Play`/`Character`/`Diary`/`Journal`/`Settings` with SVG icons — top tabs on desktop, a fixed **bottom bar with labels** on ≤680px) over five `.tab-panel` sections, a sticky `#promptBanner` (current prompt, shown on non-Play tabs), the setup wizard, the first-run explainer (`#welcomeOverlay`) and glossary (`#glossaryOverlay`), the confirm modal (`#appModal`), and the floating oracle. Section copy is written for players who have never read the rulebook: `.section-help` blocks under every heading, `.step-help` in the wizard, and `title=` tooltips on each control. Loads `logic.js` → `data.js` → `app.js`. No inline CSS. |
+| `index.html` | The UI markup only. An inline **SVG icon sprite** (`<symbol id="i-*">`: moon/character/journal/eye/quill/die/dots/undo/key/help/book/skill/resource/mark/check/skull/person-plus/flame; plus line-art illustrations `art-hero`/`art-grave`/`art-diary`/`art-journal`, stroked with `currentColor`; used via `<use href="#…">`). The `.app-header` holds the **vampire's name as the page title** (`#nameDisplay`; the quill reveals `#nameEditRow` with `#currentName` + Adopt New Name) and one `⋯` button (`#btnMenu`) opening `#mainMenu`: Meaning oracle (`#btnOracle`), Undo, Keeper’s tools, How to play, What the words mean, Settings, and `#saveStatus`. Then short warnings/nudges, a sticky `#promptBanner` (current Prompt on non-Night tabs), and **three tabs** — **Night** (`#panel-play`), **Vampire** (`#panel-character`), **Chronicle** (`#panel-journal`) — top tabs on desktop, a fixed bottom bar on ≤680px. `#panel-settings` is reached from the menu (not in the nav); `#panel-diary` is an empty legacy panel (the Diary lives on the Vampire tab). Night = `.night#night[data-stage]` with the `ol.beats` tracker and one `.stage` block per beat (roll/reveal/obey/write/remember). Also the setup wizard (one question per step: `.wiz-count`/`h2`/`.wiz-q`), the 4-card swipe `#welcomeOverlay` (`#welcomeTrack`/`#welcomeDots`), `#glossaryOverlay`, `#appModal`, `#keeperSheet` and `#editSheet` (bottom sheets on phones, dialogs on desktop), and the oracle panel. Help text sits behind ⓘ dots (`.help-dot` toggles the following `.section-help`). Loads `logic.js` → `data.js` → `app.js`. No inline CSS. |
 | `styles.css` | All styles. Opens with self-hosted `@font-face` rules (**Cinzel** display, **EB Garamond** body) and a **design-token layer**: type scale (`--fs-*`), spacing (`--sp-*`), radii (`--r-*`), and colour roles (`--bg`, `--surface`/`-2`/`-3`, `--ink`/`-soft`/`-muted`/`-faint`, `--accent`/`--accent-hover`/`--accent-ink`/`--on-accent`, `--gold`, `--moss`, `--steel`, `--amber-ink`, `--border`/`-strong`, shadows, `--page-bg`/`--surface-bg`). Two themes: **candlelit night** (`:root`, default) and **aged parchment** (`body.light-mode`, with an inline-SVG paper grain). The old names (`--bg-color`, `--accent-color`, …) survive as **aliases declared on `body`** (not `:root`) so they follow the active theme. Buttons: filled primary, `.btn-strike` = outlined secondary, `.btn-success`, `.btn-danger`. Then layout, components, `:focus-visible` gold outlines. Ends with a `@media (max-width: 680px)` block for the responsive/mobile layout; form controls use `min-width: 0` and the body has `overflow-x: hidden` so nothing scrolls sideways on phones. The body padding adds `env(safe-area-inset-*)` (with `viewport-fit=cover` in the `<head>`) so header content clears the iOS notch/status bar. The guided prompt-action buttons stack as a centered caption over two equal-width-button rows (`.prompt-actions` column + `.prompt-action-btns`; the second row is the green `.btn-add` quick-creates). `.play-recap`/`.recap-input` style the collapsible Play-tab trait recap, `.entry-actions` the File/Save entry buttons, `.slot-list`/`.slot-row` the Settings chronicle chooser, and `.welcome-*`/`.glossary`/`.section-help`/`.step-help`/`.coach-line`/`.advanced-bar` the onboarding layer (`.modal-content` scrolls internally so a long explainer never pushes its title off a phone screen). A trailing `@media print` block hides all chrome and prints only `#journalTabContent` (B9). Free-form textareas marked `.autogrow` (Experiences, the setup Memory steps, the prompt journal, the Boxed Experience) size themselves to their content via `autoGrow`/`autoGrowAll`; `#journalTabContent` is capped to a 70ch measure. Tappable suggestion chips are `button.spark-tap` (wrapping, since sentence starters hold a whole clause) with a `.spark-dismiss` ✕; `.surprise-btn` is the full-width Surprise me action. |
-| `logic.js` | **Pure**, DOM-free helpers shared by the app and tests: `escapeHtml`, `getTier`, `getPromptText`, `parseMarkdown`, `rollDice` (RNG injectable), `resolveTraitAction` (Skill/Resource substitution ladder), `rollMeaning` (d100 → meaning-table word), `pickSuggestions` (n distinct setup-wizard example entries), `fillTemplate` (substitutes `{skill}`/`{resource}`/`{character}`/`{character2}`/`{sire}` in a Memory sentence template — capitalised tokens give a sentence-initial form, `{character2}` is always a different person, one pick per token kind, with fallbacks) and `traitForms` (normalises a tagged pool entry **or** a plain player-typed string to `full`/`short`/`name`), the gauge helpers `candleStates` (per-slot `lit`/`unlit`/`lost` for the Memory candles) and `trackMarks` (visited Prompts for the 1–80 track), `monogram` (Character initials + a stable hue for the wax-seal sigil), `promptActions` (reads a Prompt's text and returns the bookkeeping it asks for: `check`, `loseSkill`, `lose`, `kill`, `allMortals`, `newSkill`, `newResource`, `newCharacter`, `mark`, `loseMark`, `memory`), and the save-state helpers `genId`/`defaultState`/`normMem`/`normalizeState` (+`SAVE_VERSION`). Exposed as `window.TYOV` in the browser and `module.exports` in Node. |
+| `logic.js` | **Pure**, DOM-free helpers shared by the app and tests: `escapeHtml`, `getTier`, `getPromptText`, `parseMarkdown`, `rollDice` (RNG injectable), `resolveTraitAction` (Skill/Resource substitution ladder), `rollMeaning` (d100 → meaning-table word), `pickSuggestions` (n distinct setup-wizard example entries), `fillTemplate` (substitutes `{skill}`/`{resource}`/`{character}`/`{character2}`/`{sire}` in a Memory sentence template — capitalised tokens give a sentence-initial form, `{character2}` is always a different person, one pick per token kind, with fallbacks) and `traitForms` (normalises a tagged pool entry **or** a plain player-typed string to `full`/`short`/`name`), the gauge helpers `candleStates` (per-slot `lit`/`unlit`/`lost` for the Memory candles) and `trackMarks` (visited Prompts for the 1–80 track), `monogram` (Character initials + a stable hue for the wax-seal sigil), `promptActions` (reads a Prompt's text and returns the bookkeeping it asks for: `check`, `loseSkill`, `lose`, `kill`, `allMortals`, `newSkill`, `newResource`, `newCharacter`, `mark`, `loseMark`, `memory`), the night-ritual helpers `STAGES`/`normTurn`/`nextStage`/`prevStage` (stage order roll→reveal→obey→write→remember; `obey` is skipped when the Prompt asks for no bookkeeping), and the save-state helpers `genId`/`defaultState`/`normMem`/`normalizeState` (+`SAVE_VERSION`). Exposed as `window.TYOV` in the browser and `module.exports` in Node. |
 | `app.js` | The game engine: the `state` object, render-from-state functions, save/load + v1→v2 migration, full-state undo stack, dice/prompts, traits/memories/diary, triggers, guided prompt actions, nudges, the Meaning Oracle, import/export. |
 | `data.js` | The prompt database: `const promptDB`, keyed `1..80`, each with tiers `a`/`b`/`c` (first/second/third visit). Also `const meaningTable` — the 100-word Meaning Oracle list (1-indexed by a d100 roll) — `const settingPacks`, **six coherent setting packs** (Medieval Europe, Norse Coast, Silk Road, West African Sahel, Imperial China, Mesoamerica), each with 8 `names`/`skills`/`resources`/`characters`/`marks`; skills/resources/characters are **tagged** (`{ text, short }` / `{ text, name }`) so templates can substitute them mid-sentence without breaking grammar. And `const memoryTemplates` (`themes.{life,combine,turning}`/`life`/`combine`/`turning`), the sentence-starter templates behind 💡 Sentence starter and Surprise me. |
 | `assets/fonts/*.woff2` | Self-hosted Latin subsets: Cinzel 600/700, EB Garamond 400/400-italic/600 (~112 KB), precached by the SW and `<link rel=preload>`ed. Licences in `assets/fonts/OFL-*.txt` (SIL OFL 1.1). |
 | `assets/dice.wav`, `assets/page.wav` | Bundled, precached sound effects (dice roll, page turn) — local so audio works offline. Generated lightweight WAVs. |
 | `assets/icon-192.png`, `assets/icon-512.png`, `assets/icon-180.png` | PWA / home-screen icons (192 & 512 for the manifest incl. `maskable`; 180 for the iOS `apple-touch-icon`). Generated PNGs (blood-red field, dark moon, white fangs). |
 | `manifest.json` | PWA manifest: name/short_name/description, `start_url`/`scope`/`id` (all relative so it works under a Pages subpath), `standalone`, colors, and PNG icons (`any` + `maskable`). Drives "Add to Home Screen". |
-| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v34`. Precaches assets (incl. `assets/*.wav`, `assets/icon-*.png` and `assets/fonts/*.woff2`), deletes old caches on activate, network-first for navigations + same-origin html/js/css/json (avoids version skew), stale-while-revalidate for other assets. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
+| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v35`. Precaches assets (incl. `assets/*.wav`, `assets/icon-*.png` and `assets/fonts/*.woff2`), deletes old caches on activate, network-first for navigations + same-origin html/js/css/json (avoids version skew), stale-while-revalidate for other assets. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
 | `.github/workflows/pages.yml` | GitHub Actions workflow: on push to `main`, runs `npm test` then deploys the repo root to **GitHub Pages**. Requires Pages Source = "GitHub Actions" (one-time repo setting). |
 | `.github/workflows/ci.yml` | CI workflow: on push to `main` and on PRs, runs `npm ci` → `npm test` → `npm run lint`. |
-| `tests/logic.test.js` | Unit tests for `logic.js` (escaping, tiers, prompt text, markdown, dice, `resolveTraitAction`, `rollMeaning`, `pickSuggestions`, `fillTemplate`, `traitForms`, `candleStates`, `trackMarks`, `monogram`, `promptActions`, and state normalization: `normalizeState`/`normMem`/`defaultState`). |
+| `tests/logic.test.js` | Unit tests for `logic.js` (escaping, tiers, prompt text, markdown, dice, `resolveTraitAction`, `rollMeaning`, `pickSuggestions`, `fillTemplate`, `traitForms`, `candleStates`, `trackMarks`, `monogram`, `promptActions`, the turn stages (`nextStage`/`prevStage`/`normTurn`), and state normalization: `normalizeState`/`normMem`/`defaultState`). |
 | `package.json` / `package-lock.json` | Scripts: `test`, `serve`, `lint`. ESLint as the sole devDependency; the lockfile pins it for reproducible CI. |
 | `eslint.config.js` | Flat ESLint config with browser + test globals. |
 | `.gitignore` | Ignores `node_modules/`, editor cruft, and `_qa_*.html` scratch files. |
@@ -87,6 +87,9 @@ A single source of truth, serialized to `localStorage` under the **active save s
 - `futureTriggers` (`[{ prompt, text }]`), `namesHistory`, `turnCount`,
   `rollsSinceOldAge`, `rollsSinceBackup` (drive the old-age / backup nudges),
   `gameOver` (bool), `rollHistory` (strings), `journalHistory` (`[{ prompt, text }]`).
+- `turn` (`{ stage, done[] }`): where the player is in tonight's ritual —
+  `stage` ∈ `TYOV.STAGES`, `done` = step-card keys already ticked. Normalised by
+  `normTurn` (no Prompt yet ⇒ `roll`). Rolls/jumps reset it to `reveal`.
 - `currentName`, `boxedExp`, `currentJournal`, `activeTab` (last-viewed tab:
   `play`|`character`|`diary`|`journal`|`settings`, restored on load).
 - `skills` (`{ id, text, lost, checked }`), `marks` (`{ id, text, lost }`),
@@ -135,6 +138,65 @@ is backed up to `tyov_save_v1_backup`. A save is "legacy" if it has `htmlData`
 or no `version`.
 
 ### Gameplay flow
+
+**"One night at a time" (the ritual redesign).** The UI was rebuilt so a new
+player only ever sees one decision. Three tabs: **Night**, **Vampire**,
+**Chronicle**; everything rare lives in the `⋯` menu or **Keeper’s tools**.
+- **Night** (`renderNight`, driven by `state.turn.stage`; `#night[data-stage]`
+  shows one `.stage` at a time, the `ol.beats` dots show Roll · Read · Do ·
+  Write · Keep, a past dot is tappable via `gotoBeat`):
+  1. *roll* — an altar candle (`renderNightCandle`, burns down with
+     `currentPrompt/80`, smokes at game over) and one Roll pill (`rollNight` →
+     `rollAndMove`). At game over the Roll hides and `#endActions` offers the
+     Chronicle.
+  2. *reveal* — the hero Prompt card only, then Continue (`nextBeat`, which
+     uses `TYOV.nextStage(stage, nightActions().length > 0)`).
+  3. *obey* — **step cards** (`renderStepCards`, `STEP_CARDS` map over
+     `promptActions` keys): one card per thing the Prompt asks (Gain a Skill,
+     Lose a Resource, Kill a Character…). Tapping runs the existing guided
+     action (pickers, quick-create, Memory ops); non-picker steps tick at once,
+     picker steps tick only when a trait is actually picked
+     (`autoMarkStep` from `pickTrait`/`pickMemoryOp`); the ✓ (`markStep`) lets
+     the player tick it by hand. Every other action sits in a collapsed
+     “Something else…” (`details.more-actions` → the old `#promptActions`).
+  4. *write* — one big page (`#promptJournal.page-textarea`), a collapsible
+     Prompt peek (`renderPeek`), “Inspire me” (Meaning spark) and “My vampire”
+     (`togglePeekVampire` → the `#playRecap`).
+  5. *remember* — the answer becomes an Experience: `renderKeep` shows the
+     Memory shelf; tapping a vessel with room (`keepIn`) files it, “New
+     Memory” (`keepInNew`) creates one and opens its sheet. At 5 active
+     Memories the shelf shows **make room…** (`keepRoomMode`) with To Diary /
+     Forget per vessel (`keepMakeRoom`) — the rules' forced forgetting.
+     “Don’t keep it as a Memory” (`finishNight`) is the guided override.
+     `finishNight` archives the journal, resets the turn to `roll`.
+- **Vampire** — Memories as a **shelf of vessels** (`vesselHtml`: Theme,
+  first Experience, used/cap dots; tap → `openMemorySheet` /
+  `renderMemorySheet`, which reuses `memoryBlockHtml` inside `#editSheet`),
+  the Boxed Experience, the Diary shelf (`.diary-shelf`), then Skills /
+  Resources / Characters / Marks as **cards** (`traitCardHtml` /
+  `renderTraitCards`; tap → `openTraitSheet` / `renderTraitSheet`: name,
+  Check/Un-check, Mortal↔Immortal, + Doom dot, Lose/Kill/Restore). `+ Skill`
+  etc. call `addAndEdit(kind)` (adds, then opens the sheet; `closeEditSheet`
+  drops a still-unnamed new trait). `renderListCardsOnly` refreshes the grids
+  without touching an open sheet.
+- **Chronicle** — book-page journal, the 1–80 `#progressTrack`, Export ▾, and
+  the dice log (`details.dice-log` → `#rollHistoryLog`).
+- **Menu / sheets** — `toggleMainMenu`/`closeMainMenu` (outside click, Esc);
+  `openKeeper`/`closeKeeper` (`#keeperSheet`: Rev. Time, Group play, Back one
+  Prompt, Go to Prompt, Future-Prompt triggers, Pass a Century, Lose a Memory
+  slot). Sheet backdrops close on click; `anySheetOpen` guards Esc. The trait
+  picker is now a centred popover appended to `document.body` with a dimmed
+  backdrop (`.tp-centered`); `[data-opens-picker]` buttons are exempt from
+  its outside-click close.
+- **Help** — `initHelpDots` puts an ⓘ before each `.section-help`, collapsed by
+  default. The welcome is 4 swipe cards (`welcomeNext`/`syncWelcomeDots`); the
+  wizard asks one plain question per step.
+- `showTab('diary')` is kept for old calls: it opens Vampire and scrolls to
+  `#diarySection`.
+
+The numbered notes below describe the underlying engine; where they mention
+the old Play/Character/Diary/Journal tabs, read Night/Vampire/Vampire/Chronicle.
+
 1. **Setup wizard** (`#setupWizard`, 8 steps) rebuilds the rules-faithful vampire
    creation. Every step has a 🎲 **"stuck for ideas" helper**: steps 1–4 offer
    concrete examples from the locked setting pack (`suggestInto`), steps 5–8 roll the
@@ -331,7 +393,7 @@ or no `version`.
    of native `alert()`/`confirm()`.
 
 ### Meaning Oracle (floating idea generator)
-The eye button in the header (`#btnOracle`, `aria-expanded` kept in sync) toggles the `#oraclePanel` — a popover under the header on desktop, a sheet above the bottom bar on mobile. (The old floating `#oracleFab` was removed: it covered controls.) `rerollOracle()`
+The **Meaning oracle** item in the `⋯` menu (`#btnOracle`, `aria-expanded` kept in sync) toggles the `#oraclePanel` — a popover under the header on desktop, a sheet above the bottom bar on mobile. (The old floating `#oracleFab` was removed: it covered controls.) `rerollOracle()`
 rolls `TYOV.rollMeaning(meaningTable)` three times; `renderOracle()` shows each
 word with its d100 roll. `insertOracle()` drops the three words into the text
 field you last had focused — a global `focusin` listener records the last
@@ -391,7 +453,7 @@ under that subpath. Every asset the SW precaches must stay same-origin/relative.
 ### Bumping the service worker cache
 If you change any cached asset (`index.html`, `styles.css`, `logic.js`,
 `app.js`, `data.js`, `manifest.json`, `assets/*.wav`, `assets/icon-*.png`), bump
-`CACHE_NAME` in `sw.js` (currently `-v34`). Bumping it is also what makes the
+`CACHE_NAME` in `sw.js` (currently `-v35`). Bumping it is also what makes the
 deployed `sw.js` byte-different, which is what triggers the tap-to-update toast
 for existing installs. The SW also network-first-loads navigations, so updates
 generally land on next load even without a bump — but bump for certainty, and
@@ -431,6 +493,16 @@ until it lands.)*
   `checkGameOver()` disabling the roll across that range is **faithful**.
 
 ### Done
+
+**“One night at a time” ritual redesign** — 5 tabs → 3 (Night / Vampire /
+Chronicle); the Play screen became a five-beat ritual (Roll · Read · Do ·
+Write · Keep) showing one thing at a time; Prompt bookkeeping became tappable
+step cards; filing the answer into a Memory is now its own beat with the
+5-Memory forced-forgetting built in; traits and Memories became cards/vessels
+with edit sheets; header reduced to name + `⋯` menu; rare rules moved to
+Keeper’s tools; help text behind ⓘ; 4-card welcome; one-question wizard.
+Rules unchanged: setup still required, substitution ladder, Diary cap and
+loss, game over 72–80, nothing automatic.
 
 **Cross-tab linking + rules audit** — Prompts now point at the controls
 they need on every tab (`promptActions` → `updatePromptSuggestions`), with

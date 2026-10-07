@@ -184,6 +184,10 @@ function setPageScroll(y) { pageScroller().scrollTop = y; }
 
 function showTab(name) {
     if (TABS.indexOf(name) === -1) name = 'play';
+    // The Diary is part of the Vampire sheet; older saves/links still say 'diary'.
+    var toDiary = name === 'diary';
+    if (toDiary) name = 'character';
+    closeMainMenu();
     if (typeof closeTraitPicker === 'function') closeTraitPicker();
     var prev = state.activeTab;
     var switching = prev !== name;
@@ -204,6 +208,7 @@ function showTab(name) {
     updatePromptBanner();
     // Same-tab calls (load, undo, re-render) leave the scroll alone.
     if (switching) setPageScroll(tabScroll[name] || 0);
+    if (toDiary) { var ds = el('diarySection'); if (ds) ds.scrollIntoView({ block: 'start' }); }
     persist();
 }
 
@@ -1201,16 +1206,12 @@ function updatePromptMeta() {
     }
     toggleNote('advanceNote', p >= 1 && visits > 3 && !state.gameOver);
     toggleNote('endNote', p === 69 && visits === 3 && !state.gameOver);
-    // First-turn hint: after setup there is no Prompt yet, so say what to do.
-    toggleNote('startNote', p === 0 && !state.gameOver);
     updateTierExplain();
-    updateCoachLine();
     renderPromptSeal();
     renderProgressTrack();
     updatePromptSuggestions();
-    var ea = el('entryActions');
-    if (ea) ea.style.display = p === 0 ? 'none' : '';
     updatePromptBanner();
+    renderNight();
 }
 
 function checkGameOver() {
@@ -1227,9 +1228,9 @@ function checkGameOver() {
         setText('promptResult', state.display.promptResult);
     }
     // gameOver may have just flipped after the meta/coach pass ran.
-    updateCoachLine();
     renderPromptSeal();
     updatePromptSuggestions();
+    renderNight();
 }
 
 // Roll counters that drive the old-age (A12) and backup (B12) nudges.
@@ -1286,6 +1287,7 @@ function rollAndMove() {
 
     tickRollCounters();
     applyDisplay();
+    state.turn = { stage: 'reveal', done: [] }; // a new Prompt: read it next
     updatePromptMeta();
     checkTriggers();
     checkGameOver();
@@ -1313,6 +1315,7 @@ function jumpToPrompt() {
     announce('Jumped to Prompt ' + target + tier + '. ' + state.display.promptText);
 
     applyDisplay();
+    state.turn = { stage: 'reveal', done: [] }; // a new Prompt: read it next
     updatePromptMeta();
     checkTriggers();
     checkGameOver();
@@ -1333,6 +1336,7 @@ function stepBackOnePrompt() {
     addToHistoryLog('Stepped back to Prompt ' + state.currentPrompt);
     announce('Stepped back to Prompt ' + state.currentPrompt + '. ' + state.display.promptText);
     applyDisplay();
+    state.turn = { stage: 'reveal', done: [] }; // a new Prompt: read it next
     updatePromptMeta();
     checkTriggers();
     persist();
@@ -1354,6 +1358,7 @@ function advanceToNextPrompt() {
     addToHistoryLog('Advanced to Prompt ' + state.currentPrompt + tier);
     announce('Advanced to Prompt ' + state.currentPrompt + tier + '. ' + state.display.promptText);
     applyDisplay();
+    state.turn = { stage: 'reveal', done: [] }; // a new Prompt: read it next
     updatePromptMeta();
     checkTriggers();
     checkGameOver();
@@ -1428,8 +1433,9 @@ function showTraitPicker(kind, anchorBtn) {
     closeTraitPicker();
     if (toggleClosed) return; // clicking the same button again closes it
 
-    var container = el('promptActions');
-    if (!container) return;
+    // Pickers open as a centred sheet over everything (never anchored inside a
+    // collapsed section), so they work from step cards and menus alike.
+    var container = document.body;
     var pop = document.createElement('div');
     pop.className = 'trait-picker';
     pop.setAttribute('data-kind', kind);
@@ -1450,7 +1456,7 @@ function showTraitPicker(kind, anchorBtn) {
     if (first) first.focus({ preventScroll: true });
     // A picker opened low on the page (e.g. under the journal) can run past the
     // bottom of the screen — bring all of it into view.
-    if (pop.scrollIntoView) pop.scrollIntoView({ block: 'nearest' });
+    // (centred & fixed — nothing to scroll into view)
 }
 
 function traitPickerHTML(kind) {
@@ -1545,6 +1551,7 @@ function pickTrait(kind, id) {
             announce((on ? 'Lost' : 'Restored') + ' Resource "' + (e.text || 'Unnamed') + '".');
         }
     }
+    autoMarkStep(kind);
     // Update just this row in place. (Rebuilding innerHTML here would detach the
     // clicked node before the document outside-click handler runs, which would
     // then wrongly close the popover.)
@@ -1585,25 +1592,8 @@ function createMortalFromPicker() {
     }
 }
 
-function positionTraitPicker(pop, anchorBtn) {
-    // Anchor just below the clicked button, inside the position:relative
-    // .prompt-actions. On narrow screens, center it so it can't run off-screen.
-    if (window.innerWidth <= 520 || !anchorBtn) {
-        pop.classList.add('tp-centered');
-        pop.style.left = '';
-        pop.style.top = '';
-        return;
-    }
-    pop.classList.remove('tp-centered');
-    var container = pop.parentNode;
-    var cRect = container.getBoundingClientRect();
-    var bRect = anchorBtn.getBoundingClientRect();
-    var left = bRect.left - cRect.left;
-    var maxLeft = container.clientWidth - pop.offsetWidth;
-    if (left > maxLeft) left = maxLeft;
-    if (left < 0) left = 0;
-    pop.style.left = left + 'px';
-    pop.style.top = (bRect.bottom - cRect.top + 6) + 'px';
+function positionTraitPicker(pop) {
+    pop.classList.add('tp-centered');
 }
 
 function offerGameOver(msg) {
@@ -1788,49 +1778,6 @@ function checkSurvivalState() {
     el('gameWarning').style.display = (activeSkills === 0 && activeRes === 0) ? 'block' : 'none';
 }
 
-function renderSkills() {
-    el('skillsList').innerHTML = state.skills.map(function (s) {
-        return '<li class="' + (s.lost ? 'strikethrough' : '') + '" data-stamp="LOST">' +
-            '<input type="checkbox" aria-label="Tick when this Skill has been checked (used up)" ' +
-                'title="Tick when a Prompt says to check a Skill. A checked Skill has been spent and cannot be checked again." ' +
-                (s.checked ? 'checked' : '') +
-                ' onchange="setSkillChecked(\'' + s.id + '\', this.checked)">' +
-            '<input type="text" aria-label="Skill name" class="' + (s.checked ? 'checked-skill' : '') +
-                '" value="' + escapeHtml(s.text) + '" oninput="setEntityText(\'skills\',\'' + s.id + '\', this.value)">' +
-            '<button class="btn-small btn-strike" title="' +
-                (s.lost ? 'Bring this Skill back.' : 'Cross this Skill out for good. It stays listed, struck through.') +
-                '" onclick="toggleLoseEntity(\'skills\',\'' + s.id + '\')">' +
-                (s.lost ? 'Restore' : 'Lose') + '</button></li>';
-    }).join('');
-    renderPlayRecap(); // Play-tab recap mirrors every trait list
-}
-
-function renderResources() {
-    el('resourcesList').innerHTML = state.resources.map(function (r) {
-        return '<li class="' + (r.lost ? 'strikethrough' : '') + '" data-stamp="LOST">' +
-            '<input type="text" aria-label="Resource name" value="' + escapeHtml(r.text) +
-                '" oninput="setEntityText(\'resources\',\'' + r.id + '\', this.value)">' +
-            '<button class="btn-small btn-strike" title="' +
-                (r.lost ? 'Bring this Resource back.' : 'Cross this Resource out. It stays listed, struck through, as part of the record.') +
-                '" onclick="toggleLoseEntity(\'resources\',\'' + r.id + '\')">' +
-                (r.lost ? 'Restore' : 'Lose') + '</button></li>';
-    }).join('');
-    renderPlayRecap(); // Play-tab recap mirrors every trait list
-}
-
-function renderMarks() {
-    el('marksList').innerHTML = state.marks.map(function (m) {
-        return '<li class="' + (m.lost ? 'strikethrough' : '') + '" data-stamp="LOST">' +
-            '<input type="text" aria-label="Mark description" value="' + escapeHtml(m.text) +
-                '" oninput="setEntityText(\'marks\',\'' + m.id + '\', this.value)">' +
-            '<button class="btn-small btn-strike" title="' +
-                (m.lost ? 'Bring this Mark back.' : 'Cross this Mark out. It stays listed, struck through, as part of the record.') +
-                '" onclick="toggleLoseEntity(\'marks\',\'' + m.id + '\')">' +
-                (m.lost ? 'Restore' : 'Lose') + '</button></li>';
-    }).join('');
-    renderPlayRecap(); // Play-tab recap mirrors every trait list
-}
-
 // Monogram wax seal for a Character: red wax for mortals (hue nudged per
 // person), black wax with a gold rim for immortals.
 function sigilHtml(c) {
@@ -1838,32 +1785,6 @@ function sigilHtml(c) {
     var hueShift = (mono.hue % 36) - 18; // keep mortals in the red family
     return '<span class="sigil sigil-' + (c.type === 'Immortal' ? 'immortal' : 'mortal') +
         '" style="--wax-shift:' + hueShift + 'deg" aria-hidden="true">' + escapeHtml(mono.initials) + '</span>';
-}
-
-function renderCharacters() {
-    el('charactersList').innerHTML = state.characters.map(function (c) {
-        var doomTip = 'Doom dots (Appendix Prompt 98): each dot halves this mortal’s remaining lifespan.';
-        var pips = '';
-        for (var i = 0; i < c.doom; i++) pips += '<span class="doom-pip"></span>';
-        var other = c.type === 'Mortal' ? 'Immortal' : 'Mortal';
-        return '<li class="char-row' + (c.lost ? ' strikethrough' : '') + '" id="' + c.id + '" data-stamp="DEAD">' +
-            sigilHtml(c) +
-            '<input type="text" aria-label="Character name" value="' + escapeHtml(c.text) +
-                '" oninput="setEntityText(\'characters\',\'' + c.id + '\', this.value)">' +
-            '<div class="char-controls">' +
-                '<button type="button" class="type-chip type-' + c.type.toLowerCase() + '" aria-label="Character mortality: ' +
-                    c.type + '. Tap to switch to ' + other + '." title="Tap to switch to ' + other + '" ' +
-                    'onclick="setCharacterType(\'' + c.id + '\', \'' + other + '\')">' + c.type + '</button>' +
-                '<span class="doom-dots" title="' + doomTip + '">' + pips + '</span>' +
-                '<button class="btn-small btn-strike doom-btn" aria-label="Add doom dot" title="' + doomTip + '"' +
-                    (c.type === 'Mortal' ? '' : ' hidden') + ' onclick="addDoom(\'' + c.id + '\')">+•</button>' +
-                '<button class="btn-small btn-strike" title="' +
-                    (c.lost ? 'Bring this Character back.' : 'Cross this Character out. It stays listed, struck through, as part of the record.') +
-                    '" onclick="toggleLoseEntity(\'characters\',\'' + c.id + '\')">' +
-                    (c.lost ? 'Restore' : 'Lose') + '</button>' +
-            '</div></li>';
-    }).join('');
-    renderPlayRecap(); // Play-tab recap mirrors every trait list
 }
 
 // ==========================================
@@ -1912,12 +1833,14 @@ function addMemoryBlock(containerId) {
         return;
     }
     pushUndo();
-    memList(name).push(newMemory());
+    var fresh = newMemory();
+    memList(name).push(fresh);
     if (name === 'diary') ensureDiaryResource();
     renderMemoryList(name);
     updateMemoryCount();
     updateDiaryCount();
     persist();
+    openMemorySheet(name, fresh.id);
 }
 
 function memExpCap(m) { return m.memState === 'vast' ? 5 : 3; }
@@ -1978,6 +1901,7 @@ function migrateToDiary(id) {
 }
 
 function deleteMemory(name, id) {
+    if (editCtx && editCtx.type === 'memory' && editCtx.id === id) closeEditSheet();
     pushUndo();
     var arr = memList(name);
     var i = arr.map(function (m) { return m.id; }).indexOf(id);
@@ -2090,15 +2014,6 @@ function closeMemMenus() {
 document.addEventListener('click', function (e) {
     if (e.target.closest && !e.target.closest('.mem-menu')) closeMemMenus();
 });
-
-function renderMemoryList(name) {
-    var containerId = name === 'diary' ? 'diaryContainer' : 'memoriesContainer';
-    var list = memList(name);
-    el(containerId).innerHTML = (name === 'diary' && !list.length)
-        ? '<div class="empty-state">' + artHtml('art-diary', 'art-empty') + '</div>'
-        : list.map(function (m) { return memoryBlockHtml(m, name); }).join('');
-    autoGrowAll(el(containerId)); // size each Experience box to its text
-}
 
 function updateMemoryCount() {
     // Starred Memories don't take a slot; struck-out (lost) ones don't count.
@@ -2218,9 +2133,6 @@ function applyState() {
     showAgeNudgeIfDue();
     showBackupNudgeIfDue();
     showTab(state.activeTab || 'play');
-    // On wide screens the traits recap is the side column — open it.
-    var rec = el('playRecap');
-    if (rec && window.matchMedia && window.matchMedia('(min-width: 1024px)').matches) rec.open = true;
 }
 
 // ==========================================
@@ -2392,6 +2304,7 @@ function welcomeAlreadySeen() {
 function showWelcomeIfFirstRun() {
     if (welcomeAlreadySeen()) return false;
     openOverlay('welcomeOverlay');
+    syncWelcomeDots();
     return true;
 }
 
@@ -2402,7 +2315,12 @@ function dismissWelcome() {
     if (!isGameLoaded || !state.currentName) showWizard();
 }
 
-function openWelcome() { openOverlay('welcomeOverlay'); }
+function openWelcome() {
+    openOverlay('welcomeOverlay');
+    var t = el('welcomeTrack');
+    if (t) t.scrollLeft = 0;
+    syncWelcomeDots();
+}
 
 function openGlossary() {
     closeOverlay('welcomeOverlay');
@@ -2433,22 +2351,15 @@ function openHelpMenu() {
 function updateCoachLine() {
     var box = el('coachLine');
     if (!box) return;
-    var art = el('gameOverArt');
-    // An <svg> has no .hidden property — toggle the attribute itself.
-    if (art) art.toggleAttribute('hidden', !state.gameOver);
-    // A soft candle-glow on Roll until the very first roll.
-    var rb = el('btnRoll');
-    if (rb) rb.classList.toggle('is-inviting', state.currentPrompt === 0 && !state.gameOver);
+    var stage = state.turn ? state.turn.stage : 'roll';
     var msg;
-    if (state.gameOver) {
-        msg = 'Your vampire\u2019s story is over. Read it in 📖, then export or print it.';
-    } else if (state.currentPrompt === 0) {
-        msg = 'Press the button above. The dice choose which Prompt you answer.';
-    } else if (!val('promptJournal').trim()) {
-        msg = 'Read the Prompt above, then answer it in the box below — a sentence is enough.';
-    } else {
-        msg = 'Done writing? Keep it as a Memory, then roll again for the next Prompt.';
-    }
+    if (state.gameOver) msg = 'Your vampire\u2019s story is over.';
+    else if (state.currentPrompt === 0) msg = 'Your vampire is made. Roll to begin the first night.';
+    else if (stage === 'roll') msg = 'Dawn. Roll when you are ready for the next night.';
+    else if (stage === 'reveal') msg = 'Read tonight\u2019s Prompt.';
+    else if (stage === 'obey') msg = 'Tap each card to do what the Prompt asks.';
+    else if (stage === 'write') msg = val('promptJournal').trim() ? 'Done? Keep it as a Memory.' : 'Answer in a sentence or two. There are no wrong answers.';
+    else msg = 'Choose where this Experience lives.';
     box.textContent = msg;
 }
 
@@ -2460,7 +2371,7 @@ function updateTierExplain() {
     var visits = state.promptVisits[p] || 0;
     if (p < 1 || visits < 1) { box.textContent = ''; return; }
     box.textContent = visits === 1
-        ? 'Your first time at this Prompt — you get its first question.'
+        ? ''
         : visits === 2 ? 'You have been here before, so this is a new question on the same Prompt.'
         : visits === 3 ? 'Your third and last question for this Prompt.'
         : 'You have used up all three questions here. Roll again, or move on.';
@@ -2486,10 +2397,7 @@ function updatePromptSuggestions() {
         nodes[i].classList.toggle('is-suggested', on);
         if (on) nodes[i].setAttribute('aria-describedby', 'suggestNote');
         else if (nodes[i].getAttribute('aria-describedby') === 'suggestNote') nodes[i].removeAttribute('aria-describedby');
-        if (nodes[i].hasAttribute('data-extra')) nodes[i].hidden = !on;
     }
-    var extras = el('promptExtras');
-    if (extras) extras.hidden = !extras.querySelector('[data-extra]:not([hidden])');
 }
 
 // --- Memory operations (Play tab) ----------------------------------------
@@ -2562,6 +2470,7 @@ function firstExperienceOf(m) {
 function pickMemoryOp(list, id) {
     var m = findEntity(list, id);
     if (!m) return;
+    autoMarkStep('memoryops');
     if (memoryOpsMode === 'skill') {
         var conv = el('memConvert');
         var strike = !!(conv && conv.checked);
@@ -2721,9 +2630,7 @@ function quickCreate(list) {
     else if (list === 'marks') addMark('');
     else return;
     var added = state[list][state[list].length - 1];
-    var labels = { skills: 'Skill', resources: 'Resource', characters: 'mortal Character', marks: 'Mark' };
-    renderPlayRecap();
-    toast('New ' + labels[list] + ' added — name it below.', 'info');
+    var labels = { skills: 'Skill', resources: 'Resource', characters: 'Character', marks: 'Mark' };
     announce('New ' + labels[list] + ' created.');
     focusNewTrait(list, added);
 }
@@ -2732,10 +2639,7 @@ function quickCreate(list) {
 // without leaving the Prompt.
 function focusNewTrait(list, entity) {
     if (!entity) return;
-    var rec = el('playRecap');
-    if (rec) rec.open = true;
-    var field = el('recap-' + entity.id);
-    if (field) { field.focus(); field.scrollIntoView({ block: 'nearest' }); }
+    openTraitSheet(list, entity.id); // name it right away, without leaving the night
 }
 
 // --- Play-tab trait recap -------------------------------------------------
@@ -2770,19 +2674,7 @@ function recapGroup(label, list) {
 // The Character tab shows the same traits. Mirror the edit into its matching
 // input directly rather than re-rendering, so neither field loses focus.
 function syncTraitLists(list) {
-    var ids = { skills: 'skillsList', resources: 'resourcesList',
-                characters: 'charactersList', marks: 'marksList' };
-    var host = el(ids[list]);
-    var src = document.activeElement;
-    if (!host || !src || !src.id) return;
-    var id = src.id.replace(/^recap-/, '');
-    var inputs = host.querySelectorAll('input[type="text"]');
-    for (var i = 0; i < inputs.length && i < state[list].length; i++) {
-        if (state[list][i].id === id && inputs[i].value !== src.value) {
-            inputs[i].value = src.value;
-            return;
-        }
-    }
+    renderListCardsOnly(list); // cards are read-only, so re-rendering can't steal focus
 }
 
 // --- Setting packs -------------------------------------------------------
@@ -3081,7 +2973,7 @@ document.addEventListener('click', function (e) {
     // already detached by the time this runs — that is not an outside click.
     if (!t.isConnected) return;
     if (openTraitPicker.contains(t)) return;
-    if (t.closest && t.closest('#btnCheckSkill, #btnLoseResource, #btnKillCharacter, #btnFileExperience, #btnMemoryOps, #btnLoseSkill, #btnLoseMark')) return;
+    if (t.closest && t.closest('[data-opens-picker]')) return;
     closeTraitPicker();
 });
 
@@ -3096,6 +2988,8 @@ function focusablesIn(container) {
 function openModalEl() {
     var am = el('appModal'); if (am && am.classList.contains('show')) return am;
     if (isOverlayOpen('glossaryOverlay')) return el('glossaryOverlay');
+    var es = el('editSheet'); if (es && !es.hidden) return es;
+    var ks = el('keeperSheet'); if (ks && !ks.hidden) return ks;
     if (isOverlayOpen('welcomeOverlay')) return el('welcomeOverlay');
     var sw = el('setupWizard'); if (sw && sw.style.display === 'flex') return sw;
     return null;
@@ -3105,7 +2999,12 @@ document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
         // Esc dismisses dismissable overlays (not the required setup wizard).
         if (openTraitPicker) { closeTraitPicker(); return; }
+        var mm = el('mainMenu');
+        if (mm && !mm.hidden) { closeMainMenu(); return; }
         if (document.querySelector('.mem-menu-pop:not([hidden])')) { closeMemMenus(); return; }
+        if (openTraitPicker) { closeTraitPicker(); return; }
+        if (el('editSheet') && !el('editSheet').hidden) { closeEditSheet(); return; }
+        if (el('keeperSheet') && !el('keeperSheet').hidden) { closeKeeper(); return; }
         if (document.querySelector('.export-pop:not([hidden])')) { closeExportMenu(); return; }
         if (isAppModalOpen()) { closeAppModal(); return; }
         if (isOverlayOpen('glossaryOverlay')) { closeGlossary(); return; }
@@ -3128,6 +3027,561 @@ document.addEventListener('keydown', function (e) {
         else if (!e.shiftKey && a === last) { e.preventDefault(); first.focus(); }
         else if (f.indexOf(a) === -1) { e.preventDefault(); first.focus(); }
     }
+});
+
+// --- Trait cards (Vampire sheet) -------------------------------------------
+// The sheet is read-only cards; tapping one opens the edit sheet. That keeps
+// the page calm (no wall of inputs) while every action stays one tap away.
+var TRAIT_META = {
+    skills:     { noun: 'Skill',     icon: 'i-skill',    stamp: 'LOST' },
+    resources:  { noun: 'Resource',  icon: 'i-resource', stamp: 'LOST' },
+    characters: { noun: 'Character', icon: 'i-character', stamp: 'DEAD' },
+    marks:      { noun: 'Mark',      icon: 'i-mark',     stamp: 'LOST' }
+};
+var LIST_IDS = { skills: 'skillsList', resources: 'resourcesList', characters: 'charactersList', marks: 'marksList' };
+
+function traitCardHtml(list, e) {
+    var meta = TRAIT_META[list];
+    var name = escapeHtml(e.text || ('Unnamed ' + meta.noun));
+    var lead = list === 'characters'
+        ? sigilHtml(e)
+        : '<svg class="ico t-ico" aria-hidden="true"><use href="#' + (e.isDiary ? 'i-diary' : meta.icon) + '"/></svg>';
+    var badges = '';
+    if (list === 'skills' && e.checked) badges += '<span class="t-badge t-checked"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>checked</span>';
+    if (list === 'characters') {
+        badges += '<span class="t-badge t-' + e.type.toLowerCase() + '">' + e.type + '</span>';
+        if (e.doom) {
+            var pips = '';
+            for (var i = 0; i < e.doom; i++) pips += '<span class="doom-pip"></span>';
+            badges += '<span class="doom-dots" title="Doom dots">' + pips + '</span>';
+        }
+    }
+    var cls = 't-card t-' + list + (e.lost ? ' strikethrough' : '') + (list === 'skills' && e.checked ? ' is-checked' : '');
+    return '<li class="' + cls + '" data-stamp="' + meta.stamp + '">' +
+        '<button type="button" class="t-card-btn" onclick="openTraitSheet(\'' + list + '\',\'' + e.id + '\')" ' +
+            'aria-label="' + meta.noun + ': ' + name + (e.lost ? ' (lost)' : '') + '. Tap to change.">' +
+            lead + '<span class="t-name">' + name + '</span>' +
+            (badges ? '<span class="t-badges">' + badges + '</span>' : '') +
+        '</button></li>';
+}
+
+function renderTraitCards(list) {
+    var box = el(LIST_IDS[list]);
+    if (box) {
+        var items = state[list];
+        box.innerHTML = items.length
+            ? items.map(function (e) { return traitCardHtml(list, e); }).join('')
+            : '<li class="t-empty">None yet.</li>';
+    }
+    renderPlayRecap(); // Play-tab recap mirrors every trait list
+    if (editCtx && editCtx.type === 'trait' && editCtx.list === list) renderTraitSheet();
+}
+
+function renderSkills() { renderTraitCards('skills'); }
+function renderResources() { renderTraitCards('resources'); }
+function renderMarks() { renderTraitCards('marks'); }
+function renderCharacters() { renderTraitCards('characters'); }
+
+// --- Edit sheet (trait or Memory) ------------------------------------------
+var editCtx = null; // { type: 'trait', list, id } | { type: 'memory', list, id }
+
+function openEditSheetEl() {
+    var sh = el('editSheet');
+    if (!sh) return;
+    sh.hidden = false;
+    document.body.classList.add('sheet-open');
+}
+function closeEditSheet() {
+    var sh = el('editSheet');
+    if (sh) sh.hidden = true;
+    // A trait added and never named is just clutter — drop it on close.
+    if (editCtx && editCtx.type === 'trait') {
+        var e = findEntity(editCtx.list, editCtx.id);
+        if (e && !e.text.trim() && !e.lost) {
+            state[editCtx.list] = state[editCtx.list].filter(function (x) { return x.id !== e.id; });
+            var l = editCtx.list;
+            editCtx = null;
+            renderList(l);
+            checkSurvivalState();
+            persist();
+        }
+    }
+    editCtx = null;
+    if (!anySheetOpen()) document.body.classList.remove('sheet-open');
+}
+
+function openTraitSheet(list, id) {
+    editCtx = { type: 'trait', list: list, id: id };
+    renderTraitSheet();
+    openEditSheetEl();
+    var input = el('sheetName');
+    if (input && !input.value) input.focus();
+}
+
+function renderTraitSheet() {
+    if (!editCtx || editCtx.type !== 'trait') return;
+    var list = editCtx.list, e = findEntity(list, editCtx.id);
+    if (!e) { closeEditSheet(); return; }
+    var meta = TRAIT_META[list];
+    setText('editSheetTitle', meta.noun);
+    var id = e.id;
+    var actions = '';
+    if (list === 'skills' && !e.lost) {
+        actions += '<button class="' + (e.checked ? 'btn-strike' : '') + '" onclick="setSkillChecked(\'' + id + '\',' + !e.checked + ')">' +
+            (e.checked ? 'Un-check' : 'Check this Skill') + '</button>';
+    }
+    if (list === 'characters') {
+        var other = e.type === 'Mortal' ? 'Immortal' : 'Mortal';
+        actions += '<button class="btn-strike" onclick="setCharacterType(\'' + id + '\',\'' + other + '\')">Make ' + other + '</button>';
+        if (e.type === 'Mortal') actions += '<button class="btn-strike" title="Doom dots (Appendix Prompt 98): each dot halves this mortal’s remaining lifespan." onclick="addDoom(\'' + id + '\')">+ Doom dot</button>';
+    }
+    var loseLabel = e.lost ? 'Restore' : (list === 'characters' ? 'Kill' : 'Lose');
+    actions += '<button class="btn-strike' + (e.lost ? '' : ' danger-text') + '" onclick="toggleLoseEntity(\'' + list + '\',\'' + id + '\')">' + loseLabel + '</button>';
+    var note = e.isDiary ? '<p class="section-help is-open">This is your Diary. Lose it and every Memory inside is lost too.</p>' : '';
+    var lead = list === 'characters' ? sigilHtml(e) : '<svg class="ico sheet-ico" aria-hidden="true"><use href="#' + meta.icon + '"/></svg>';
+    el('editSheetBody').innerHTML =
+        '<div class="sheet-trait' + (e.lost ? ' is-lost' : '') + '">' + lead +
+            '<input type="text" id="sheetName" value="' + escapeHtml(e.text) + '" placeholder="Name this ' + meta.noun + '…" ' +
+            'aria-label="' + meta.noun + ' name" oninput="setEntityText(\'' + list + '\',\'' + id + '\', this.value); renderListCardsOnly(\'' + list + '\')" ' +
+            'onkeydown="if(event.key===\'Enter\'){event.preventDefault();closeEditSheet();}">' +
+        '</div>' + note +
+        '<div class="sheet-actions">' + actions + '<button class="btn-strike" onclick="closeEditSheet()">Done</button></div>';
+}
+
+// Typing in the sheet updates the card behind it without rebuilding the sheet
+// (which would drop the caret).
+function renderListCardsOnly(list) {
+    var box = el(LIST_IDS[list]);
+    if (box) box.innerHTML = state[list].map(function (e) { return traitCardHtml(list, e); }).join('');
+    renderPlayRecap();
+}
+
+function addAndEdit(list) {
+    if (list === 'skills') addSkill('');
+    else if (list === 'resources') addResource('');
+    else if (list === 'characters') addCharacter('', 'Mortal');
+    else if (list === 'marks') addMark('');
+    var added = state[list][state[list].length - 1];
+    if (added) openTraitSheet(list, added.id);
+}
+
+// --- Memory shelf & Memory sheet ---------------------------------------------
+function vesselHtml(m, name, onclick, extraCls, extraHtml) {
+    var filled = m.experiences.filter(function (x) { return x.trim(); }).length;
+    var cap = memExpCap(m);
+    var dots = '';
+    for (var i = 0; i < cap; i++) dots += '<span class="v-dot' + (i < filled ? ' on' : '') + '"></span>';
+    var stateBadge = m.memState !== 'normal' ? '<span class="v-state v-' + m.memState + '">' + m.memState + '</span>' : '';
+    return '<div class="vessel-wrap">' +
+        '<button type="button" class="vessel' + (m.lost ? ' is-lost strikethrough' : '') + (extraCls || '') + '" data-stamp="LOST" onclick="' + onclick + '">' +
+            '<span class="v-theme">' + escapeHtml(m.theme || 'Untitled') + '</span>' +
+            '<span class="v-line">' + escapeHtml(firstExperienceOf(m) || '…') + '</span>' +
+            '<span class="v-dots" aria-label="' + filled + ' of ' + cap + ' Experiences">' + dots + '</span>' + stateBadge +
+        '</button>' + (extraHtml || '') + '</div>';
+}
+
+function renderMemoryList(name) {
+    var containerId = name === 'diary' ? 'diaryContainer' : 'memoriesContainer';
+    var list = memList(name);
+    var box = el(containerId);
+    if (box) {
+        box.innerHTML = (name === 'diary' && !list.length)
+            ? '<div class="empty-state">' + artHtml('art-diary', 'art-empty') + '</div>'
+            : list.map(function (m) {
+                return vesselHtml(m, name, 'openMemorySheet(\'' + name + '\',\'' + m.id + '\')');
+            }).join('');
+    }
+    if (editCtx && editCtx.type === 'memory' && editCtx.list === name) renderMemorySheet();
+}
+
+function openMemorySheet(name, id) {
+    editCtx = { type: 'memory', list: name, id: id };
+    renderMemorySheet();
+    openEditSheetEl();
+    autoGrowAll(el('editSheetBody')); // textareas measure 0 until the sheet is visible
+}
+
+function renderMemorySheet() {
+    if (!editCtx || editCtx.type !== 'memory') return;
+    var m = findMem(editCtx.list, editCtx.id);
+    if (!m) { closeEditSheet(); return; }
+    setText('editSheetTitle', editCtx.list === 'diary' ? 'Diary entry' : 'Memory');
+    var body = el('editSheetBody');
+    // Keep the caret if the player is typing inside the sheet.
+    var a = document.activeElement;
+    if (a && body.contains(a) && (a.tagName === 'TEXTAREA' || a.tagName === 'INPUT')) return;
+    body.innerHTML = memoryBlockHtml(m, editCtx.list);
+    autoGrowAll(body);
+}
+
+// ==========================================
+// THE NIGHT — one beat on screen at a time
+// ==========================================
+// Roll → Read → Do → Write → Keep. Each beat fills the screen; the beat dots
+// at the top show where you are (finished beats can be revisited). The rules
+// still live in the existing functions — this only sequences them.
+
+function nightActions() {
+    if (state.currentPrompt < 1 || state.gameOver) return [];
+    return TYOV.promptActions(state.display.promptText);
+}
+
+function setStage(stage) {
+    state.turn = state.turn || { stage: 'roll', done: [] };
+    state.turn.stage = stage;
+    renderNight();
+    persist();
+    var top = el('panel-play');
+    if (top && state.activeTab === 'play') setPageScroll(0);
+}
+
+function rollNight() {
+    if (state.gameOver) return;
+    rollAndMove(); // sets the turn to 'reveal' and renders
+}
+
+function nextBeat() {
+    var stage = state.turn ? state.turn.stage : 'roll';
+    var next = TYOV.nextStage(stage, nightActions().length > 0);
+    if (next === 'roll') { finishNight(); return; }
+    setStage(next);
+    if (next === 'write') {
+        var ta = el('promptJournal');
+        if (ta) { autoGrow(ta); ta.focus({ preventScroll: true }); }
+    }
+}
+
+function gotoBeat(stage) {
+    var order = TYOV.STAGES;
+    var cur = state.turn ? state.turn.stage : 'roll';
+    if (state.currentPrompt < 1 || state.gameOver) return;
+    // Only beats already reached tonight (never back to the roll).
+    if (stage === 'roll' || order.indexOf(stage) > order.indexOf(cur)) return;
+    if (stage === 'obey' && !nightActions().length) return;
+    setStage(stage);
+}
+
+// The night ends: the answer goes into the Chronicle and the next roll waits.
+function finishNight() {
+    keepRoomMode = false;
+    archiveJournal();
+    renderJournalTab();
+    state.turn = { stage: 'roll', done: [] };
+    renderNight();
+    persist();
+    setPageScroll(0);
+    announce('The night is recorded.');
+}
+
+function renderNight() {
+    var night = el('night');
+    if (!night) return;
+    var stage = (state.turn && state.turn.stage) || 'roll';
+    if (state.gameOver || state.currentPrompt < 1) stage = 'roll';
+    night.setAttribute('data-stage', stage);
+    night.classList.toggle('is-over', !!state.gameOver);
+    night.classList.toggle('is-first', state.currentPrompt < 1);
+
+    // beat dots
+    var order = TYOV.STAGES, ci = order.indexOf(stage);
+    var hasActions = nightActions().length > 0;
+    var lis = night.querySelectorAll('.beats li');
+    for (var i = 0; i < lis.length; i++) {
+        var b = lis[i].getAttribute('data-beat'), bi = order.indexOf(b);
+        lis[i].className = (bi < ci ? 'done' : bi === ci ? 'now' : '') + (b === 'obey' && !hasActions ? ' skip' : '');
+        lis[i].onclick = (bi < ci && b !== 'roll') ? gotoBeat.bind(null, b) : null;
+    }
+
+    var art = el('gameOverArt');
+    if (art) art.toggleAttribute('hidden', !state.gameOver);
+    var endA = el('endActions');
+    if (endA) endA.hidden = !state.gameOver;
+    var rb = el('btnRoll');
+    if (rb) {
+        rb.hidden = !!state.gameOver;
+        rb.classList.toggle('is-inviting', state.currentPrompt === 0 && !state.gameOver);
+    }
+    renderNightCandle();
+    if (stage === 'obey') renderStepCards();
+    if (stage === 'write') renderPeek();
+    if (stage === 'remember') renderKeep();
+    updateCoachLine();
+}
+
+// The altar candle burns down as the story moves through the 80 Prompts.
+function renderNightCandle() {
+    var svg = el('nightCandle');
+    if (!svg) return;
+    var p = Math.max(0, Math.min(80, state.currentPrompt));
+    var left = state.gameOver ? 0.06 : Math.max(0.12, 1 - p / 80);
+    var h = Math.round(96 * left), top = 128 - h;
+    var flame = state.gameOver ? '<path class="smoke" d="M30 ' + (top - 6) + 'c-6-8 6-14 0-22c-5-7 4-12 1-19"/>'
+        : '<g class="flame"><path class="flame-outer" d="M30 ' + (top - 34) + 'c8 10 11 16 11 21a11 11 0 0 1-22 0c0-5 3-11 11-21Z"/>' +
+          '<path class="flame-inner" d="M30 ' + (top - 22) + 'c3.5 4.5 5 7.5 5 10a5 5 0 0 1-10 0c0-2.5 1.5-5.5 5-10Z"/></g>';
+    svg.innerHTML = '<defs><radialGradient id="glow" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#f0a83a" stop-opacity=".35"/><stop offset="1" stop-color="#f0a83a" stop-opacity="0"/></radialGradient></defs>' +
+        (state.gameOver ? '' : '<circle cx="30" cy="' + (top - 12) + '" r="30" fill="url(#glow)"/>') + flame +
+        '<line class="wick" x1="30" y1="' + (top - 4) + '" x2="30" y2="' + (top + 2) + '"/>' +
+        '<path class="wax" d="M18 ' + top + 'h24v' + h + 'H18z"/>' +
+        '<path class="drip" d="M23 ' + top + 'v9a2.2 2.2 0 0 0 4.4 0V' + top + '"/>' +
+        '<path class="dish" d="M6 128h48l-5 8H11Z"/><path class="dish" d="M22 136h16v4H22z"/>';
+}
+
+// --- Beat 3: the Prompt's instructions as cards ----------------------------
+var STEP_CARDS = {
+    check:        { icon: 'i-check',       title: 'Check a Skill',          run: 'promptCheckSkill()',        picker: true },
+    loseSkill:    { icon: 'i-skill',       title: 'Lose a Skill',           run: 'promptLoseSkill()',         picker: true },
+    lose:         { icon: 'i-resource',    title: 'Lose or regain a Resource', run: 'promptLoseResource()',   picker: true },
+    kill:         { icon: 'i-skull',       title: 'A Character dies (or returns)', run: 'promptKillCharacter()', picker: true },
+    allMortals:   { icon: 'i-skull',       title: 'Every mortal dies',      run: 'killAllMortals()' },
+    newSkill:     { icon: 'i-skill',       title: 'Gain a Skill',           run: "quickCreate('skills')" },
+    newResource:  { icon: 'i-resource',    title: 'Gain a Resource',        run: "quickCreate('resources')" },
+    newCharacter: { icon: 'i-person-plus', title: 'Meet a new Character',   run: "quickCreate('characters')" },
+    mark:         { icon: 'i-mark',        title: 'Take a Mark',            run: "quickCreate('marks')" },
+    loseMark:     { icon: 'i-mark',        title: 'Lose a Mark',            run: 'promptLoseMark()',          picker: true },
+    memory:       { icon: 'i-flame',       title: 'Change your Memories',   run: 'promptMemoryOps()',         picker: true }
+};
+
+function renderStepCards() {
+    var box = el('stepCards');
+    if (!box) return;
+    var acts = nightActions();
+    var done = (state.turn && state.turn.done) || [];
+    box.innerHTML = acts.map(function (a) {
+        var c = STEP_CARDS[a];
+        if (!c) return '';
+        var isDone = done.indexOf(a) !== -1;
+        return '<div class="step-card' + (isDone ? ' is-done' : '') + '">' +
+            '<button type="button" class="step-main"' + (c.picker ? ' data-opens-picker' : '') +
+                ' onclick="' + c.run + (c.picker ? '' : '; markStep(\'' + a + '\', true)') + '">' +
+                '<svg class="ico step-ico" aria-hidden="true"><use href="#' + c.icon + '"/></svg>' +
+                '<span class="step-title">' + c.title + '</span></button>' +
+            '<button type="button" class="step-tick" aria-pressed="' + isDone + '" aria-label="' + (isDone ? 'Mark not done' : 'Mark done') + '" ' +
+                'onclick="markStep(\'' + a + '\', ' + !isDone + ')"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></button>' +
+            '</div>';
+    }).join('');
+}
+
+// A pick inside a picker completes the matching step card.
+var PICKER_STEP = { skills: 'check', resources: 'lose', characters: 'kill', loseskills: 'loseSkill', losemarks: 'loseMark', memoryops: 'memory' };
+function autoMarkStep(kind) {
+    var a = PICKER_STEP[kind];
+    if (!a || !state.turn || state.turn.stage !== 'obey') return;
+    if (nightActions().indexOf(a) !== -1 && state.turn.done.indexOf(a) === -1) markStep(a, true);
+}
+
+function markStep(action, isDone) {
+    state.turn = state.turn || { stage: 'obey', done: [] };
+    var d = state.turn.done.filter(function (x) { return x !== action; });
+    if (isDone) d.push(action);
+    state.turn.done = d;
+    if (state.turn.stage === 'obey') renderStepCards();
+    persist();
+}
+
+// --- Beat 4: write — keep the Prompt one tap away --------------------------
+function renderPeek() {
+    var p = state.currentPrompt, v = state.promptVisits[p] || 1;
+    setText('peekLabel', 'Prompt ' + p + getTier(Math.min(v, 3)));
+    setText('peekText', state.display.promptText || '');
+    autoGrow(el('promptJournal'));
+}
+function togglePeekVampire() {
+    var r = el('playRecap');
+    if (r) r.open = !r.open;
+}
+
+// --- Beat 5: keep — choose the Memory -------------------------------------
+function renderKeep() {
+    var text = val('promptJournal').trim();
+    var q = el('keepQuote');
+    if (q) q.textContent = text || 'You haven’t written anything tonight.';
+    var shelf = el('keepShelf');
+    if (!shelf) return;
+    if (!text) {
+        shelf.innerHTML = '<button class="btn-strike" onclick="setStage(\'write\')">← Write something first</button>';
+        setText('keepNote', '');
+        return;
+    }
+    var mems = state.memories.filter(function (m) { return !m.lost; });
+    var atCap = activeMemoryCount() >= state.maxMemories;
+    var anyRoom = mems.some(function (m) {
+        return m.experiences.filter(function (x) { return x.trim(); }).length < memExpCap(m);
+    });
+    var showRoom = atCap && (keepRoomMode || !anyRoom);
+    var html = mems.map(function (m) {
+        var filled = m.experiences.filter(function (x) { return x.trim(); }).length;
+        var full = filled >= memExpCap(m);
+        var extra = '';
+        if (showRoom) {
+            extra = '<div class="vessel-acts">' +
+                (state.diary.length < state.maxDiary ? '<button class="mini" onclick="keepMakeRoom(\'' + m.id + '\',\'diary\')">To Diary</button>' : '') +
+                (m.memState === 'starred' ? '' : '<button class="mini danger" onclick="keepMakeRoom(\'' + m.id + '\',\'forget\')">Forget</button>') +
+                '</div>';
+        }
+        return vesselHtml(m, 'memories', full ? '' : 'keepIn(\'' + m.id + '\')', full ? ' is-full' : ' is-open', extra);
+    }).join('');
+    html += atCap
+        ? '<div class="vessel-wrap"><button class="vessel vessel-new is-closed" onclick="keepRoomMode = !keepRoomMode; renderKeep()"><span class="v-theme">New Memory</span><span class="v-line">' +
+            (showRoom ? 'Choose one to let go.' : 'All ' + state.maxMemories + ' places are taken — make room…') + '</span></button></div>'
+        : '<div class="vessel-wrap"><button class="vessel vessel-new" onclick="keepInNew()"><span class="v-plus">+</span><span class="v-theme">New Memory</span></button></div>';
+    shelf.innerHTML = html;
+    setText('keepNote', showRoom ? 'To make room: send a Memory to the Diary, or forget it forever.' : '');
+}
+var keepRoomMode = false;
+
+function keepIn(id) {
+    var text = val('promptJournal').trim();
+    var m = findMem('memories', id);
+    if (!m || !text) return;
+    pushUndo();
+    var idx = -1;
+    for (var i = 0; i < m.experiences.length; i++) if (!m.experiences[i].trim()) { idx = i; break; }
+    if (idx === -1) m.experiences.push(text); else m.experiences[idx] = text;
+    renderMemoryList('memories');
+    updateMemoryCount();
+    toast('Kept in “' + (m.theme || 'Untitled') + '”.', 'info');
+    finishNight();
+}
+
+function keepInNew() {
+    var text = val('promptJournal').trim();
+    if (!text || activeMemoryCount() >= state.maxMemories) return;
+    pushUndo();
+    var m = newMemory('', text);
+    state.memories.push(m);
+    renderMemoryList('memories');
+    updateMemoryCount();
+    finishNight();
+    // Name it while it's fresh.
+    showTab('character');
+    openMemorySheet('memories', m.id);
+    toast('A new Memory. Give it a Theme — a few words.', 'info');
+}
+
+// Make room at the cap: the two legal ways out.
+function keepMakeRoom(id, how) {
+    var m = findMem('memories', id);
+    if (!m) return;
+    if (how === 'diary') { migrateToDiary(id); renderKeep(); return; }
+    showConfirm({
+        title: 'Forget “' + (m.theme || 'this Memory') + '”?',
+        message: 'It is struck out forever.',
+        confirmLabel: 'Forget it',
+        danger: true,
+        onConfirm: function () {
+            pushUndo();
+            m.lost = true;
+            renderMemoryList('memories');
+            updateMemoryCount();
+            persist();
+            renderKeep();
+        }
+    });
+}
+
+// ==========================================
+// MENUS, SHEETS, HELP DOTS, WELCOME CARDS
+// ==========================================
+function toggleMainMenu() {
+    var m = el('mainMenu'), b = el('btnMenu');
+    if (!m) return;
+    var open = m.hidden;
+    m.hidden = !open;
+    if (b) b.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) { var f = m.querySelector('button:not([disabled])'); if (f) f.focus(); }
+}
+function closeMainMenu() {
+    var m = el('mainMenu'), b = el('btnMenu');
+    if (m) m.hidden = true;
+    if (b) b.setAttribute('aria-expanded', 'false');
+}
+document.addEventListener('click', function (e) {
+    if (e.target.closest && !e.target.closest('.header-actions')) closeMainMenu();
+});
+
+function anySheetOpen() {
+    return !!document.querySelector('.sheet:not([hidden])');
+}
+function openKeeper() {
+    var s = el('keeperSheet');
+    if (!s) return;
+    renderTriggers();
+    s.hidden = false;
+    document.body.classList.add('sheet-open');
+}
+function closeKeeper() {
+    var s = el('keeperSheet');
+    if (s) s.hidden = true;
+    if (!anySheetOpen()) document.body.classList.remove('sheet-open');
+}
+// Tapping the dimmed area around a sheet closes it.
+document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (!t.classList || !t.classList.contains('sheet')) return;
+    if (t.id === 'keeperSheet') closeKeeper();
+    if (t.id === 'editSheet') closeEditSheet();
+});
+
+// Explanations stay on the page but collapsed: each .section-help gets a small
+// ⓘ beside the heading it explains, and opens on demand.
+function initHelpDots() {
+    var helps = document.querySelectorAll('.section-help');
+    for (var i = 0; i < helps.length; i++) {
+        var h = helps[i];
+        if (h.classList.contains('is-open') || h.getAttribute('data-dot')) continue;
+        h.setAttribute('data-dot', '1');
+        var id = 'help-' + i;
+        h.id = h.id || id;
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'help-dot';
+        btn.setAttribute('aria-label', 'What is this?');
+        btn.setAttribute('aria-expanded', 'false');
+        btn.setAttribute('aria-controls', h.id);
+        btn.textContent = 'i';
+        btn.onclick = (function (p, b) {
+            return function () {
+                var open = !p.classList.contains('is-open');
+                p.classList.toggle('is-open', open);
+                b.setAttribute('aria-expanded', open ? 'true' : 'false');
+            };
+        })(h, btn);
+        var prev = h.previousElementSibling;
+        var heading = prev && /^(H[1-4]|DIV)$/.test(prev.tagName) ? (prev.querySelector('h2, h3, h4') || prev) : null;
+        if (heading && /^H[1-4]$/.test(heading.tagName)) heading.appendChild(btn);
+        else h.parentNode.insertBefore(btn, h);
+    }
+}
+
+// Welcome: swipe (or tap Next) through four cards.
+function welcomeIndex() {
+    var t = el('welcomeTrack');
+    if (!t) return 0;
+    return Math.round(t.scrollLeft / Math.max(1, t.clientWidth));
+}
+function syncWelcomeDots() {
+    var i = welcomeIndex();
+    var dots = document.querySelectorAll('#welcomeDots span');
+    for (var k = 0; k < dots.length; k++) dots[k].classList.toggle('on', k === i);
+    var n = el('welcomeNext');
+    if (n) n.textContent = i >= dots.length - 1 ? (welcomeAlreadySeen() ? 'Close' : 'Make my vampire') : 'Next';
+}
+function welcomeNext() {
+    var t = el('welcomeTrack');
+    var count = document.querySelectorAll('#welcomeDots span').length;
+    var i = welcomeIndex();
+    if (i >= count - 1) {
+        if (welcomeAlreadySeen()) closeOverlay('welcomeOverlay');
+        else dismissWelcome();
+        return;
+    }
+    t.scrollTo({ left: (i + 1) * t.clientWidth, behavior: 'smooth' });
+    setTimeout(syncWelcomeDots, 350);
+}
+document.addEventListener('DOMContentLoaded', function () {
+    var t = el('welcomeTrack');
+    if (t) t.addEventListener('scroll', function () { syncWelcomeDots(); }, { passive: true });
+    initHelpDots();
 });
 
 window.addEventListener('load', function () {

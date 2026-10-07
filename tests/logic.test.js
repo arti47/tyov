@@ -300,3 +300,27 @@ test('promptActions maps rulebook phrasing to the bookkeeping it asks for', () =
     assert.ok(!has('Lose a Resource.', 'loseSkill'));
     assert.deepStrictEqual(promptActions(''), []);
 });
+
+test('turn stages: order, skipping "obey" when the Prompt asks for nothing', () => {
+    const { nextStage, prevStage, STAGES } = require('../logic.js');
+    assert.deepStrictEqual(STAGES, ['roll', 'reveal', 'obey', 'write', 'remember']);
+    assert.strictEqual(nextStage('roll', true), 'reveal');
+    assert.strictEqual(nextStage('reveal', true), 'obey');
+    assert.strictEqual(nextStage('reveal', false), 'write');
+    assert.strictEqual(nextStage('obey', true), 'write');
+    assert.strictEqual(nextStage('write', false), 'remember');
+    assert.strictEqual(nextStage('remember', false), 'roll');
+    assert.strictEqual(prevStage('write', false), 'reveal');
+    assert.strictEqual(prevStage('write', true), 'obey');
+    assert.strictEqual(prevStage('reveal', true), 'reveal');
+});
+
+test('normTurn repairs saved turns (and pre-ritual saves)', () => {
+    const { normTurn, normalizeState } = require('../logic.js');
+    assert.deepStrictEqual(normTurn(undefined, 0), { stage: 'roll', done: [] });
+    assert.deepStrictEqual(normTurn(undefined, 12), { stage: 'reveal', done: [] });
+    assert.deepStrictEqual(normTurn({ stage: 'write', done: ['kill', 3] }, 12), { stage: 'write', done: ['kill'] });
+    assert.deepStrictEqual(normTurn({ stage: 'bogus' }, 5), { stage: 'reveal', done: [] });
+    assert.deepStrictEqual(normTurn({ stage: 'write' }, 0), { stage: 'roll', done: [] });
+    assert.deepStrictEqual(normalizeState({ currentPrompt: 7 }).turn, { stage: 'reveal', done: [] });
+});
