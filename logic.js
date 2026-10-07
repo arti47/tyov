@@ -324,12 +324,22 @@
         ['memory', /\bmemory slot\b|\b(?:strike ?out|lose|forget|erase|regain) (?:a|an|one|two|three|any|your)?\s*(?:\w+\s){0,4}memor(?:y|ies)\b|\bbased on (?:a|an|one)?\s*(?:\w+\s)?memory\b|\bconvert a memory\b/i]
     ];
 
+    // "Create a mortal if none are available" / "If you have no living
+    // Characters, … create …" only applies when there is nobody to kill — the
+    // Kill picker's "+ New mortal Character" row covers it, so such a Prompt
+    // gets no separate new-Character step. (Without a kill, e.g. 3a, it stays.)
+    var CONDITIONAL_CREATE = /[^.]*\b(?:if none (?:are|is) available|if you have no (?:living )?characters?)\b[^.]*\.?/gi;
+
     function promptActions(text) {
         var t = String(text || '');
         var out = [];
         PROMPT_ACTIONS.forEach(function (pa) {
             if (pa[1].test(t)) out.push(pa[0]);
         });
+        if (out.indexOf('kill') !== -1 && out.indexOf('newCharacter') !== -1) {
+            var rx = PROMPT_ACTIONS.filter(function (pa) { return pa[0] === 'newCharacter'; })[0][1];
+            if (!rx.test(t.replace(CONDITIONAL_CREATE, ''))) out.splice(out.indexOf('newCharacter'), 1);
+        }
         return out;
     }
 

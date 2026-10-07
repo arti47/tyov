@@ -338,3 +338,16 @@ test('normTurn repairs saved turns (and pre-ritual saves)', () => {
     assert.deepStrictEqual(normTurn({ stage: 'write' }, 0), { stage: 'roll', done: [] });
     assert.deepStrictEqual(normalizeState({ currentPrompt: 7 }).turn, { stage: 'reveal', done: [] });
 });
+
+test('promptActions: conditional "create a mortal" folds into the kill step', () => {
+    const { promptActions } = require('../logic.js');
+    const p1 = promptActions('Kill a mortal Character. Create a mortal if none are available. Take the skill Bloodthirsty.');
+    assert.ok(p1.includes('kill') && p1.includes('newSkill') && !p1.includes('newCharacter'));
+    const p5 = promptActions('Kill a Character. Check a Skill. If you have no living Characters, kill no one, and create a beloved mortal Character who you have betrayed.');
+    assert.ok(p5.includes('kill') && p5.includes('check') && !p5.includes('newCharacter'));
+    // No kill to fall back on: the creation stays (3a).
+    const p3 = promptActions('Create a Resource which represents their assistance. Create a mortal Character if none are available.');
+    assert.ok(p3.includes('newCharacter') && p3.includes('newResource'));
+    // An unconditional creation alongside a kill stays too.
+    assert.ok(promptActions('Kill a Character. Create a new mortal Character who saw it.').includes('newCharacter'));
+});
