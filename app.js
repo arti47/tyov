@@ -3424,6 +3424,12 @@ function renderKeep() {
         ? '<div class="vessel-wrap"><button class="vessel vessel-new is-closed" onclick="keepRoomMode = !keepRoomMode; renderKeep()"><span class="v-theme">New Memory</span><span class="v-line">' +
             (showRoom ? 'Choose one to let go.' : 'All ' + state.maxMemories + ' places are taken — make room…') + '</span></button></div>'
         : '<div class="vessel-wrap"><button class="vessel vessel-new" onclick="keepInNew()"><span class="v-plus">+</span><span class="v-theme">New Memory</span></button></div>';
+    // Rules: every answer becomes an Experience. Only if no legal place
+    // exists at all (every slot lost) does the night end without one.
+    var canKeep = !atCap || anyRoom || mems.some(function (m) {
+        return m.memState !== 'starred' || state.diary.length < state.maxDiary;
+    });
+    if (!canKeep) html += '<button class="link-btn" onclick="finishNight()">No Memory can hold it — end the night</button>';
     shelf.innerHTML = html;
     setText('keepNote', showRoom ? 'To make room: send a Memory to the Diary, or forget it forever.' : '');
 }

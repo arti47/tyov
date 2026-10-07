@@ -69,7 +69,7 @@ npm run lint      # ESLint (needs `npm install` first; no network = skip)
 | `assets/dice.wav`, `assets/page.wav` | Bundled, precached sound effects (dice roll, page turn) — local so audio works offline. Generated lightweight WAVs. |
 | `assets/icon-192.png`, `assets/icon-512.png`, `assets/icon-180.png` | PWA / home-screen icons (192 & 512 for the manifest incl. `maskable`; 180 for the iOS `apple-touch-icon`). Generated PNGs (blood-red field, dark moon, white fangs). |
 | `manifest.json` | PWA manifest: name/short_name/description, `start_url`/`scope`/`id` (all relative so it works under a Pages subpath), `standalone`, colors, and PNG icons (`any` + `maskable`). Drives "Add to Home Screen". |
-| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v35`. Precaches assets (incl. `assets/*.wav`, `assets/icon-*.png` and `assets/fonts/*.woff2`), deletes old caches on activate, network-first for navigations + same-origin html/js/css/json (avoids version skew), stale-while-revalidate for other assets. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
+| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v36`. Precaches assets (incl. `assets/*.wav`, `assets/icon-*.png` and `assets/fonts/*.woff2`), deletes old caches on activate, network-first for navigations + same-origin html/js/css/json (avoids version skew), stale-while-revalidate for other assets. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
 | `.github/workflows/pages.yml` | GitHub Actions workflow: on push to `main`, runs `npm test` then deploys the repo root to **GitHub Pages**. Requires Pages Source = "GitHub Actions" (one-time repo setting). |
 | `.github/workflows/ci.yml` | CI workflow: on push to `main` and on PRs, runs `npm ci` → `npm test` → `npm run lint`. |
 | `tests/logic.test.js` | Unit tests for `logic.js` (escaping, tiers, prompt text, markdown, dice, `resolveTraitAction`, `rollMeaning`, `pickSuggestions`, `fillTemplate`, `traitForms`, `candleStates`, `trackMarks`, `monogram`, `promptActions`, the turn stages (`nextStage`/`prevStage`/`normTurn`), and state normalization: `normalizeState`/`normMem`/`defaultState`). |
@@ -167,8 +167,10 @@ player only ever sees one decision. Three tabs: **Night**, **Vampire**,
      Memory” (`keepInNew`) creates one and opens its sheet. At 5 active
      Memories the shelf shows **make room…** (`keepRoomMode`) with To Diary /
      Forget per vessel (`keepMakeRoom`) — the rules' forced forgetting.
-     “Don’t keep it as a Memory” (`finishNight`) is the guided override.
-     `finishNight` archives the journal, resets the turn to `roll`.
+     There is **no skip**: every answer becomes an Experience (rules). Only
+     when no legal place exists (every slot lost, nothing forgettable) does
+     `renderKeep` offer “end the night” without one. `finishNight` archives
+     the journal and resets the turn to `roll`.
 - **Vampire** — Memories as a **shelf of vessels** (`vesselHtml`: Theme,
   first Experience, used/cap dots; tap → `openMemorySheet` /
   `renderMemorySheet`, which reuses `memoryBlockHtml` inside `#editSheet`),
@@ -453,7 +455,7 @@ under that subpath. Every asset the SW precaches must stay same-origin/relative.
 ### Bumping the service worker cache
 If you change any cached asset (`index.html`, `styles.css`, `logic.js`,
 `app.js`, `data.js`, `manifest.json`, `assets/*.wav`, `assets/icon-*.png`), bump
-`CACHE_NAME` in `sw.js` (currently `-v35`). Bumping it is also what makes the
+`CACHE_NAME` in `sw.js` (currently `-v36`). Bumping it is also what makes the
 deployed `sw.js` byte-different, which is what triggers the tap-to-update toast
 for existing installs. The SW also network-first-loads navigations, so updates
 generally land on next load even without a bump — but bump for certainty, and
@@ -501,6 +503,7 @@ step cards; filing the answer into a Memory is now its own beat with the
 5-Memory forced-forgetting built in; traits and Memories became cards/vessels
 with edit sheets; header reduced to name + `⋯` menu; rare rules moved to
 Keeper’s tools; help text behind ⓘ; 4-card welcome; one-question wizard.
+The Keep beat has no skip — every answer must become an Experience.
 Rules unchanged: setup still required, substitution ladder, Diary cap and
 loss, game over 72–80, nothing automatic.
 
