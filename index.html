@@ -546,7 +546,8 @@
                 <button class="btn-small btn-strike" onclick="changeFontSize(2)" aria-label="Increase font size">A+</button>
                 <button class="btn-small btn-strike" onclick="changeFontSize(-2)" aria-label="Decrease font size">A-</button>
             </span>
-            <label><input type="checkbox" id="optMuteSound" onchange="saveGame()"> Mute sounds</label>
+            <label><input type="checkbox" id="optMuteSound" onchange="saveGame(); syncAmbient()"> Mute sounds</label>
+            <label title="Quiet wind and candle crackle while you play. Made in the browser, works offline."><input type="checkbox" id="optAmbient" onchange="setAmbient()"> Night ambience</label>
             <label title="Show tonight's Prompt, actions, answer and Memory choice on one page instead of step by step."><input type="checkbox" id="optCompactNight" onchange="setCompactNight()"> Whole night on one page</label>
         </div>
 

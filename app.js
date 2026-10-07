@@ -193,6 +193,7 @@ function showTab(name) {
     var switching = prev !== name;
     if (switching && prev) tabScroll[prev] = getPageScroll();
     state.activeTab = name;
+    syncNudges();
     TABS.forEach(function (t) {
         var panel = el('panel-' + t), btn = el('tab-' + t);
         if (panel) panel.hidden = (t !== name);
@@ -412,6 +413,7 @@ function persist() {
         hideGraveyard: checked('hideGraveyardToggle'),
         muteSound: checked('optMuteSound'),
         compactNight: checked('optCompactNight'),
+        ambient: checked('optAmbient'),
         // reverseTime is a one-shot (clears after each roll), so it is not persisted.
         multiplayer: checked('optMultiplayer')
     };
@@ -1231,6 +1233,8 @@ function checkGameOver() {
     // gameOver may have just flipped after the meta/coach pass ran.
     renderPromptSeal();
     updatePromptSuggestions();
+    checkSurvivalState();
+    showAgeNudgeIfDue();
     renderNight();
 }
 
@@ -1615,6 +1619,8 @@ function declareGameOver(reason) {
     // final, most important entry of the chronicle would be lost.
     archiveJournal();
     state.gameOver = true;
+    // Mid-night: the Prompt still gets its final answer.
+    if (state.currentPrompt > 0 && state.turn && state.turn.stage !== 'roll') state.turn.stage = 'write';
     addToHistoryLog('GAME OVER — ' + reason);
     applyDisplay();
     checkGameOver();
@@ -1695,7 +1701,7 @@ function toggleLoseEntity(list, id) {
     // The Diary is a Resource: losing/restoring it strikes/unstrikes the
     // Memories it holds (A6 — rules p.100).
     if (list === 'resources' && e.isDiary) {
-        state.diary.forEach(function (m) { m.lost = e.lost; });
+        state.diary.forEach(function (m) { m.lost = e.lost; markForgotten(m); });
         renderMemoryList('diary');
         updateDiaryCount();
     }
@@ -1776,7 +1782,15 @@ function killAllMortals() {
 function checkSurvivalState() {
     var activeSkills = state.skills.filter(function (s) { return !s.lost && !s.checked; }).length;
     var activeRes = state.resources.filter(function (r) { return !r.lost; }).length;
-    el('gameWarning').style.display = (activeSkills === 0 && activeRes === 0) ? 'block' : 'none';
+    el('gameWarning').style.display = (activeSkills === 0 && activeRes === 0 && !state.gameOver) ? 'block' : 'none';
+}
+
+// Between-night nudges (old age, backup) only show on the Night tab at the
+// roll, so they never pile up over a Prompt or the character sheet.
+function syncNudges() {
+    var stage = state.turn ? state.turn.stage : 'roll';
+    var calm = state.activeTab === 'play' && (stage === 'roll' || state.currentPrompt < 1);
+    document.body.classList.toggle('nudges-quiet', !calm);
 }
 
 // Monogram wax seal for a Character: red wax for mortals (hue nudged per
@@ -2123,6 +2137,8 @@ function applyState() {
     if (st.hideGraveyard) el('traitsContainer').classList.add('hide-graveyard');
     setChecked('optMuteSound', !!st.muteSound);
     setChecked('optCompactNight', !!st.compactNight);
+    setChecked('optAmbient', !!st.ambient);
+    syncAmbient();
     setChecked('optReverseTime', false); // one-shot, never restored
     setChecked('optMultiplayer', !!st.multiplayer);
 
@@ -2355,7 +2371,10 @@ function updateCoachLine() {
     if (!box) return;
     var stage = state.turn ? state.turn.stage : 'roll';
     var msg;
-    if (state.gameOver) msg = 'Your vampire\u2019s story is over.';
+    if (state.gameOver && stage === 'write') msg = 'The last night. Write how it ends.';
+    else if (state.gameOver && stage === 'remember') msg = 'Keep the ending as a final Experience.';
+    else if (state.gameOver && stage === 'reveal') msg = 'The final Prompt.';
+    else if (state.gameOver) msg = 'Your vampire\u2019s story is over.';
     else if (state.currentPrompt === 0) msg = 'Your vampire is made. Roll to begin the first night.';
     else if (isCompact() && stage !== 'roll') msg = 'Do what the Prompt asks, answer it, then choose a Memory.';
     else if (stage === 'roll') msg = 'Dawn. Roll when you are ready for the next night.';
@@ -2481,6 +2500,7 @@ function pickMemoryOp(list, id) {
         var base = m.theme || firstExperienceOf(m) || '';
         if (strike) {
             m.lost = true;
+            markForgotten(m);
             renderMemoryList(list);
             updateMemoryCount();
             updateDiaryCount();
@@ -2501,6 +2521,7 @@ function pickMemoryOp(list, id) {
     }
     pushUndo();
     m.lost = !m.lost;
+    markForgotten(m);
     renderMemoryList(list);
     updateMemoryCount();
     updateDiaryCount();
@@ -3169,6 +3190,10 @@ function addAndEdit(list) {
 }
 
 // --- Memory shelf & Memory sheet ---------------------------------------------
+// Memories struck out in the last moments play a burn-away animation once.
+var forgottenAt = {};
+function markForgotten(m) { if (m && m.lost) forgottenAt[m.id] = Date.now(); }
+
 function vesselHtml(m, name, onclick, extraCls, extraHtml) {
     var filled = m.experiences.filter(function (x) { return x.trim(); }).length;
     var cap = memExpCap(m);
@@ -3176,7 +3201,9 @@ function vesselHtml(m, name, onclick, extraCls, extraHtml) {
     for (var i = 0; i < cap; i++) dots += '<span class="v-dot' + (i < filled ? ' on' : '') + '"></span>';
     var stateBadge = m.memState !== 'normal' ? '<span class="v-state v-' + m.memState + '">' + m.memState + '</span>' : '';
     return '<div class="vessel-wrap">' +
-        '<button type="button" class="vessel' + (m.lost ? ' is-lost strikethrough' : '') + (extraCls || '') + '" data-stamp="LOST" onclick="' + onclick + '">' +
+        '<button type="button" class="vessel v-' + m.memState + (m.lost ? ' is-lost strikethrough' : '') +
+            (m.lost && Date.now() - (forgottenAt[m.id] || 0) < 1500 ? ' is-forgetting' : '') + (extraCls || '') +
+            '" data-stamp="FORGOTTEN" onclick="' + onclick + '">' +
             '<span class="v-theme">' + escapeHtml(m.theme || 'Untitled') + '</span>' +
             '<span class="v-line">' + escapeHtml(firstExperienceOf(m) || '…') + '</span>' +
             '<span class="v-dots" aria-label="' + filled + ' of ' + cap + ' Experiences">' + dots + '</span>' + stateBadge +
@@ -3257,7 +3284,7 @@ function nextBeat() {
 function gotoBeat(stage) {
     var order = TYOV.STAGES;
     var cur = state.turn ? state.turn.stage : 'roll';
-    if (state.currentPrompt < 1 || state.gameOver) return;
+    if (state.currentPrompt < 1) return;
     // Only beats already reached tonight (never back to the roll).
     if (stage === 'roll' || order.indexOf(stage) > order.indexOf(cur)) return;
     if (stage === 'obey' && !nightActions().length) return;
@@ -3281,7 +3308,9 @@ function renderNight() {
     var night = el('night');
     if (!night) return;
     var stage = (state.turn && state.turn.stage) || 'roll';
-    if (state.gameOver || state.currentPrompt < 1) stage = 'roll';
+    if (state.currentPrompt < 1) stage = 'roll';
+    // The final Prompt is still read, answered and kept; it just asks nothing.
+    if (state.gameOver && stage === 'obey') stage = 'write';
     night.setAttribute('data-stage', stage);
     night.classList.toggle('is-over', !!state.gameOver);
     night.classList.toggle('is-first', state.currentPrompt < 1);
@@ -3314,6 +3343,7 @@ function renderNight() {
     if (all || stage === 'write') renderPeek();
     if (all || stage === 'remember') renderKeep();
     renderTour(all ? '' : stage);
+    syncNudges();
     updateCoachLine();
 }
 
@@ -3489,6 +3519,7 @@ function keepMakeRoom(id, how) {
         onConfirm: function () {
             pushUndo();
             m.lost = true;
+            markForgotten(m);
             renderMemoryList('memories');
             updateMemoryCount();
             persist();
@@ -3609,6 +3640,71 @@ function nightInput(ta) {
     keepRefreshTimer = setTimeout(renderKeep, 250);
 }
 
+// --- Ambient night: wind + candle crackle, synthesised (no audio files) ----
+// Off by default. Browsers only start audio after a user gesture, so a saved
+// "on" waits for the first tap. Silent while muted or the page is hidden.
+var ambient = null;
+function buildAmbient() {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    var ctx = new AC();
+    var master = ctx.createGain();
+    master.gain.value = 0;
+    master.connect(ctx.destination);
+    // Brown noise → low-pass, slowly swelling: wind.
+    var len = ctx.sampleRate * 4, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0), last = 0;
+    for (var i = 0; i < len; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = last * 3.2; }
+    var wind = ctx.createBufferSource();
+    wind.buffer = buf; wind.loop = true;
+    var lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 420;
+    var windGain = ctx.createGain();
+    windGain.gain.value = 0.5;
+    var lfo = ctx.createOscillator(), lfoGain = ctx.createGain();
+    lfo.frequency.value = 0.07; lfoGain.gain.value = 0.3;
+    lfo.connect(lfoGain); lfoGain.connect(windGain.gain);
+    wind.connect(lp); lp.connect(windGain); windGain.connect(master);
+    wind.start(); lfo.start();
+    // Short filtered clicks at random intervals: the candle.
+    var crackleBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.03), ctx.sampleRate), c = crackleBuf.getChannelData(0);
+    for (var j = 0; j < c.length; j++) c[j] = (Math.random() * 2 - 1) * Math.pow(1 - j / c.length, 4);
+    var hp = ctx.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 1800;
+    hp.connect(master);
+    function crackle() {
+        if (!ambient || ambient.ctx !== ctx) return;
+        if (ctx.state === 'running') {
+            var src = ctx.createBufferSource(), g = ctx.createGain();
+            src.buffer = crackleBuf; g.gain.value = 0.05 + Math.random() * 0.15;
+            src.connect(g); g.connect(hp); src.start();
+        }
+        ambient.timer = setTimeout(crackle, 120 + Math.random() * (Math.random() < 0.2 ? 2500 : 700));
+    }
+    var a = { ctx: ctx, master: master, timer: null };
+    ambient = a;
+    crackle();
+    return a;
+}
+function ambientWanted() {
+    return checked('optAmbient') && !checked('optMuteSound') && !document.hidden;
+}
+function syncAmbient() {
+    var want = ambientWanted();
+    if (!want && !ambient) return;
+    if (want && !ambient && !buildAmbient()) return;
+    var ctx = ambient.ctx, now = ctx.currentTime;
+    ambient.master.gain.cancelScheduledValues(now);
+    ambient.master.gain.setTargetAtTime(want ? 0.12 : 0, now, 0.6);
+    if (want && ctx.state === 'suspended') ctx.resume().catch(function () { /* needs a gesture */ });
+    // Once faded out, stop the audio thread to spare the battery.
+    if (!want) setTimeout(function () { if (!ambientWanted() && ctx.state === 'running') ctx.suspend(); }, 2500);
+}
+function setAmbient() { syncAmbient(); persist(); }
+document.addEventListener('visibilitychange', function () { if (ambient || ambientWanted()) syncAmbient(); });
+document.addEventListener('pointerdown', function () {
+    if (ambientWanted() && (!ambient || ambient.ctx.state === 'suspended')) syncAmbient();
+}, { passive: true });
+
 // --- Dawn: a brief sunrise once the night is recorded ----------------------
 function playDawn() {
     var night = el('night');
@@ -3671,7 +3767,7 @@ function initNightSwipe() {
         x0 = null;
         if (Math.abs(dx) < 60 || Math.abs(dx) < 2 * Math.abs(dy)) return;
         var stage = state.turn ? state.turn.stage : 'roll';
-        if (stage === 'roll' || state.gameOver) return;
+        if (stage === 'roll') return;
         if (dx < 0) {
             if (stage !== 'remember') nextBeat(); // Keep needs a chosen Memory
         } else {
