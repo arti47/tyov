@@ -327,6 +327,7 @@
                 <button type="button" role="menuitem" id="btnUndo" onclick="closeMainMenu(); undoLastRoll()" disabled><svg class="ico" aria-hidden="true"><use href="#i-undo"/></svg>Undo last action</button>
                 <button type="button" role="menuitem" onclick="closeMainMenu(); openKeeper()"><svg class="ico" aria-hidden="true"><use href="#i-key"/></svg>Keeper’s tools</button>
                 <button type="button" role="menuitem" onclick="closeMainMenu(); openWelcome()"><svg class="ico" aria-hidden="true"><use href="#i-help"/></svg>How to play</button>
+                <button type="button" role="menuitem" onclick="closeMainMenu(); replayTour()"><svg class="ico" aria-hidden="true"><use href="#i-moon"/></svg>Show step tips again</button>
                 <button type="button" role="menuitem" onclick="closeMainMenu(); openGlossary()"><svg class="ico" aria-hidden="true"><use href="#i-book"/></svg>What the words mean</button>
                 <button type="button" role="menuitem" onclick="closeMainMenu(); showTab('settings')"><svg class="ico" aria-hidden="true"><use href="#i-settings"/></svg>Settings</button>
                 <div class="menu-foot"><span id="saveStatus" class="save-status"></span></div>
@@ -360,6 +361,10 @@
             <li data-beat="write"><span>Write</span></li>
             <li data-beat="remember"><span>Keep</span></li>
         </ol>
+        <div id="tourTip" class="tour-tip" role="note" hidden>
+            <p id="tourText"></p>
+            <button type="button" class="link-btn" onclick="dismissTour()">Got it</button>
+        </div>
 
         <!-- 1 · ROLL -->
         <div class="stage" data-stage="roll">
@@ -425,7 +430,7 @@
         <!-- 4 · WRITE -->
         <div class="stage" data-stage="write">
             <details class="prompt-peek"><summary id="peekLabel">Tonight’s Prompt</summary><p id="peekText"></p></details>
-            <textarea id="promptJournal" class="autogrow page-textarea" rows="5" oninput="autoGrow(this); updateCoachLine()" placeholder="Answer the Prompt in a sentence or two…"></textarea>
+            <textarea id="promptJournal" class="autogrow page-textarea" rows="5" oninput="nightInput(this)" placeholder="Answer the Prompt in a sentence or two…"></textarea>
             <div class="write-tools">
                 <button type="button" class="chip-btn" onclick="sparkInto('sparkJournal','promptJournal')"><svg class="ico" aria-hidden="true"><use href="#i-die"/></svg>Inspire me</button>
                 <button type="button" class="chip-btn" onclick="togglePeekVampire()"><svg class="ico" aria-hidden="true"><use href="#i-character"/></svg>My vampire</button>
@@ -542,6 +547,7 @@
                 <button class="btn-small btn-strike" onclick="changeFontSize(-2)" aria-label="Decrease font size">A-</button>
             </span>
             <label><input type="checkbox" id="optMuteSound" onchange="saveGame()"> Mute sounds</label>
+            <label title="Show tonight's Prompt, actions, answer and Memory choice on one page instead of step by step."><input type="checkbox" id="optCompactNight" onchange="setCompactNight()"> Whole night on one page</label>
         </div>
 
         <h3 class="sub-head">Save data</h3>

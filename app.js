@@ -411,6 +411,7 @@ function persist() {
         fontSize: getComputedStyle(document.body).getPropertyValue('--base-font-size'),
         hideGraveyard: checked('hideGraveyardToggle'),
         muteSound: checked('optMuteSound'),
+        compactNight: checked('optCompactNight'),
         // reverseTime is a one-shot (clears after each roll), so it is not persisted.
         multiplayer: checked('optMultiplayer')
     };
@@ -2121,6 +2122,7 @@ function applyState() {
     setChecked('hideGraveyardToggle', !!st.hideGraveyard);
     if (st.hideGraveyard) el('traitsContainer').classList.add('hide-graveyard');
     setChecked('optMuteSound', !!st.muteSound);
+    setChecked('optCompactNight', !!st.compactNight);
     setChecked('optReverseTime', false); // one-shot, never restored
     setChecked('optMultiplayer', !!st.multiplayer);
 
@@ -2355,6 +2357,7 @@ function updateCoachLine() {
     var msg;
     if (state.gameOver) msg = 'Your vampire\u2019s story is over.';
     else if (state.currentPrompt === 0) msg = 'Your vampire is made. Roll to begin the first night.';
+    else if (isCompact() && stage !== 'roll') msg = 'Do what the Prompt asks, answer it, then choose a Memory.';
     else if (stage === 'roll') msg = 'Dawn. Roll when you are ready for the next night.';
     else if (stage === 'reveal') msg = 'Read tonight\u2019s Prompt.';
     else if (stage === 'obey') msg = 'Tap each card to do what the Prompt asks.';
@@ -3270,6 +3273,7 @@ function finishNight() {
     renderNight();
     persist();
     setPageScroll(0);
+    playDawn();
     announce('The night is recorded.');
 }
 
@@ -3281,10 +3285,13 @@ function renderNight() {
     night.setAttribute('data-stage', stage);
     night.classList.toggle('is-over', !!state.gameOver);
     night.classList.toggle('is-first', state.currentPrompt < 1);
+    var compact = isCompact();
+    night.classList.toggle('is-compact', compact);
 
     // beat dots
     var order = TYOV.STAGES, ci = order.indexOf(stage);
     var hasActions = nightActions().length > 0;
+    night.classList.toggle('no-actions', !hasActions);
     var lis = night.querySelectorAll('.beats li');
     for (var i = 0; i < lis.length; i++) {
         var b = lis[i].getAttribute('data-beat'), bi = order.indexOf(b);
@@ -3302,9 +3309,11 @@ function renderNight() {
         rb.classList.toggle('is-inviting', state.currentPrompt === 0 && !state.gameOver);
     }
     renderNightCandle();
-    if (stage === 'obey') renderStepCards();
-    if (stage === 'write') renderPeek();
-    if (stage === 'remember') renderKeep();
+    var all = compact && stage !== 'roll';
+    if (all || stage === 'obey') renderStepCards();
+    if (all || stage === 'write') renderPeek();
+    if (all || stage === 'remember') renderKeep();
+    renderTour(all ? '' : stage);
     updateCoachLine();
 }
 
@@ -3365,7 +3374,7 @@ function renderStepCards() {
 var PICKER_STEP = { skills: 'check', resources: 'lose', characters: 'kill', loseskills: 'loseSkill', losemarks: 'loseMark', memoryops: 'memory' };
 function autoMarkStep(kind) {
     var a = PICKER_STEP[kind];
-    if (!a || !state.turn || state.turn.stage !== 'obey') return;
+    if (!a || !state.turn || (state.turn.stage !== 'obey' && !isCompact())) return;
     if (nightActions().indexOf(a) !== -1 && state.turn.done.indexOf(a) === -1) markStep(a, true);
 }
 
@@ -3374,7 +3383,7 @@ function markStep(action, isDone) {
     var d = state.turn.done.filter(function (x) { return x !== action; });
     if (isDone) d.push(action);
     state.turn.done = d;
-    if (state.turn.stage === 'obey') renderStepCards();
+    if (state.turn.stage === 'obey' || isCompact()) renderStepCards();
     persist();
 }
 
@@ -3383,6 +3392,9 @@ function renderPeek() {
     var p = state.currentPrompt, v = state.promptVisits[p] || 1;
     setText('peekLabel', 'Prompt ' + p + getTier(Math.min(v, 3)));
     setText('peekText', state.display.promptText || '');
+    // Wide screens show the Prompt beside the page (CSS grid), always open.
+    var peek = document.querySelector('.prompt-peek');
+    if (peek && window.matchMedia && window.matchMedia('(min-width: 1024px)').matches) peek.open = true;
     autoGrow(el('promptJournal'));
 }
 function togglePeekVampire() {
@@ -3584,10 +3596,96 @@ function welcomeNext() {
     t.scrollTo({ left: (i + 1) * t.clientWidth, behavior: 'smooth' });
     setTimeout(syncWelcomeDots, 350);
 }
+// --- Compact night: every beat on one page (Settings) ----------------------
+function isCompact() { return !!checked('optCompactNight'); }
+function setCompactNight() { renderNight(); persist(); }
+
+var keepRefreshTimer = null;
+function nightInput(ta) {
+    autoGrow(ta);
+    updateCoachLine();
+    if (!isCompact()) return;
+    clearTimeout(keepRefreshTimer);
+    keepRefreshTimer = setTimeout(renderKeep, 250);
+}
+
+// --- Dawn: a brief sunrise once the night is recorded ----------------------
+function playDawn() {
+    var night = el('night');
+    if (!night || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+    night.classList.remove('is-dawn');
+    void night.offsetWidth; // restart the animation
+    night.classList.add('is-dawn');
+    setTimeout(function () { night.classList.remove('is-dawn'); }, 2000);
+}
+
+// --- First-night walkthrough: one tip per beat, shown once per device ------
+var TOUR_TIPS = {
+    roll: 'Each night starts with a roll. The dice move you through 80 Prompts, the story of your vampire.',
+    reveal: 'This is tonight’s Prompt: what happens to your vampire. a, b, c means your first, second or third visit.',
+    obey: 'The Prompt changes your vampire. Tap each card to make the change; it ticks when done.',
+    write: 'Now answer the Prompt in a sentence or two, as your vampire. There are no wrong answers.',
+    remember: 'Your answer becomes an Experience inside a Memory. You can hold only five Memories. Forgetting is the heart of the game.'
+};
+function tourSeen() {
+    try { return JSON.parse(localStorage.getItem('tyov_tour_seen') || '[]') || []; } catch (e) { return []; }
+}
+function renderTour(stage) {
+    var tip = el('tourTip');
+    if (!tip) return;
+    var show = stage && TOUR_TIPS[stage] && !state.gameOver && tourSeen().indexOf(stage) === -1 &&
+        (stage !== 'roll' || state.currentPrompt === 0);
+    tip.hidden = !show;
+    if (show) { setText('tourText', TOUR_TIPS[stage]); tip.setAttribute('data-for', stage); }
+}
+function dismissTour() {
+    var tip = el('tourTip');
+    var stage = tip && tip.getAttribute('data-for');
+    if (!stage) return;
+    var seen = tourSeen();
+    if (seen.indexOf(stage) === -1) seen.push(stage);
+    try { localStorage.setItem('tyov_tour_seen', JSON.stringify(seen)); } catch (e) { /* private mode */ }
+    tip.hidden = true;
+}
+function replayTour() {
+    try { localStorage.removeItem('tyov_tour_seen'); } catch (e) { /* private mode */ }
+    showTab('play');
+    renderNight();
+    toast('The tips will show again on each step.', 'info');
+}
+
+// --- Swipe between beats (phones). Rolling and keeping stay deliberate taps.
+function initNightSwipe() {
+    var night = el('night');
+    if (!night) return;
+    var x0 = null, y0 = 0;
+    night.addEventListener('touchstart', function (e) {
+        var t = e.target;
+        if (e.touches.length !== 1 || isCompact() || anySheetOpen() ||
+            (t.closest && t.closest('textarea, input, select, .trait-picker, .shelf'))) { x0 = null; return; }
+        x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+    }, { passive: true });
+    night.addEventListener('touchend', function (e) {
+        if (x0 === null) return;
+        var dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0;
+        x0 = null;
+        if (Math.abs(dx) < 60 || Math.abs(dx) < 2 * Math.abs(dy)) return;
+        var stage = state.turn ? state.turn.stage : 'roll';
+        if (stage === 'roll' || state.gameOver) return;
+        if (dx < 0) {
+            if (stage !== 'remember') nextBeat(); // Keep needs a chosen Memory
+        } else {
+            var prev = TYOV.prevStage(stage, nightActions().length > 0);
+            if (prev !== stage) gotoBeat(prev);
+        }
+    }, { passive: true });
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     var t = el('welcomeTrack');
     if (t) t.addEventListener('scroll', function () { syncWelcomeDots(); }, { passive: true });
     initHelpDots();
+    initNightSwipe();
 });
 
 window.addEventListener('load', function () {

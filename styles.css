@@ -2598,3 +2598,77 @@ body:not(.light-mode) .t-checked { color: #93b07a; }
     .toast, .update-toast { top: calc(12px + env(safe-area-inset-top, 0px)); bottom: auto; transform: translate(-50%, -12px); }
     .toast.show, .update-toast.show { transform: translate(-50%, 0); }
 }
+
+/* ===== Night extras: tour tips, dawn, compact night, desktop write ===== */
+.tour-tip {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    max-width: 560px;
+    margin: 0 auto var(--sp-3);
+    padding: 10px 14px;
+    border: 1px solid var(--gold);
+    border-radius: var(--r-md);
+    background: var(--surface-2);
+    box-shadow: var(--shadow-1);
+    animation: beatIn 0.35s var(--ease);
+}
+.tour-tip[hidden] { display: none; }
+.tour-tip p { margin: 0; flex: 1; font-size: 0.95em; color: var(--ink); }
+.tour-tip .link-btn { flex: none; color: var(--gold); white-space: nowrap; }
+
+.night { position: relative; }
+.night.is-dawn::after {
+    content: '';
+    position: absolute;
+    inset: -40px -16px;
+    pointer-events: none;
+    border-radius: 50% 50% 0 0;
+    background: radial-gradient(ellipse at 50% 100%, rgba(240, 168, 58, 0.5), rgba(200, 90, 60, 0.18) 45%, transparent 72%);
+    animation: dawn 1.9s ease-out forwards;
+}
+@keyframes dawn {
+    0% { opacity: 0; transform: translateY(30%); }
+    40% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-6%); }
+}
+
+/* Compact: every beat on one page once the dice are rolled. */
+.night.is-compact .beats { display: none; }
+.night.is-compact:not([data-stage="roll"]) .stage:not([data-stage="roll"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
+    animation: none;
+}
+.night.is-compact .stage + .stage { margin-top: var(--sp-6); }
+.night.is-compact.no-actions .stage[data-stage="obey"],
+.night.is-compact .stage:not([data-stage="roll"]) .next-btn,
+.night.is-compact .stage[data-stage="write"] .prompt-peek { display: none !important; }
+
+/* Wide screens: the Prompt sits beside the writing page. */
+@media (min-width: 1024px) {
+    .night[data-stage="write"]:not(.is-compact) { max-width: 1040px; }
+    .night[data-stage="write"]:not(.is-compact) .stage[data-stage="write"] {
+        display: grid;
+        grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr);
+        column-gap: var(--sp-6);
+        row-gap: var(--sp-4);
+        align-items: start;
+    }
+    .night[data-stage="write"]:not(.is-compact) .stage[data-stage="write"] > * { grid-column: 2; }
+    .night[data-stage="write"]:not(.is-compact) .stage[data-stage="write"] > .prompt-peek {
+        grid-column: 1;
+        grid-row: 1 / span 6;
+        position: sticky;
+        top: 16px;
+        padding: 18px 20px;
+    }
+    .night[data-stage="write"]:not(.is-compact) .prompt-peek > summary { pointer-events: none; list-style: none; }
+    .night[data-stage="write"]:not(.is-compact) .prompt-peek > summary::-webkit-details-marker { display: none; }
+    .night[data-stage="write"]:not(.is-compact) .prompt-peek p { font-size: 1.2em; line-height: 1.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .night.is-dawn::after, .tour-tip { animation: none; }
+}

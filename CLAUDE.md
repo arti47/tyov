@@ -69,7 +69,7 @@ npm run lint      # ESLint (needs `npm install` first; no network = skip)
 | `assets/dice.wav`, `assets/page.wav` | Bundled, precached sound effects (dice roll, page turn) — local so audio works offline. Generated lightweight WAVs. |
 | `assets/icon-192.png`, `assets/icon-512.png`, `assets/icon-180.png` | PWA / home-screen icons (192 & 512 for the manifest incl. `maskable`; 180 for the iOS `apple-touch-icon`). Generated PNGs (blood-red field, dark moon, white fangs). |
 | `manifest.json` | PWA manifest: name/short_name/description, `start_url`/`scope`/`id` (all relative so it works under a Pages subpath), `standalone`, colors, and PNG icons (`any` + `maskable`). Drives "Add to Home Screen". |
-| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v36`. Precaches assets (incl. `assets/*.wav`, `assets/icon-*.png` and `assets/fonts/*.woff2`), deletes old caches on activate, network-first for navigations + same-origin html/js/css/json (avoids version skew), stale-while-revalidate for other assets. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
+| `sw.js` | Service worker. `CACHE_NAME` = `vampire-chronicle-v37`. Precaches assets (incl. `assets/*.wav`, `assets/icon-*.png` and `assets/fonts/*.woff2`), deletes old caches on activate, network-first for navigations + same-origin html/js/css/json (avoids version skew), stale-while-revalidate for other assets. **Does not `skipWaiting()` on install** — it waits so the page can offer "tap to update", and calls `skipWaiting()` only on a `SKIP_WAITING` message. |
 | `.github/workflows/pages.yml` | GitHub Actions workflow: on push to `main`, runs `npm test` then deploys the repo root to **GitHub Pages**. Requires Pages Source = "GitHub Actions" (one-time repo setting). |
 | `.github/workflows/ci.yml` | CI workflow: on push to `main` and on PRs, runs `npm ci` → `npm test` → `npm run lint`. |
 | `tests/logic.test.js` | Unit tests for `logic.js` (escaping, tiers, prompt text, markdown, dice, `resolveTraitAction`, `rollMeaning`, `pickSuggestions`, `fillTemplate`, `traitForms`, `candleStates`, `trackMarks`, `monogram`, `promptActions`, the turn stages (`nextStage`/`prevStage`/`normTurn`), and state normalization: `normalizeState`/`normMem`/`defaultState`). |
@@ -102,7 +102,7 @@ A single source of truth, serialized to `localStorage` under the **active save s
   renders as an **auto-growing `<textarea>`** so a whole paragraph stays visible
   without scrolling (see `.autogrow` below).
 - `settings` (`isLightMode`, `fontSize`, `hideGraveyard`, `muteSound`,
-  `multiplayer`). **`reverseTime` is intentionally NOT persisted** — it is a
+  `multiplayer`, `compactNight`). **`reverseTime` is intentionally NOT persisted** — it is a
   one-shot cleared after each roll.
 - `display` (`promptResult`, `rollDetails`, `promptText`).
 
@@ -193,6 +193,21 @@ player only ever sees one decision. Three tabs: **Night**, **Vampire**,
 - **Help** — `initHelpDots` puts an ⓘ before each `.section-help`, collapsed by
   default. The welcome is 4 swipe cards (`welcomeNext`/`syncWelcomeDots`); the
   wizard asks one plain question per step.
+- **Night extras** — *step tips*: `#tourTip` above the stages shows one tip
+  per beat (`TOUR_TIPS`, `renderTour`, `dismissTour`), each once per device
+  (`localStorage.tyov_tour_seen`, outside the save); the roll tip only before
+  the first roll; `⋯ → Show step tips again` = `replayTour`. *Swipe*
+  (`initNightSwipe`, phones): left = `nextBeat`, right = previous beat via
+  `TYOV.prevStage` + `gotoBeat`; never rolls, never leaves Keep (a Memory must
+  be chosen), ignored on fields/shelves/sheets and in compact mode. *Dawn*:
+  `finishNight` → `playDawn` adds `.is-dawn` (a 1.9 s sunrise glow; skipped
+  under reduced motion). *Compact night* (Settings → “Whole night on one
+  page”, `settings.compactNight`, `isCompact`/`setCompactNight`): after a roll
+  every beat shows at once (`.night.is-compact`, beats/Continue/peek hidden,
+  `no-actions` hides Do); the Roll still appears only after Keep, so the
+  Memory step can't be skipped; `nightInput` refreshes the Keep shelf as you
+  type. *Wide screens* (≥1024px): the write beat is a two-column grid with the
+  Prompt (`.prompt-peek`, forced open by `renderPeek`) sticky on the left.
 - `showTab('diary')` is kept for old calls: it opens Vampire and scrolls to
   `#diarySection`.
 
@@ -455,7 +470,7 @@ under that subpath. Every asset the SW precaches must stay same-origin/relative.
 ### Bumping the service worker cache
 If you change any cached asset (`index.html`, `styles.css`, `logic.js`,
 `app.js`, `data.js`, `manifest.json`, `assets/*.wav`, `assets/icon-*.png`), bump
-`CACHE_NAME` in `sw.js` (currently `-v36`). Bumping it is also what makes the
+`CACHE_NAME` in `sw.js` (currently `-v37`). Bumping it is also what makes the
 deployed `sw.js` byte-different, which is what triggers the tap-to-update toast
 for existing installs. The SW also network-first-loads navigations, so updates
 generally land on next load even without a bump — but bump for certainty, and
@@ -503,7 +518,9 @@ step cards; filing the answer into a Memory is now its own beat with the
 5-Memory forced-forgetting built in; traits and Memories became cards/vessels
 with edit sheets; header reduced to name + `⋯` menu; rare rules moved to
 Keeper’s tools; help text behind ⓘ; 4-card welcome; one-question wizard.
-The Keep beat has no skip — every answer must become an Experience.
+The Keep beat has no skip — every answer must become an Experience. Then:
+step tips, swipe between beats, dawn animation, compact one-page night,
+and a side-by-side Prompt + page on desktop.
 Rules unchanged: setup still required, substitution ladder, Diary cap and
 loss, game over 72–80, nothing automatic.
 
