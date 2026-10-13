@@ -17,6 +17,13 @@ Guidance for AI agents (and humans) working in this repository.
 
 ---
 
+## Owner's working preferences (for AI agents)
+
+- Report progress only as percentages (5%, 10% … 100%); don't narrate each step.
+- Keep replies technical and brief; ask questions one at a time as menu options.
+- Always keep the app faithful to the *Thousand Year Old Vampire* rules.
+- Always update this file and merge to `main` after each change.
+
 ## What this project is
 
 **Thousand Year Old Vampire — Companion** ("Vampire Chronicle") is a
