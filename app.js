@@ -209,8 +209,22 @@ function showTab(name) {
     updatePromptBanner();
     // Same-tab calls (load, undo, re-render) leave the scroll alone.
     if (switching) setPageScroll(tabScroll[name] || 0);
-    if (toDiary) { var ds = el('diarySection'); if (ds) ds.scrollIntoView({ block: 'start' }); }
+    if (toDiary) openRoom('diary');
+    if (name === 'character') renderPortrait();
     persist();
+}
+
+// Esc inside a Vampire room returns to the portrait (sheets/menus close first).
+document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' || state.activeTab !== 'character' || !vRoom) return;
+    if (anySheetOpen() || document.querySelector('.modal-overlay.show, .trait-picker')) return;
+    openRoom(null);
+});
+
+// Bottom-nav tap: tapping Vampire while already there goes back to the portrait.
+function navTo(name) {
+    if (name === 'character' && state.activeTab === 'character' && vRoom) { openRoom(null); return; }
+    showTab(name);
 }
 
 // Slim banner (shown on non-Play tabs) with the current prompt so you can act on
@@ -278,74 +292,177 @@ function toggleGraveyard() {
 // SETUP WIZARD
 // ==========================================
 
-function nextStep(stepNum) {
-    var steps = document.querySelectorAll('.wizard-step');
-    for (var i = 0; i < steps.length; i++) steps[i].style.display = 'none';
-    var step = el('step' + stepNum);
-    step.style.display = 'block';
-    fillTraitRecaps(); // keep the "traits so far" reference current on every step
-    autoGrowAll(step);  // textareas measure 0 while hidden
-    var first = step.querySelector('input, textarea'); // move focus into the step (B10)
-    if (first) first.focus();
+// The wizard is a deck of cards, one question each (17 + a review card).
+// Field ids (setupName, setupSkill1…) are unchanged, so finishSetup,
+// surpriseMe and currentSetupTraits work on them as before. The order is the
+// rulebook's: mortal, Skills, Resources, mortals, four Memories, then the
+// immortal who turned you, its Mark, and the Memory of the turning.
+var wizIndex = 0;
+var WIZ_CHAPTERS = [['life', 'i-quill'], ['skills', 'i-skill'], ['resources', 'i-resource'],
+    ['people', 'i-people'], ['memories', 'i-flame'], ['turning', 'i-moon'], ['review', 'i-check']];
+
+function wizCards() { return document.querySelectorAll('#wizCards .wiz-card'); }
+function wizFields(card) { return card ? card.querySelectorAll('input, textarea') : []; }
+
+function wizGoto(i) {
+    var cards = wizCards();
+    wizIndex = Math.max(0, Math.min(cards.length - 1, i));
+    var card = cards[wizIndex];
+    for (var k = 0; k < cards.length; k++) cards[k].hidden = k !== wizIndex;
+    var isReview = card.classList.contains('wiz-review');
+    setText('wizCount', isReview ? '' : (wizIndex + 1) + ' of ' + (cards.length - 1));
+    setText('wizErr', '');
+    var ch = card.getAttribute('data-ch');
+    var ci = WIZ_CHAPTERS.map(function (c) { return c[0]; }).indexOf(ch);
+    el('wizChapters').innerHTML = WIZ_CHAPTERS.map(function (c, j) {
+        return '<li class="' + (j < ci ? 'done' : j === ci ? 'now' : '') + '">' + ico(c[1]) + '</li>';
+    }).join('');
+    el('wizBack').style.visibility = wizIndex === 0 ? 'hidden' : 'visible';
+    el('wizNext').textContent = isReview ? 'Begin' : 'Next';
+    el('wizNext').classList.toggle('btn-success', isReview);
+    el('wizSurprise').hidden = wizIndex !== 0;
+    if (isReview) renderWizReview();
+    else if (!card.querySelector('.wiz-sugs').innerHTML) wizSuggest(card);
+    autoGrowAll(card);
+    // On touch screens the keyboard would hide the suggestion cards.
+    var fine = window.matchMedia && window.matchMedia('(pointer: fine)').matches;
+    var f = wizFields(card)[0];
+    if (f && fine) f.focus();
 }
 
-// Populate the read-only "your traits so far" panels shown on the Memory steps,
-// so you can see the Skills/Resources/Characters you entered earlier while you
-// write Experiences that combine them.
-function recapLine(label, ids) {
-    var vals = ids.map(function (id) { return val(id).trim(); }).filter(Boolean);
-    return '<div><em>' + label + ':</em> ' +
-        (vals.length ? vals.map(escapeHtml).join(', ') : '<span class="recap-empty">— none yet —</span>') +
-        '</div>';
-}
-function fillTraitRecaps() {
-    var html = '<strong>Your traits so far</strong>' +
-        recapLine('Skills', ['setupSkill1', 'setupSkill2', 'setupSkill3']) +
-        recapLine('Resources', ['setupRes1', 'setupRes2', 'setupRes3']) +
-        recapLine('Characters', ['setupChar1', 'setupChar2', 'setupChar3']);
-    var nodes = document.querySelectorAll('.trait-recap');
-    for (var i = 0; i < nodes.length; i++) nodes[i].innerHTML = html;
+function wizValid(card) {
+    var f = wizFields(card);
+    for (var i = 0; i < f.length; i++) if (!f[i].value.trim()) return f[i];
+    return null;
 }
 
-function setStepError(fromStep, msg) {
-    var e = el('err' + fromStep);
-    if (e) e.textContent = msg || '';
+function wizNext() {
+    var cards = wizCards(), card = cards[wizIndex];
+    if (card.classList.contains('wiz-review')) { finishSetup(); return; }
+    var miss = wizValid(card);
+    if (miss) {
+        setText('wizErr', miss.tagName === 'TEXTAREA' ? 'Write one sentence — or tap an idea.' : 'Fill this in — or tap an idea.');
+        miss.focus();
+        return;
+    }
+    wizGoto(wizIndex + 1);
 }
+function wizBack() { wizGoto(wizIndex - 1); }
 
-// Required-field validation for the faithful creation sequence. Every field a
-// field the rules seed on the character record must be present before Begin.
-function validateStep(stepNum) {
-    var missing = [];
-    function need(id, label) { if (!val(id).trim()) missing.push(label); }
-    if (stepNum === 1) { need('setupName', 'your mortal name'); }
-    if (stepNum === 2) { ['setupSkill1', 'setupSkill2', 'setupSkill3'].forEach(function (id, i) { need(id, 'Skill ' + (i + 1)); }); }
-    if (stepNum === 3) { ['setupRes1', 'setupRes2', 'setupRes3'].forEach(function (id, i) { need(id, 'Resource ' + (i + 1)); }); }
-    if (stepNum === 4) { ['setupChar1', 'setupChar2', 'setupChar3'].forEach(function (id, i) { need(id, 'Character ' + (i + 1)); }); }
-    if (stepNum === 5) { need('setupMemTheme1', 'Memory 1 theme'); need('setupMemExp1', 'Memory 1 Experience'); }
-    if (stepNum === 6) {
-        need('setupMemTheme2', 'Memory 2 theme'); need('setupMemExp2', 'Experience 2');
-        need('setupMemTheme3', 'Memory 3 theme'); need('setupMemExp3', 'Experience 3');
+// Every card must be filled before Begin; jump to the first that isn't.
+function wizValidateAll() {
+    var cards = wizCards();
+    for (var i = 0; i < cards.length; i++) {
+        if (wizValid(cards[i])) {
+            wizGoto(i);
+            setText('wizErr', 'This one still needs an answer.');
+            return false;
+        }
     }
-    if (stepNum === 7) { need('setupMemTheme4', 'Memory 4 theme'); need('setupMemExp4', 'Experience 4'); }
-    if (stepNum === 8) {
-        need('setupSire', 'the immortal who turned you'); need('setupMark', 'your Mark');
-        need('setupMemTheme5', 'Memory 5 theme'); need('setupMemExp5', 'the transformation Experience');
-    }
-    if (missing.length) {
-        setStepError(stepNum, 'Please fill in: ' + missing.join(', ') + '.');
-        return false;
-    }
-    setStepError(stepNum, '');
     return true;
 }
 
-// Advance from `fromStep`, validating it first.
-// `skipValidate` is used by "Surprise me", which fills every step at once and
-// therefore has nothing to validate on the way past.
-function gotoStep(nextStepNum, skipValidate) {
-    var fromStep = nextStepNum - 1;
-    if (!skipValidate && !validateStep(fromStep)) return;
-    nextStep(nextStepNum);
+// Ideas for the current card: three tappable suggestion cards (traits) or two
+// sentence starters + two titles (Memories), drawn from one setting pack.
+function wizSuggest(card) {
+    var box = card.querySelector('.wiz-sugs');
+    var pack = activeSettingPack();
+    if (!box || !pack) return;
+    var sug = card.getAttribute('data-sug'), tpl = card.getAttribute('data-tpl');
+    var fields = wizFields(card);
+    var html = '';
+    if (sug) {
+        var field = fields[0];
+        var used = Array.prototype.map.call(document.querySelectorAll('#wizCards input'), function (x) { return x.value.trim(); });
+        var pool = sug === 'sire' ? pack.names : pack[sug];
+        var picks = TYOV.pickSuggestions((pool || []).filter(function (e) {
+            return used.indexOf(traitText(e)) === -1;
+        }), 3).map(traitText);
+        if (sug === 'sire') picks = picks.map(function (n) { return n + ', an ancient immortal'; });
+        html = picks.map(function (t) {
+            return '<button type="button" class="sug-card" data-text="' + escapeHtml(t) + '" onclick="wizPick(this, \'' + field.id + '\', true)">' + escapeHtml(t) + '</button>';
+        }).join('');
+    } else if (tpl && typeof memoryTemplates !== 'undefined') {
+        var theme = fields[0], exp = fields[1];
+        var traits = currentSetupTraits(tpl === 'turning');
+        var starters = TYOV.pickSuggestions(memoryTemplates[tpl], 2).map(function (t) { return TYOV.fillTemplate(t, traits); });
+        var titles = TYOV.pickSuggestions((memoryTemplates.themes && memoryTemplates.themes[tpl]) || [], 2);
+        html = starters.map(function (t) {
+            return '<button type="button" class="sug-card sug-line" data-text="' + escapeHtml(t) + '" onclick="wizPick(this, \'' + exp.id + '\')">' + escapeHtml(t) + '</button>';
+        }).join('') +
+        '<div class="sug-titles">' + titles.map(function (t) {
+            return '<button type="button" class="chip-btn" data-text="' + escapeHtml(t) + '" onclick="wizPick(this, \'' + theme.id + '\')">' + escapeHtml(t) + '</button>';
+        }).join('') + '</div>';
+        if (tpl === 'combine') {
+            var mine = [].concat(traits.skills, traits.resources).map(function (t) { return TYOV.traitForms(t).short; })
+                .concat(traits.characters.map(function (t) { return TYOV.traitForms(t).name; }));
+            html += '<details class="sug-weave"><summary>Weave in one of your traits</summary><div>' + mine.map(function (t) {
+                return '<button type="button" class="weave-chip" data-text="' + escapeHtml(t) + '" onclick="wizWeave(this, \'' + exp.id + '\')">' + escapeHtml(t) + '</button>';
+            }).join('') + '</div></details>';
+        }
+    }
+    box.innerHTML = html + '<button type="button" class="link-btn sug-more" onclick="wizSuggest(this.closest(\'.wiz-card\'))">' +
+        ico('i-shuffle') + ' Other ideas</button>';
+}
+
+// Tap an idea: fill the field (a single-answer card then moves on by itself).
+function wizPick(btn, fieldId, advance) {
+    var f = el(fieldId);
+    if (!f) return;
+    f.value = btn.getAttribute('data-text') || '';
+    f.dispatchEvent(new Event('input', { bubbles: true }));
+    autoGrow(f);
+    var row = btn.parentNode.querySelectorAll('.sug-card, .chip-btn');
+    for (var i = 0; i < row.length; i++) row[i].classList.toggle('is-picked', row[i] === btn);
+    if (advance) setTimeout(function () { if (el(fieldId).value) wizNext(); }, 280);
+}
+
+// Insert a trait name into the Experience at the caret.
+function wizWeave(btn, fieldId) {
+    var f = el(fieldId);
+    if (!f) return;
+    var t = btn.getAttribute('data-text') || '';
+    var v = f.value;
+    insertAtCaret(f, (v && !/\s$/.test(v) ? ' ' : '') + t);
+}
+
+function renderWizReview() {
+    function v(id) { return escapeHtml(val(id).trim()); }
+    function row(icon, label, ids, at) {
+        return '<button type="button" class="rv-row" onclick="wizGoto(' + at + ')">' + ico(icon) +
+            '<span class="rv-label">' + label + '</span><span class="rv-vals">' +
+            ids.map(function (id) { return '<span class="rv-chip">' + (v(id) || '—') + '</span>'; }).join('') + '</span></button>';
+    }
+    var mems = [1, 2, 3, 4, 5].map(function (n) {
+        var at = n < 5 ? 9 + n : 16;
+        return '<button type="button" class="rv-mem" onclick="wizGoto(' + at + ')"><b>' + (v('setupMemTheme' + n) || 'Untitled') + '</b>' +
+            '<span>' + (v('setupMemExp' + n) || '…') + '</span></button>';
+    }).join('');
+    el('wizReview').innerHTML =
+        '<button type="button" class="rv-name" onclick="wizGoto(0)"><span class="v-sigil rv-sigil">' +
+            escapeHtml(TYOV.monogram(val('setupName') || '?').initials || '?') + '</span>' + (v('setupName') || 'Unnamed') + '</button>' +
+        row('i-skill', 'Skills', ['setupSkill1', 'setupSkill2', 'setupSkill3'], 1) +
+        row('i-resource', 'Resources', ['setupRes1', 'setupRes2', 'setupRes3'], 4) +
+        row('i-people', 'Mortals', ['setupChar1', 'setupChar2', 'setupChar3'], 7) +
+        row('i-moon', 'Your maker', ['setupSire'], 14) +
+        row('i-mark', 'Mark', ['setupMark'], 15) +
+        '<div class="rv-mems">' + ico('i-flame') + '<span class="rv-label">Memories</span></div>' + mems;
+}
+
+// Enter in a one-line field moves to the next card.
+document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' || !e.target.closest) return;
+    var card = e.target.closest('#wizCards .wiz-card');
+    if (card && e.target.tagName === 'INPUT') {
+        e.preventDefault();
+        var f = wizFields(card), i = Array.prototype.indexOf.call(f, e.target);
+        if (i < f.length - 1) f[i + 1].focus(); else wizNext();
+    }
+});
+
+// Inline sprite icon for template-literal HTML.
+function ico(id, cls) {
+    return '<svg class="ico' + (cls ? ' ' + cls : '') + '" aria-hidden="true"><use href="#' + id + '"/></svg>';
 }
 
 function newMemory(theme, exp1) {
@@ -353,7 +470,7 @@ function newMemory(theme, exp1) {
 }
 
 function finishSetup() {
-    if (!validateStep(8)) return;
+    if (!wizValidateAll()) return;
 
     state.currentName = val('setupName');
 
@@ -394,7 +511,9 @@ function showWizard() {
     resetSettingPack(); // a fresh vampire gets a fresh setting
     closeOverlay('welcomeOverlay');
     el('setupWizard').style.display = 'flex';
-    nextStep(1);
+    var sugs = document.querySelectorAll('#wizCards .wiz-sugs');
+    for (var i = 0; i < sugs.length; i++) sugs[i].innerHTML = '';
+    wizGoto(0);
 }
 
 // ==========================================
@@ -788,11 +907,13 @@ function importSaveData(e) {
 // The Journal tab is laid out as a book page: Prompt rubrics, a drop cap on
 // each entry, and ornamental rules between sections. (Text content is the
 // same as before; only the markup/presentation changed.)
-var ORNAMENT = '<div class="ornament" aria-hidden="true"><span></span></div>';
 function artHtml(id, cls) {
     return '<svg class="art ' + cls + '" aria-hidden="true"><use href="#' + id + '"/></svg>';
 }
 
+// The Chronicle is a timeline: one wax seal per night (Prompt + tier) on a
+// gold thread, each showing its first lines; tap to read the whole entry.
+// Tonight's Prompt sits at the end as an open seal until it is kept.
 function renderJournalTab() {
     var box = el('journalTabContent');
     if (!box) return;
@@ -804,23 +925,34 @@ function renderJournalTab() {
             '<p class="empty-note">Your chronicle will appear here as you answer prompts.</p></div>';
         return;
     }
-    var html = '<p class="chronicle-title">The Chronicle of ' + escapeHtml(name) + '</p>' + ORNAMENT;
+    var html = '<p class="chronicle-title">The Chronicle of ' + escapeHtml(name) + '</p>';
     var boxed = val('boxedExpText');
-    if (boxed.trim()) {
-        html += '<blockquote class="chronicle-boxed">' +
-                '<i>"A serendipitous moment that never fades..."</i><br><br>' + parseMarkdown(boxed) + '</blockquote>';
+    if (boxed.trim()) html += '<blockquote class="chronicle-boxed">' + parseMarkdown(boxed) + '</blockquote>';
+    html += '<ol class="timeline">';
+    state.journalHistory.forEach(function (entry, i) {
+        var tag = String(entry.prompt), m = tag.match(/^(\d+)([a-c]?)/);
+        var num = m ? m[1] : tag, tier = m ? m[2] : '';
+        var plain = String(entry.text || '').replace(/\s+/g, ' ').trim();
+        var short = plain.length > 130 ? plain.slice(0, 130).replace(/\s\S*$/, '') + '…' : plain;
+        html += '<li class="tl-node"><details>' +
+            '<summary><span class="tl-seal" aria-label="Prompt ' + escapeHtml(tag) + '">' + escapeHtml(num) +
+                (tier ? '<i>' + escapeHtml(tier) + '</i>' : '') + '</span>' +
+                '<span class="tl-night">Night ' + (i + 1) + '</span>' +
+                '<span class="tl-excerpt">' + escapeHtml(short) + '</span></summary>' +
+            '<div class="tl-full">' + parseMarkdown(entry.text) + '</div></details></li>';
+    });
+    if (state.currentPrompt > 0 && !state.gameOver && state.turn && state.turn.stage !== 'roll') {
+        html += '<li class="tl-node is-tonight"><button type="button" class="tl-tonight" onclick="showTab(\'play\')">' +
+            '<span class="tl-seal">' + state.currentPrompt + '</span><span class="tl-night">Tonight</span>' +
+            '<span class="tl-excerpt">Still being written…</span></button></li>';
+    } else if (state.gameOver) {
+        html += '<li class="tl-node is-end"><span class="tl-seal">' + ico('i-skull') + '</span><span class="tl-night">The end</span></li>';
     }
-    if (state.journalHistory.length > 0) {
-        html += '<h3>Narrative Journal</h3><div class="chronicle-entries">';
-        state.journalHistory.forEach(function (entry) {
-            html += '<section class="chronicle-entry"><div class="rubric">[Prompt ' + escapeHtml(String(entry.prompt)) + ']</div>' +
-                    '<div class="entry-text">' + parseMarkdown(entry.text) + '</div></section>';
-        });
-        html += '</div>' + ORNAMENT;
-    }
-    html += '<h3>Active Memories</h3>' + renderMemoriesPreview(state.memories, false);
-    html += ORNAMENT;
-    html += '<h3>The Diary / Lost Storage</h3>' + renderMemoriesPreview(state.diary, true);
+    html += '</ol>';
+    var mems = state.memories.filter(function (m) { return m.theme && !m.lost; }).length;
+    var diary = state.diary.filter(function (m) { return m.theme && !m.lost; }).length;
+    if (mems) html += '<details class="chron-more"><summary>' + ico('i-flame') + 'Memories <span>' + mems + '</span></summary>' + renderMemoriesPreview(state.memories, false) + '</details>';
+    if (diary) html += '<details class="chron-more"><summary>' + ico('i-diary') + 'Diary <span>' + diary + '</span></summary>' + renderMemoriesPreview(state.diary, true) + '</details>';
     box.innerHTML = html;
 }
 
@@ -951,6 +1083,9 @@ function downloadFile(text, filename, mime) {
 function printChronicle() {
     showTab('journal');
     renderJournalTab();
+    // Closed <details> never print their content: open every entry first.
+    var d = document.querySelectorAll('#journalTabContent details');
+    for (var i = 0; i < d.length; i++) d[i].open = true;
     setTimeout(function () { window.print(); }, 60);
 }
 
@@ -1005,6 +1140,7 @@ function syncNameDisplay() {
     var v = input.value.trim();
     text.textContent = v || input.getAttribute('placeholder') || '';
     text.classList.toggle('is-empty', !v);
+    renderPortraitSigil();
 }
 
 function editName(open) {
@@ -1970,10 +2106,10 @@ function memoryBlockHtml(m, name) {
     var expIds = m.experiences.map(function (x, i) { return 'exp-' + m.id + '-' + i; }).join(',');
     var sparkBtn = inDiary ? ''
         : '<button type="button" class="btn-small spark-btn" onclick="sparkInto(\'spark-' + m.id +
-          '\',\'' + expIds + '\')">🎲 Spark</button>';
+          '\',\'' + expIds + '\')">' + ico('i-die') + 'Spark</button>';
     var sparkDiv = inDiary ? '' : '<div class="meaning-spark" id="spark-' + m.id + '"></div>';
-    var states = [['normal', 'Normal'], ['starred', '⭐ Starred'], ['hazy', '🌫️ Hazy'],
-                  ['vast', '🌌 Vast'], ['primal', '🐾 Primal']];
+    var states = [['normal', 'Normal'], ['starred', ico('i-star') + 'Starred'], ['hazy', ico('i-mist') + 'Hazy'],
+                  ['vast', ico('i-vast') + 'Vast'], ['primal', ico('i-paw') + 'Primal']];
     var chips = states.map(function (st) {
         var on = m.memState === st[0];
         return '<button type="button" role="radio" aria-checked="' + on + '" class="seal-chip seal-' + st[0] +
@@ -1982,11 +2118,11 @@ function memoryBlockHtml(m, name) {
     }).join('');
     // Writing-constraint reminders for the states that impose them (A11).
     var hint = '';
-    if (m.memState === 'hazy') hint = '<div class="mem-hint">🌫️ Hazy: only verbs &amp; adjectives may be written here.</div>';
-    else if (m.memState === 'primal') hint = '<div class="mem-hint">🐾 Primal: write only the “how I felt” clause, not “what happened”.</div>';
-    else if (m.memState === 'vast') hint = '<div class="mem-hint">🌌 Vast: holds up to five Experiences.</div>';
-    else if (m.memState === 'starred') hint = '<div class="mem-hint">⭐ Starred: fixed forever and does not count toward your Memory limit.</div>';
-    if (inDiary) hint += '<div class="mem-hint">📔 In the Diary: no new Experiences. Change its words only when a Prompt tells you to.</div>';
+    if (m.memState === 'hazy') hint = '<div class="mem-hint">' + ico('i-mist') + 'Hazy: only verbs &amp; adjectives may be written here.</div>';
+    else if (m.memState === 'primal') hint = '<div class="mem-hint">' + ico('i-paw') + 'Primal: write only the “how I felt” clause, not “what happened”.</div>';
+    else if (m.memState === 'vast') hint = '<div class="mem-hint">' + ico('i-vast') + 'Vast: holds up to five Experiences.</div>';
+    else if (m.memState === 'starred') hint = '<div class="mem-hint">' + ico('i-star') + 'Starred: fixed forever and does not count toward your Memory limit.</div>';
+    if (inDiary) hint += '<div class="mem-hint">' + ico('i-diary') + 'In the Diary: no new Experiences. Change its words only when a Prompt tells you to.</div>';
     var migrateBtn = name === 'memories'
         ? '<button type="button" role="menuitem" class="mem-menu-item" onclick="closeMemMenus(); migrateToDiary(\'' + m.id + '\')">Move to Diary</button>'
         : '';
@@ -2035,13 +2171,15 @@ function updateMemoryCount() {
     var count = state.memories.filter(function (m) {
         return m.memState !== 'starred' && !m.lost;
     }).length;
-    setText('memoryCount', '(' + count + '/' + state.maxMemories + ' Active Slots)');
+    setText('memoryCount', count + ' of ' + state.maxMemories + ' held');
     renderCandles();
+    renderPortrait();
 }
 
 function updateDiaryCount() {
     var count = state.diary.filter(function (m) { return !m.lost; }).length;
-    setText('diaryCount', '(' + count + '/' + state.maxDiary + ' Slots)');
+    setText('diaryCount', count + ' of ' + state.maxDiary + ' kept');
+    renderPortrait();
 }
 
 // At the Memory cap: name the choice and take the player straight to it.
@@ -2087,8 +2225,8 @@ function loseMemorySlot() {
 // ==========================================
 
 function renderNameHistory() {
-    setText('nameHistory', 'Forgotten Names: ' +
-        (state.namesHistory.length ? state.namesHistory.join(' ➔ ') : 'None yet.'));
+    // Only worth a line once there is something to show.
+    setText('nameHistory', state.namesHistory.length ? 'Once called ' + state.namesHistory.join(' · ') : '');
 }
 
 function renderRollLog() {
@@ -2279,18 +2417,6 @@ function sparkInto(id, fieldIds) {
     target.innerHTML = chipRowHtml('Spark:', chips, id);
 }
 
-// Concrete ready-to-use examples for setup steps 1–4 (names / skills /
-// resources / characters). Tapping one drops it into the first empty field of
-// that step. Purely a "stuck for ideas" aid, like the Meaning Oracle.
-function suggestInto(kind, containerId, fieldIds) {
-    var target = el(containerId);
-    var pack = activeSettingPack();
-    if (!target || !pack) return;
-    var picks = TYOV.pickSuggestions(pack[kind], 3).map(traitText);
-    var chips = picks.map(function (s) { return chipHtml(s, fieldIds); }).join(' ');
-    target.innerHTML = chipRowHtml('Try:', chips, containerId);
-}
-
 // --- Onboarding & help ---------------------------------------------------
 // Most players arrive without ever having read the rulebook, so the app has to
 // teach the game itself: a first-run explainer, a permanent glossary, and a
@@ -2337,6 +2463,7 @@ function openWelcome() {
     openOverlay('welcomeOverlay');
     var t = el('welcomeTrack');
     if (t) t.scrollLeft = 0;
+    welcomeGoal = null;
     syncWelcomeDots();
 }
 
@@ -2742,25 +2869,6 @@ function packEntryFor(text, kind) {
     return text;
 }
 
-// Sentence-starter suggestions for the Memory steps: a template from
-// `memoryTemplates[kind]` with the player's own traits substituted in
-// (TYOV.fillTemplate), so the chip inserts usable prose rather than one word.
-// `themeFieldId` (optional) additionally offers a Memory Theme chip.
-function templateInto(kind, containerId, fieldIds, themeFieldId) {
-    var target = el(containerId);
-    if (!target || typeof memoryTemplates === 'undefined') return;
-    var traits = currentSetupTraits();
-    var picks = TYOV.pickSuggestions(memoryTemplates[kind], 2).map(function (t) {
-        return TYOV.fillTemplate(t, traits);
-    });
-    var chips = picks.map(function (s) { return chipHtml(s, fieldIds); }).join(' ');
-    if (themeFieldId) {
-        var theme = TYOV.pickSuggestions(memoryTemplates.themes, 1)[0];
-        if (theme) chips += ' ' + chipHtml(theme, themeFieldId, 'Theme: ' + escapeHtml(theme));
-    }
-    target.innerHTML = chipRowHtml('Try:', chips, containerId);
-}
-
 // The traits the player has entered so far in the wizard, for template
 // substitution. Falls back to saved state once the game is under way.
 // The traits the player has entered so far, for template substitution. The
@@ -2878,7 +2986,7 @@ function surpriseMe() {
         TYOV.pickSuggestions(memoryTemplates.turning, 1)[0],
         rotateTraits(turningTraits, 1), first));
 
-    gotoStep(8, true);
+    wizGoto(wizCards().length - 1);
     toast('Rolled a vampire from ' + pack.label + ' — review and edit, then Begin.', 'info');
 }
 
@@ -3100,6 +3208,8 @@ function renderTraitCards(list) {
     }
     renderPlayRecap(); // Play-tab recap mirrors every trait list
     if (editCtx && editCtx.type === 'trait' && editCtx.list === list) renderTraitSheet();
+    if (list === 'characters') renderConstellation();
+    renderPortrait();
 }
 
 function renderSkills() { renderTraitCards('skills'); }
@@ -3179,6 +3289,8 @@ function renderListCardsOnly(list) {
     var box = el(LIST_IDS[list]);
     if (box) box.innerHTML = state[list].map(function (e) { return traitCardHtml(list, e); }).join('');
     renderPlayRecap();
+    if (list === 'characters') renderConstellation();
+    renderPortrait();
 }
 
 function addAndEdit(list) {
@@ -3439,9 +3551,6 @@ function renderPeek() {
     var p = state.currentPrompt, v = state.promptVisits[p] || 1;
     setText('peekLabel', 'Prompt ' + p + getTier(Math.min(v, 3)));
     setText('peekText', state.display.promptText || '');
-    // Wide screens show the Prompt beside the page (CSS grid), always open.
-    var peek = document.querySelector('.prompt-peek');
-    if (peek && window.matchMedia && window.matchMedia('(min-width: 1024px)').matches) peek.open = true;
     autoGrow(el('promptJournal'));
 }
 function togglePeekVampire() {
@@ -3632,18 +3741,125 @@ function syncWelcomeDots() {
     var n = el('welcomeNext');
     if (n) n.textContent = i >= dots.length - 1 ? (welcomeAlreadySeen() ? 'Close' : 'Make my vampire') : 'Next';
 }
+// Quick taps during the smooth scroll would read a stale scrollLeft and land
+// on the same card twice, so remember where we're heading.
+var welcomeGoal = null, welcomeGoalTimer = null;
 function welcomeNext() {
     var t = el('welcomeTrack');
     var count = document.querySelectorAll('#welcomeDots span').length;
-    var i = welcomeIndex();
+    var i = welcomeGoal !== null ? welcomeGoal : welcomeIndex();
     if (i >= count - 1) {
         if (welcomeAlreadySeen()) closeOverlay('welcomeOverlay');
         else dismissWelcome();
         return;
     }
-    t.scrollTo({ left: (i + 1) * t.clientWidth, behavior: 'smooth' });
-    setTimeout(syncWelcomeDots, 350);
+    welcomeGoal = i + 1;
+    t.scrollTo({ left: welcomeGoal * t.clientWidth, behavior: 'smooth' });
+    clearTimeout(welcomeGoalTimer);
+    welcomeGoalTimer = setTimeout(function () { welcomeGoal = null; syncWelcomeDots(); }, 600);
+    var n = el('welcomeNext');
+    if (n && welcomeGoal >= count - 1) n.textContent = welcomeAlreadySeen() ? 'Close' : 'Make my vampire';
 }
+// --- Vampire portrait + rooms ----------------------------------------------
+// The Vampire tab opens on one screen: a wax seal, the Memory candles and six
+// tiles. A tile opens that group alone ("room"); ← or the Vampire tab returns.
+var vRoom = null;
+var ROOMS = {
+    memories:  { icon: 'i-flame',    label: 'Memories',  acts: ['memory'] },
+    diary:     { icon: 'i-diary',    label: 'Diary',     acts: [] },
+    skills:    { icon: 'i-skill',    label: 'Skills',    acts: ['check', 'loseSkill', 'newSkill'] },
+    resources: { icon: 'i-resource', label: 'Resources', acts: ['lose', 'newResource'] },
+    people:    { icon: 'i-people',   label: 'Characters',    acts: ['kill', 'newCharacter', 'allMortals'] },
+    marks:     { icon: 'i-mark',     label: 'Marks',     acts: ['mark', 'loseMark'] }
+};
+
+function openRoom(name) {
+    vRoom = ROOMS[name] ? name : null;
+    var home = el('vHome');
+    if (home) home.hidden = !!vRoom;
+    var rooms = document.querySelectorAll('.v-room');
+    for (var i = 0; i < rooms.length; i++) rooms[i].hidden = rooms[i].getAttribute('data-room') !== vRoom;
+    if (vRoom) {
+        var r = document.querySelector('.v-room[data-room="' + vRoom + '"]');
+        autoGrowAll(r);
+        if (vRoom === 'people') renderConstellation();
+    } else {
+        renderPortrait();
+    }
+    if (state.activeTab === 'character') setPageScroll(0);
+}
+
+function renderPortraitSigil() {
+    var box = el('vSigil');
+    if (!box) return;
+    var mono = TYOV.monogram(val('currentName') || state.currentName || '?');
+    box.textContent = mono.initials || '?';
+}
+
+// Pips under a tile: one per item, hollow when spent/lost.
+function pipsHtml(items, spent) {
+    if (!items.length) return '<span class="v-pips is-none">none</span>';
+    return '<span class="v-pips">' + items.slice(0, 10).map(function (x) {
+        return '<i class="' + (spent(x) ? 'off' : 'on') + '"></i>';
+    }).join('') + '</span>';
+}
+
+function renderPortrait() {
+    var tiles = el('vTiles');
+    if (!tiles) return;
+    renderPortraitSigil();
+    var nights = state.journalHistory.length;
+    setText('vSub', state.currentPrompt > 0
+        ? 'Prompt ' + state.currentPrompt + ' · ' + nights + (nights === 1 ? ' night' : ' nights') + ' remembered'
+        : 'Before the first night');
+    var asked = (state.currentPrompt > 0 && !state.gameOver) ? TYOV.promptActions(state.display.promptText) : [];
+    var mems = state.memories.filter(function (m) { return !m.lost; });
+    var held = mems.filter(function (m) { return m.memState !== 'starred'; }).length;
+    var alive = state.characters.filter(function (c) { return !c.lost; });
+    var data = {
+        memories:  { n: held + '/' + state.maxMemories, pips: '' }, // the candles above already show this
+        diary:     { n: state.diary.filter(function (m) { return !m.lost; }).length + '/' + state.maxDiary,
+                     pips: pipsHtml(state.diary, function (m) { return m.lost; }) },
+        skills:    { n: state.skills.filter(function (x) { return !x.lost && !x.checked; }).length,
+                     pips: pipsHtml(state.skills, function (x) { return x.lost || x.checked; }) },
+        resources: { n: state.resources.filter(function (x) { return !x.lost; }).length,
+                     pips: pipsHtml(state.resources, function (x) { return x.lost; }) },
+        people:    { n: alive.length, pips: pipsHtml(state.characters, function (x) { return x.lost; }) },
+        marks:     { n: state.marks.filter(function (x) { return !x.lost; }).length,
+                     pips: pipsHtml(state.marks, function (x) { return x.lost; }) }
+    };
+    tiles.innerHTML = Object.keys(ROOMS).map(function (k) {
+        var r = ROOMS[k], d = data[k];
+        var hot = r.acts.some(function (a) { return asked.indexOf(a) !== -1; });
+        return '<button type="button" class="v-tile' + (hot ? ' is-suggested' : '') + '" onclick="openRoom(\'' + k + '\')" ' +
+            'aria-label="' + r.label + ': ' + d.n + '">' +
+            ico(r.icon, 'v-tile-ico') + '<span class="v-tile-n">' + d.n + '</span>' +
+            '<span class="v-tile-label">' + r.label + '</span>' + d.pips + '</button>';
+    }).join('');
+}
+
+// People as a constellation around the vampire: living seals lit, the dead
+// dark; immortals in black wax. Tapping a seal opens that Character.
+function renderConstellation() {
+    var box = el('constellation');
+    if (!box) return;
+    var people = state.characters;
+    if (!people.length) { box.innerHTML = ''; return; }
+    var n = people.length, R = 40; // % of the box
+    var lines = '', seals = '';
+    people.forEach(function (c, i) {
+        var a = -Math.PI / 2 + (2 * Math.PI * i) / n;
+        var x = 50 + R * Math.cos(a), y = 50 + R * Math.sin(a);
+        lines += '<line x1="50" y1="50" x2="' + x.toFixed(1) + '" y2="' + y.toFixed(1) + '"' + (c.lost ? ' class="is-dead"' : '') + '/>';
+        seals += '<button type="button" class="star' + (c.lost ? ' is-dead' : '') + '" style="left:' + x.toFixed(1) + '%;top:' + y.toFixed(1) + '%" ' +
+            'onclick="openTraitSheet(\'characters\',\'' + c.id + '\')" aria-label="' + escapeHtml(c.text || 'Unnamed Character') + '">' +
+            sigilHtml(c) + '<span class="star-name">' + escapeHtml((c.text || '…').split(',')[0]) + '</span></button>';
+    });
+    var me = TYOV.monogram(val('currentName') || state.currentName || '?');
+    box.innerHTML = '<svg class="const-lines" viewBox="0 0 100 100" preserveAspectRatio="none">' + lines + '</svg>' +
+        '<div class="star star-me" style="left:50%;top:50%"><span class="sigil sigil-immortal">' + escapeHtml(me.initials || '?') + '</span></div>' + seals;
+}
+
 // --- Compact night: every beat on one page (Settings) ----------------------
 function isCompact() { return !!checked('optCompactNight'); }
 function setCompactNight() { renderNight(); persist(); }
@@ -3751,6 +3967,8 @@ function renderTour(stage) {
         (stage !== 'roll' || state.currentPrompt === 0);
     tip.hidden = !show;
     if (show) { setText('tourText', TOUR_TIPS[stage]); tip.setAttribute('data-for', stage); }
+    var coach = el('coachLine');
+    if (coach) coach.hidden = !!show;
 }
 function dismissTour() {
     var tip = el('tourTip');
@@ -3760,6 +3978,8 @@ function dismissTour() {
     if (seen.indexOf(stage) === -1) seen.push(stage);
     try { localStorage.setItem('tyov_tour_seen', JSON.stringify(seen)); } catch (e) { /* private mode */ }
     tip.hidden = true;
+    var coach = el('coachLine');
+    if (coach) coach.hidden = false;
 }
 function replayTour() {
     try { localStorage.removeItem('tyov_tour_seen'); } catch (e) { /* private mode */ }
