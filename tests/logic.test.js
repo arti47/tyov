@@ -351,3 +351,30 @@ test('promptActions: conditional "create a mortal" folds into the kill step', ()
     // An unconditional creation alongside a kill stays too.
     assert.ok(promptActions('Kill a Character. Create a new mortal Character who saw it.').includes('newCharacter'));
 });
+
+test('promptVignette picks a picture from the story, not the bookkeeping', () => {
+    const { promptVignette } = require('../logic.js');
+    assert.strictEqual(promptVignette('You develop a system for feeding. What is it? Create a Skill that reflects this.'), 'blood');
+    // "Kill a Character." is bookkeeping; the story is about hiding.
+    assert.strictEqual(promptVignette('Horrified at your new nature, you withdraw from society. Kill a Character.'), 'city');
+    assert.strictEqual(promptVignette('A ship carries you across the sea.'), 'sea');
+    assert.strictEqual(promptVignette('A great fire sweeps the quarter.'), 'fire');
+    assert.strictEqual(promptVignette('Your lover dies in your arms.'), 'grave');
+    assert.strictEqual(promptVignette('Check a Skill.'), 'moon');
+    assert.strictEqual(promptVignette(''), 'moon');
+});
+
+test('promptVignette covers every Prompt with a known picture', () => {
+    const { promptVignette } = require('../logic.js');
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'data.js'), 'utf8');
+    const db = new Function(src.replace(/\bconst /g, 'var ') + ';return promptDB;')();
+    const known = ['sea', 'fire', 'church', 'crown', 'coin', 'book', 'city', 'road', 'blood', 'grave', 'eye', 'mirror', 'bat', 'person', 'moon'];
+    const seen = new Set();
+    for (const k of Object.keys(db)) for (const tier of ['a', 'b', 'c']) {
+        if (!db[k][tier]) continue;
+        const v = promptVignette(db[k][tier]);
+        assert.ok(known.includes(v), k + tier + ' -> ' + v);
+        seen.add(v);
+    }
+    assert.ok(seen.size >= 8, 'variety: ' + [...seen].join(','));
+});

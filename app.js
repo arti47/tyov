@@ -1249,6 +1249,13 @@ function renderPromptSeal() {
     if (!seal) return;
     var p = state.currentPrompt;
     var visits = state.promptVisits[p] || 0;
+    // A small line-art picture of what tonight's Prompt is about.
+    var vig = el('promptVignette');
+    if (vig) {
+        vig.toggleAttribute('hidden', p < 1);
+        var use = vig.querySelector('use');
+        if (use && p >= 1) use.setAttribute('href', '#art-v-' + TYOV.promptVignette(state.display.promptText));
+    }
     if (p < 1) {
         seal.className = 'prompt-seal is-empty';
         seal.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-die"/></svg>';

@@ -343,6 +343,37 @@
         return out;
     }
 
+    // Pick a line-art vignette for a Prompt card from what the Prompt is about.
+    // Only the story sentences count: sentences that are pure bookkeeping
+    // ("Kill a Character.", "Create a Skill…") would otherwise make every card
+    // a grave or a book. Order = most specific first; 'moon' is the default.
+    var VIGNETTES = [
+        ['sea', /\b(sea|seas|ship|ships|ocean|boat|shore|voyage|sail|harbou?r|river|drown)\w*/i],
+        ['fire', /\b(fire|fires|burn\w*|flame\w*|ash|ashes|blaze)\b/i],
+        ['church', /\b(church\w*|god|gods|faith|priest\w*|holy|relig\w*|monaster\w*|temple|cult|pray\w*|saint)\b/i],
+        ['crown', /\b(power|king\w*|queen|lord\w*|throne|empire|army|armies|war|wars|noble\w*|rule[rs]?)\b/i],
+        ['coin', /\b(wealth\w*|money|gold|coin\w*|trade|treasure|valuable|antique|fortune|rich\w*|debt)\b/i],
+        ['book', /\b(book\w*|diary|letter\w*|writ\w*|read\w*|scroll\w*|library|record\w*|journal)\b/i],
+        ['city', /\b(city|cities|town\w*|village\w*|street\w*|market\w*|society|crowd\w*)\b/i],
+        ['road', /\b(travel\w*|journey\w*|flee\w*|fled|road\w*|exile\w*|wander\w*|leave|left|away|hide|hiding)\b/i],
+        ['blood', /\b(blood\w*|feed\w*|fed|hunger|hungry|drink\w*|bite|thirst\w*|prey)\b/i],
+        ['grave', /\b(die|dies|died|death|dead|grave\w*|murder\w*|bur(y|ied)|corpse\w*|tomb\w*|kill\w*)\b/i],
+        ['eye', /\b(secret\w*|dream\w*|curse\w*|ritual\w*|cabal|ceremon\w*|supernatural|entity|occult|magic\w*|prophec\w*|vision\w*)\b/i],
+        ['mirror', /\b(body|bodies|trait|horror\w*|nature|reflection|mirror|monster\w*|face|skin|appearance|yourself|self|control|change[sd]?)\b/i],
+        ['bat', /\b(immortal\w*|vampire\w*|hunt\w*|hounded|crime\w*|reveng\w*|duel\w*|outcast\w*|escape\w*|predator\w*)\b/i],
+        ['person', /\b(love\w*|lover\w*|friend\w*|child\w*|family|loved one|companion\w*|someone|stranger|mortal\w*|serv\w*|betray\w*|prot[eé]g[eé]|all(y|ies)|enem\w*|people|victim\w*|brother|sister|mother|father)\b/i]
+    ];
+    // A sentence that *starts* with a game instruction is bookkeeping.
+    var BOOKKEEPING = /^\s*(create|kill|check|uncheck|lose|gain|take|strike|cross|convert|add|remove|erase|forget|regain|restore|replace|if you|if there|you may|move|skip|roll|return|go to|the game is over|lower|raise|discard)\b/i;
+
+    function promptVignette(text) {
+        var t = String(text || '');
+        var story = t.split(/(?<=[.!?])\s+/).filter(function (s) { return !BOOKKEEPING.test(s); }).join(' ');
+        var src = story.trim() ? story : t;
+        for (var i = 0; i < VIGNETTES.length; i++) if (VIGNETTES[i][1].test(src)) return VIGNETTES[i][0];
+        return 'moon';
+    }
+
     // --- Save-state shape + validation (pure; shared with the app & tests) ----
 
     var SAVE_VERSION = 2;
@@ -501,6 +532,7 @@
         STAGES: STAGES,
         GAIN_ACTIONS: GAIN_ACTIONS,
         splitActions: splitActions,
+        promptVignette: promptVignette,
         normTurn: normTurn,
         nextStage: nextStage,
         prevStage: prevStage,

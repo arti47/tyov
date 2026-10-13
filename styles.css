@@ -3052,3 +3052,18 @@ body.nudges-quiet #backupNudge { display: none !important; }
 .chron-head { justify-content: flex-end; }
 .tl-node details[open] summary { grid-template-rows: auto; }
 .tl-node details[open] .tl-seal { grid-row: auto; }
+
+/* Prompt-card vignette: a small line drawing of what the Prompt is about. */
+.prompt-vignette {
+    display: block;
+    width: min(70%, 260px);
+    height: auto;
+    aspect-ratio: 160 / 56;
+    margin: 0 auto 2px;
+    color: var(--gold);
+    opacity: 0.75;
+    animation: vignetteIn 0.9s var(--ease) both;
+}
+.prompt-vignette[hidden] { display: none; }
+@keyframes vignetteIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 0.75; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .prompt-vignette { animation: none; } }
