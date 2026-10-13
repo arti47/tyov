@@ -3067,3 +3067,73 @@ body.nudges-quiet #backupNudge { display: none !important; }
 .prompt-vignette[hidden] { display: none; }
 @keyframes vignetteIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 0.75; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .prompt-vignette { animation: none; } }
+
+/* ===== The sky ages with the story ===== */
+:root {
+    --era-candle: rgba(240, 168, 58, 0.16);
+    --era-lantern: rgba(232, 118, 40, 0.18);
+    --era-gas: rgba(196, 210, 120, 0.14);
+    --era-electric: rgba(120, 170, 255, 0.18);
+    --skyline: color-mix(in srgb, var(--surface-3) 85%, black);
+    --star: rgba(255, 244, 214, 0.75);
+}
+body.light-mode {
+    --era-candle: rgba(200, 120, 30, 0.14);
+    --era-lantern: rgba(190, 90, 30, 0.14);
+    --era-gas: rgba(120, 140, 60, 0.14);
+    --era-electric: rgba(60, 100, 180, 0.14);
+    --skyline: color-mix(in srgb, var(--border-strong) 55%, transparent);
+    --star: rgba(120, 90, 40, 0.35);
+}
+.night > .stage, .night > .beats, .night > .tour-tip, .night > .coach-line { position: relative; z-index: 1; }
+.night-sky {
+    position: absolute;
+    z-index: 0;
+    left: -16px;
+    right: -16px;
+    top: -8px;
+    bottom: 0;
+    pointer-events: none;
+    overflow: hidden;
+    border-radius: 0 0 28px 28px;
+}
+.sky-glow {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 70% 55% at 50% 38%, var(--era-glow, var(--era-candle)), transparent 72%);
+}
+.sky-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 70px;
+    background: var(--skyline);
+    -webkit-mask: var(--era-mask) bottom / 100% 100% no-repeat;
+    mask: var(--era-mask) bottom / 100% 100% no-repeat;
+    opacity: 0.9;
+}
+.sky-stars {
+    position: absolute;
+    inset: 0 0 70px;
+    background-image:
+        radial-gradient(1px 1px at 12% 18%, var(--star), transparent 70%),
+        radial-gradient(1px 1px at 28% 42%, var(--star), transparent 70%),
+        radial-gradient(1.4px 1.4px at 46% 12%, var(--star), transparent 70%),
+        radial-gradient(1px 1px at 63% 30%, var(--star), transparent 70%),
+        radial-gradient(1.2px 1.2px at 81% 16%, var(--star), transparent 70%),
+        radial-gradient(1px 1px at 90% 48%, var(--star), transparent 70%),
+        radial-gradient(1px 1px at 7% 62%, var(--star), transparent 70%),
+        radial-gradient(1.3px 1.3px at 72% 66%, var(--star), transparent 70%);
+    opacity: var(--star-op, 0.9);
+    transition: opacity 1.2s ease;
+}
+.night[data-era="candle"] { --era-glow: var(--era-candle); --star-op: 0.95; --era-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 60' preserveAspectRatio='none'%3E%3Cpath d='M0%2060V44c30-8%2060-10%2090-4l10-2V24h4v-4h4v4h4v-4h4v4h4v18c40-6%2080%202%20120-2%2020-14%2040-16%2060-6%2030%200%2060-4%2096%202V60z'/%3E%3C/svg%3E"); }
+.night[data-era="lantern"] { --era-glow: var(--era-lantern); --star-op: 0.7; --era-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 60' preserveAspectRatio='none'%3E%3Cpath d='M0%2060V40l20-14%2020%2014v-6h10l16-14%2016%2014v-4l12-10%2012%2010v8h8l14-12%2014%2012v-6l6-28%206%2028v6l16-14%2016%2014v6h10l18-16%2018%2016v-2l14-10%2014%2010v6h12l16-12%2016%2012v8h14l14-10%2014%2010V60z'/%3E%3C/svg%3E"); }
+.night[data-era="gas"] { --era-glow: var(--era-gas); --star-op: 0.4; --era-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 60' preserveAspectRatio='none'%3E%3Cpath d='M0%2060V38h30V28h6v10h24V30h8v-8h4v8h8v16h20a20%2020%200%200%201%2040%200h20V26h6v-6h4v6h6v18h30V32h6v-8h5v8h25v12h40V36l20-12%2020%2012v8h30V30h6v-6h5v6h25v30zM350%2060V30h2v30zM346%2028h10l-2-6h-6z'/%3E%3C/svg%3E"); }
+.night[data-era="electric"] { --era-glow: var(--era-electric); --star-op: 0.08; --era-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 60' preserveAspectRatio='none'%3E%3Cpath d='M0%2060V36h24V20h20v16h12V8h4V2h2v6h4v28h16V24h22v12h14V14h26v22h10V28h18v8h20V4h3V0h2v4h3v32h14V22h24v14h18V30h20h12V18h16v12h14V8h4V2h2v6h4v22h18V26h20v8h20V20h12v40z'/%3E%3C/svg%3E"); }
+.night.is-first .sky-line, .night.is-compact .night-sky { opacity: 0.5; }
+.era-name { margin: 0; text-align: center; font-family: var(--font-display); font-size: 0.7rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-muted); }
+.era-name:empty { display: none; }
+.tl-night { display: flex; align-items: center; gap: 8px; }
+.tl-art { width: 66px; height: 23px; margin-left: auto; color: var(--gold); opacity: 0.6; flex: 0 0 auto; }

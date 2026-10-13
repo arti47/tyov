@@ -378,3 +378,15 @@ test('promptVignette covers every Prompt with a known picture', () => {
     }
     assert.ok(seen.size >= 8, 'variety: ' + [...seen].join(','));
 });
+
+test('eraFor: four eras across the Prompt book', () => {
+    const { eraFor } = require('../logic.js');
+    assert.strictEqual(eraFor(0).key, 'candle');
+    assert.strictEqual(eraFor(20).key, 'candle');
+    assert.strictEqual(eraFor(21).key, 'lantern');
+    assert.strictEqual(eraFor(41).key, 'gas');
+    assert.strictEqual(eraFor(61).key, 'electric');
+    assert.strictEqual(eraFor(80).key, 'electric');
+    assert.strictEqual(eraFor(999).index, 3);
+    assert.strictEqual(eraFor('x').index, 0);
+});

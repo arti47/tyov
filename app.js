@@ -531,6 +531,7 @@ function persist() {
         fontSize: getComputedStyle(document.body).getPropertyValue('--base-font-size'),
         hideGraveyard: checked('hideGraveyardToggle'),
         muteSound: checked('optMuteSound'),
+        haptics: checked('optHaptics'),
         compactNight: checked('optCompactNight'),
         ambient: checked('optAmbient'),
         // reverseTime is a one-shot (clears after each roll), so it is not persisted.
@@ -911,6 +912,14 @@ function artHtml(id, cls) {
     return '<svg class="art ' + cls + '" aria-hidden="true"><use href="#' + id + '"/></svg>';
 }
 
+// The small Prompt drawing for a kept night (same picture its card showed).
+function vignetteFor(num, tier) {
+    if (typeof promptDB === 'undefined' || !promptDB[num]) return '';
+    var visits = { a: 1, b: 2, c: 3 }[tier] || 1;
+    var key = TYOV.promptVignette(TYOV.getPromptText(promptDB, num, visits));
+    return '<svg class="tl-art" aria-hidden="true" viewBox="0 0 160 56"><use href="#art-v-' + key + '"/></svg>';
+}
+
 // The Chronicle is a timeline: one wax seal per night (Prompt + tier) on a
 // gold thread, each showing its first lines; tap to read the whole entry.
 // Tonight's Prompt sits at the end as an open seal until it is kept.
@@ -937,7 +946,7 @@ function renderJournalTab() {
         html += '<li class="tl-node"><details>' +
             '<summary><span class="tl-seal" aria-label="Prompt ' + escapeHtml(tag) + '">' + escapeHtml(num) +
                 (tier ? '<i>' + escapeHtml(tier) + '</i>' : '') + '</span>' +
-                '<span class="tl-night">Night ' + (i + 1) + '</span>' +
+                '<span class="tl-night">Night ' + (i + 1) + vignetteFor(num, tier) + '</span>' +
                 '<span class="tl-excerpt">' + escapeHtml(short) + '</span></summary>' +
             '<div class="tl-full">' + parseMarkdown(entry.text) + '</div></details></li>';
     });
@@ -1410,6 +1419,7 @@ function rollAndMove() {
     pushUndo();
     archiveJournal();
     playSound('dice');
+    cue('roll');
 
     if (state.currentPrompt === 0) state.currentPrompt = 1;
 
@@ -1851,12 +1861,13 @@ function toggleLoseEntity(list, id) {
     renderList(list);
     checkSurvivalState();
     if (list === 'characters') showAgeNudgeIfDue(); // no living mortals → no old-age nudge
+    cue(e.lost ? 'lose' : 'tick');
     persist();
 }
 
 function setSkillChecked(id, isChecked) {
     var e = findEntity('skills', id);
-    if (e) { pushUndo(); e.checked = isChecked; renderSkills(); checkSurvivalState(); persist(); }
+    if (e) { pushUndo(); e.checked = isChecked; renderSkills(); checkSurvivalState(); cue(isChecked ? 'check' : 'tick'); persist(); }
 }
 
 function setCharacterType(id, type) {
@@ -1915,6 +1926,7 @@ function killAllMortals() {
             toggleNote('ageNudge', false);
             renderCharacters();
             checkSurvivalState();
+            cue('lose');
             persist();
         }
     });
@@ -2281,6 +2293,9 @@ function applyState() {
     setChecked('hideGraveyardToggle', !!st.hideGraveyard);
     if (st.hideGraveyard) el('traitsContainer').classList.add('hide-graveyard');
     setChecked('optMuteSound', !!st.muteSound);
+    setChecked('optHaptics', st.haptics !== false); // on unless turned off
+    var hl = el('hapticsLabel');
+    if (hl) hl.hidden = !('vibrate' in navigator);
     setChecked('optCompactNight', !!st.compactNight);
     setChecked('optAmbient', !!st.ambient);
     syncAmbient();
@@ -2778,6 +2793,7 @@ function activeMemoryCount() {
 // Character / Mark". Doing that used to mean leaving the Prompt for the
 // Character tab; these add the trait in place and focus it for naming.
 function quickCreate(list) {
+    cue('gain');
     // addSkill/addResource/addCharacter/addMark each push their own undo step.
     if (list === 'skills') addSkill('');
     else if (list === 'resources') addResource('');
@@ -3312,7 +3328,7 @@ function addAndEdit(list) {
 // --- Memory shelf & Memory sheet ---------------------------------------------
 // Memories struck out in the last moments play a burn-away animation once.
 var forgottenAt = {};
-function markForgotten(m) { if (m && m.lost) forgottenAt[m.id] = Date.now(); }
+function markForgotten(m) { if (m && m.lost) { forgottenAt[m.id] = Date.now(); cue('forget'); } }
 
 function vesselHtml(m, name, onclick, extraCls, extraHtml) {
     var filled = m.experiences.filter(function (x) { return x.trim(); }).length;
@@ -3442,6 +3458,10 @@ function renderNight() {
     night.classList.toggle('is-first', state.currentPrompt < 1);
     var compact = isCompact();
     night.classList.toggle('is-compact', compact);
+    // The sky ages with the story (candles → lanterns → gaslight → electric).
+    var era = TYOV.eraFor(state.currentPrompt);
+    night.setAttribute('data-era', era.key);
+    setText('eraName', state.currentPrompt > 0 ? era.name : '');
 
     // beat dots
     var order = TYOV.STAGES, ci = order.indexOf(stage);
@@ -3547,7 +3567,7 @@ function autoMarkStep(kind) {
 function markStep(action, isDone) {
     state.turn = state.turn || { stage: 'obey', done: [] };
     var d = state.turn.done.filter(function (x) { return x !== action; });
-    if (isDone) d.push(action);
+    if (isDone) { d.push(action); cue('tick'); }
     state.turn.done = d;
     if (state.turn.stage === 'obey' || state.turn.stage === 'gain' || isCompact()) renderStepCards();
     persist();
@@ -3621,6 +3641,7 @@ function keepIn(id) {
     renderMemoryList('memories');
     updateMemoryCount();
     toast('Kept in “' + (m.theme || 'Untitled') + '”.', 'info');
+    cue('keep');
     finishNight();
 }
 
@@ -3632,6 +3653,7 @@ function keepInNew() {
     state.memories.push(m);
     renderMemoryList('memories');
     updateMemoryCount();
+    cue('keep');
     finishNight();
     // Name it while it's fresh.
     showTab('character');
@@ -3817,7 +3839,7 @@ function renderPortrait() {
     renderPortraitSigil();
     var nights = state.journalHistory.length;
     setText('vSub', state.currentPrompt > 0
-        ? 'Prompt ' + state.currentPrompt + ' · ' + nights + (nights === 1 ? ' night' : ' nights') + ' remembered'
+        ? TYOV.eraFor(state.currentPrompt).name + ' · ' + nights + (nights === 1 ? ' night' : ' nights') + ' remembered'
         : 'Before the first night');
     var asked = (state.currentPrompt > 0 && !state.gameOver) ? TYOV.promptActions(state.display.promptText) : [];
     var mems = state.memories.filter(function (m) { return !m.lost; });
@@ -3944,6 +3966,64 @@ document.addEventListener('visibilitychange', function () { if (ambient || ambie
 document.addEventListener('pointerdown', function () {
     if (ambientWanted() && (!ambient || ambient.ctx.state === 'suspended')) syncAmbient();
 }, { passive: true });
+
+// --- Sound cues + vibration --------------------------------------------------
+// Tiny synthesised sounds (no files) and short vibrations for the moments that
+// matter: check, lose, forget, keep. Sounds follow "Mute sounds"; vibration
+// follows "Vibrate on actions" (Android — iOS browsers have no vibration API).
+var cueCtx = null, cueLast = {};
+var CUE_BUZZ = { roll: [18], tick: [10], check: [14, 40, 14], lose: [40, 50, 40], forget: [70, 40, 90], keep: [12, 30, 12], gain: [10, 20, 10] };
+
+function cueAudio() {
+    if (cueCtx) return cueCtx;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    try { cueCtx = new AC(); } catch (e) { cueCtx = null; }
+    return cueCtx;
+}
+function cueTone(ctx, freq, dur, type, vol, freqEnd, delay) {
+    var t = ctx.currentTime + (delay || 0);
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(freq, t);
+    if (freqEnd) o.frequency.exponentialRampToValueAtTime(freqEnd, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(t); o.stop(t + dur + 0.02);
+}
+function cueNoise(ctx, dur, vol, type, f0, f1) {
+    var t = ctx.currentTime, n = Math.floor(ctx.sampleRate * dur);
+    var buf = ctx.createBuffer(1, n, ctx.sampleRate), d = buf.getChannelData(0);
+    for (var i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+    var src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    src.buffer = buf; f.type = type; f.frequency.setValueAtTime(f0, t);
+    if (f1) f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.value = vol;
+    src.connect(f); f.connect(g); g.connect(ctx.destination);
+    src.start(t);
+}
+function cue(name) {
+    var now = Date.now();
+    if (cueLast[name] && now - cueLast[name] < 150) return; // e.g. a Diary losing four Memories at once
+    cueLast[name] = now;
+    if (checked('optHaptics') && navigator.vibrate && CUE_BUZZ[name]) {
+        try { navigator.vibrate(CUE_BUZZ[name]); } catch (e) { /* unsupported */ }
+    }
+    if (checked('optMuteSound') || name === 'roll') return; // the roll has its own dice sound
+    var ctx = cueAudio();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') ctx.resume().catch(function () { /* needs a gesture */ });
+    try {
+        if (name === 'tick') cueTone(ctx, 1200, 0.05, 'sine', 0.04);
+        else if (name === 'check') { cueTone(ctx, 660, 0.09, 'triangle', 0.06); cueTone(ctx, 990, 0.14, 'triangle', 0.05, 0, 0.07); }
+        else if (name === 'lose') { cueTone(ctx, 180, 0.35, 'sine', 0.14, 70); cueNoise(ctx, 0.12, 0.05, 'lowpass', 600); }
+        else if (name === 'forget') { cueNoise(ctx, 0.7, 0.07, 'bandpass', 3000, 400); cueTone(ctx, 220, 0.6, 'sine', 0.04, 110); }
+        else if (name === 'keep') { cueTone(ctx, 523, 0.9, 'sine', 0.07); cueTone(ctx, 784, 0.9, 'sine', 0.05, 0, 0.08); cueTone(ctx, 1046, 0.7, 'sine', 0.03, 0, 0.16); }
+        else if (name === 'gain') { cueTone(ctx, 587, 0.25, 'triangle', 0.06); cueTone(ctx, 880, 0.3, 'triangle', 0.05, 0, 0.08); }
+    } catch (e) { /* audio is decoration */ }
+}
 
 // --- Dawn: a brief sunrise once the night is recorded ----------------------
 function playDawn() {

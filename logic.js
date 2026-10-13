@@ -343,6 +343,20 @@
         return out;
     }
 
+    // The Night sky ages with the story: four eras across the 80 Prompts.
+    // Purely atmospheric — the rules never date a Prompt.
+    var ERAS = [
+        { key: 'candle', name: 'Candle and stone' },
+        { key: 'lantern', name: 'Lanterns' },
+        { key: 'gas', name: 'Gaslight' },
+        { key: 'electric', name: 'Electric light' }
+    ];
+    function eraFor(prompt) {
+        var p = Math.max(0, Math.min(80, Number(prompt) || 0));
+        var i = p <= 20 ? 0 : p <= 40 ? 1 : p <= 60 ? 2 : 3;
+        return { index: i, key: ERAS[i].key, name: ERAS[i].name };
+    }
+
     // Pick a line-art vignette for a Prompt card from what the Prompt is about.
     // Only the story sentences count: sentences that are pure bookkeeping
     // ("Kill a Character.", "Create a Skill…") would otherwise make every card
@@ -533,6 +547,7 @@
         GAIN_ACTIONS: GAIN_ACTIONS,
         splitActions: splitActions,
         promptVignette: promptVignette,
+        eraFor: eraFor,
         normTurn: normTurn,
         nextStage: nextStage,
         prevStage: prevStage,

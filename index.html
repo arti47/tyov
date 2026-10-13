@@ -369,6 +369,7 @@
     <!-- ================= NIGHT: one beat on screen at a time ================= -->
     <section id="panel-play" class="tab-panel" role="tabpanel" aria-labelledby="tab-play">
     <div class="night" id="night" data-stage="roll">
+        <div class="night-sky" aria-hidden="true"><div class="sky-stars"></div><div class="sky-glow"></div><div class="sky-line"></div></div>
         <ol class="beats" id="beats" aria-label="Tonight">
             <li data-beat="roll"><span>Roll</span></li>
             <li data-beat="reveal"><span>Read</span></li>
@@ -385,6 +386,7 @@
         <!-- 1 · ROLL -->
         <div class="stage" data-stage="roll">
             <div class="altar" aria-hidden="true"><svg class="night-candle" id="nightCandle" viewBox="0 0 60 150"></svg></div>
+            <p class="era-name" id="eraName"></p>
             <div id="diceAnim" class="dice-anim" aria-hidden="true"></div>
             <svg id="gameOverArt" class="art art-grave" aria-hidden="true" hidden><use href="#art-grave"/></svg>
             <button id="btnRoll" class="roll-btn" onclick="rollNight()" aria-label="Roll the dice to get your next prompt">Roll</button>
@@ -587,6 +589,7 @@
             </span>
             <label title="Hide lost Skills, Resources, Marks and dead Characters on the Vampire tab."><input type="checkbox" id="hideGraveyardToggle" onchange="toggleGraveyard()"> Hide lost traits</label>
             <label><input type="checkbox" id="optMuteSound" onchange="saveGame(); syncAmbient()"> Mute sounds</label>
+            <label id="hapticsLabel" title="A short vibration when you roll, check a Skill, lose something or forget a Memory."><input type="checkbox" id="optHaptics" checked onchange="saveGame()"> Vibrate on actions</label>
             <label title="Quiet wind and candle crackle while you play. Made in the browser, works offline."><input type="checkbox" id="optAmbient" onchange="setAmbient()"> Night ambience</label>
             <label title="Show tonight's Prompt, actions, answer and Memory choice on one page instead of step by step."><input type="checkbox" id="optCompactNight" onchange="setCompactNight()"> Whole night on one page</label>
         </div>
